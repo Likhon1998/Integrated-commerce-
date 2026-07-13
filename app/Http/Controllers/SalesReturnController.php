@@ -30,7 +30,7 @@ class SalesReturnController extends Controller
     public function create(Request $request)
     {
         $orders = Order::where('shop_id', $this->shopId())
-            ->whereIn('status', ['completed', 'refunded'])
+            ->where('status', 'completed')
             ->with('items.product')
             ->latest()
             ->limit(50)
@@ -57,6 +57,10 @@ class SalesReturnController extends Controller
 
         $order = Order::where('shop_id', $this->shopId())->findOrFail($request->order_id);
 
+        if ($order->status !== 'completed') {
+            return back()->withInput()->with('error', 'Only completed orders can be processed as sales returns.');
+        }
+
         try {
             $this->stock->transaction(function () use ($request, $order) {
                 $totalRefund = 0;
@@ -82,15 +86,14 @@ class SalesReturnController extends Controller
                         'refund_amount' => $item['refund_amount'],
                     ]);
                     $product = Product::where('shop_id', $this->shopId())->findOrFail($item['product_id']);
-                    $this->stock->apply(
+                    $this->stock->restockForDocument(
                         $product,
-                        'in',
                         (int) $item['quantity'],
                         'Sales return ' . $return->return_number . ' for ' . $order->invoice_no,
                         'sales_return',
-                        Auth::id(),
-                        'sales_return',
                         $return->id,
+                        'sales_return',
+                        Auth::id(),
                     );
                     $totalRefund += $item['refund_amount'];
                 }

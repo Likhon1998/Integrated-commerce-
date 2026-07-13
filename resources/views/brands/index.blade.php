@@ -32,7 +32,7 @@
                                         <div class="flex items-center gap-3">
                                             <div class="h-10 w-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden">
                                                 @if($brand->logo_path)
-                                                    <img src="{{ Storage::url($brand->logo_path) }}" alt="{{ $brand->name }}" class="h-full w-full object-contain">
+                                                    <img src="{{ public_storage_url($brand->logo_path) }}" alt="{{ $brand->name }}" class="h-full w-full object-contain">
                                                 @else
                                                     <span class="text-xs font-bold text-gray-400">{{ strtoupper(substr($brand->name, 0, 2)) }}</span>
                                                 @endif

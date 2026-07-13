@@ -3,16 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\Product; 
-use App\Models\StockMovement;
+use App\Models\Product;
 use App\Services\AccountService;
+use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class SalesLedgerController extends Controller
 {
-    public function __construct(protected AccountService $accounts) {}
+    public function __construct(
+        protected AccountService $accounts,
+        protected StockService $stock,
+    ) {}
     public function index(Request $request)
     {
         $shopId = Auth::user()->shop_id;
@@ -67,23 +70,17 @@ class SalesLedgerController extends Controller
             // 🚀 STOCK RESTORED UP (+)
             foreach ($order->items as $item) {
                 $product = $item->product;
-                
+
                 if ($product) {
-                    $previousStock = $product->stock_quantity;
-                    $currentStock = $previousStock + $item->quantity;
-
-                    $product->update(['stock_quantity' => $currentStock]);
-
-                    StockMovement::create([
-                        'shop_id' => $order->shop_id,
-                        'product_id' => $product->id,
-                        'user_id' => Auth::id(),
-                        'type' => 'in', // Restored as IN (+)
-                        'quantity' => $item->quantity,
-                        'previous_stock' => $previousStock,
-                        'current_stock' => $currentStock,
-                        'reference' => 'Refund - ' . $order->invoice_no,
-                    ]);
+                    $this->stock->restockForDocument(
+                        $product,
+                        $item->quantity,
+                        'Refund - ' . $order->invoice_no,
+                        'order_refund',
+                        $order->id,
+                        'order_refund',
+                        Auth::id(),
+                    );
                 }
             }
 

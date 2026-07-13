@@ -65,8 +65,16 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Stock Quantity</label>
-                            <input type="number" name="stock_quantity" value="{{ old('stock_quantity', $product->stock_quantity) }}" required class="block w-full rounded-lg border-gray-300 bg-slate-50 sm:text-sm py-2.5">
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Current Stock</label>
+                            <div class="block w-full rounded-lg border border-gray-200 bg-gray-50 sm:text-sm py-2.5 px-3 font-bold text-gray-900">
+                                {{ $product->stock_quantity }} units
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                Change stock in
+                                <a href="{{ route('supply.opening-inventory.index') }}" class="font-bold text-indigo-600 hover:underline">Opening Inventory</a>
+                                or
+                                <a href="{{ route('supply.adjustments.index') }}" class="font-bold text-indigo-600 hover:underline">Stock Adjustment</a>.
+                            </p>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Low Stock Alert</label>

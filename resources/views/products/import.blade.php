@@ -26,8 +26,9 @@
 
             <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
                 <h3 class="text-sm font-bold text-slate-700 uppercase mb-3">CSV Format</h3>
-                <p class="text-sm text-slate-600 mb-3">Required columns: <code class="bg-white px-1 rounded">name, barcode, cost_price, selling_price, stock_quantity</code></p>
-                <p class="text-sm text-slate-600 mb-3">Optional columns: <code class="bg-white px-1 rounded">category, brand, sku, alert_quantity</code></p>
+                <p class="text-sm text-slate-600 mb-3">Required columns: <code class="bg-white px-1 rounded">name, barcode, cost_price, selling_price</code></p>
+                <p class="text-sm text-slate-600 mb-3">Optional columns: <code class="bg-white px-1 rounded">category, brand, sku, stock_quantity, alert_quantity</code></p>
+                <p class="text-sm text-slate-600 mb-3">If <code class="bg-white px-1 rounded">stock_quantity</code> is provided, opening stock is recorded with a full audit trail (same as Opening Inventory).</p>
                 <pre class="text-xs bg-white p-4 rounded border overflow-x-auto">name,barcode,category,brand,cost_price,selling_price,stock_quantity,alert_quantity
 Samsung Galaxy Buds,8801234567890,Electronics,Samsung,1200,1999,50,5
 Coca Cola 500ml,8809876543210,Beverages,,25,40,200,20</pre>

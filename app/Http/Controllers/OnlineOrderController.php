@@ -3,15 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\StockMovement;
 use App\Services\AccountService;
+use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class OnlineOrderController extends Controller
 {
-    public function __construct(protected AccountService $accounts) {}
+    public function __construct(
+        protected AccountService $accounts,
+        protected StockService $stock,
+    ) {}
     public function index(Request $request)
     {
         $shopId = Auth::user()->shop_id;
@@ -97,20 +100,17 @@ class OnlineOrderController extends Controller
             if (in_array($newStatus, ['cancelled', 'returned', 'refunded']) && !in_array($oldStatus, ['cancelled', 'returned', 'refunded'])) {
                 foreach ($order->items as $item) {
                     $product = $item->product;
-                    
-                    if ($product) {
-                        $product->increment('stock_quantity', $item->quantity);
 
-                        StockMovement::create([
-                            'shop_id' => $order->shop_id,
-                            'product_id' => $product->id,
-                            'user_id' => Auth::id(),
-                            'type' => 'in',
-                            'quantity' => $item->quantity,
-                            'previous_stock' => $product->stock_quantity - $item->quantity,
-                            'current_stock' => $product->stock_quantity,
-                            'reference' => 'Order ' . ucfirst($newStatus) . ' - ' . $order->invoice_no,
-                        ]);
+                    if ($product) {
+                        $this->stock->restockForDocument(
+                            $product,
+                            $item->quantity,
+                            'Order ' . ucfirst($newStatus) . ' - ' . $order->invoice_no,
+                            'order_refund',
+                            $order->id,
+                            'order_' . $newStatus,
+                            Auth::id(),
+                        );
                     }
                 }
 

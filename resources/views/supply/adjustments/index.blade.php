@@ -1,4 +1,4 @@
-<x-supply-layout title="Stock Adjustment" subtitle="Manual corrections — instantly synced to POS and online store.">
+<x-supply-layout title="Stock Adjustment" subtitle="Manual corrections after opening stock is set. Full movement history below (sales are recorded separately in POS / online checkout).">
     <form method="POST" action="{{ route('supply.adjustments.store') }}" class="bg-white rounded-2xl border p-6 mb-8 grid md:grid-cols-4 gap-4 max-w-4xl">
         @csrf
         <div class="md:col-span-2"><label class="text-xs font-bold text-gray-500 uppercase">Product</label><select name="product_id" class="w-full rounded-xl border-gray-200 mt-1" required>@foreach($products as $p)<option value="{{ $p->id }}">{{ $p->name }} ({{ $p->stock_quantity }})</option>@endforeach</select></div>

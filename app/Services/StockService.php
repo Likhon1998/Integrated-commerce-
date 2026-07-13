@@ -12,6 +12,14 @@ use InvalidArgumentException;
 
 class StockService
 {
+    public function hasOpeningInventory(Product $product): bool
+    {
+        return StockMovement::where('shop_id', $product->shop_id)
+            ->where('product_id', $product->id)
+            ->where('document_type', 'opening_inventory')
+            ->exists();
+    }
+
     public function apply(
         Product $product,
         string $direction,
@@ -32,6 +40,7 @@ class StockService
         }
 
         $userId ??= Auth::id();
+        $product = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
         $previousStock = $product->stock_quantity;
 
         if ($direction === 'out' && $quantity > $previousStock) {
@@ -62,20 +71,107 @@ class StockService
         return $movement;
     }
 
-    public function setOpeningStock(Product $product, int $quantity, ?int $userId = null): StockMovement
-    {
-        $userId ??= Auth::id();
-        $previousStock = $product->stock_quantity;
-        $delta = $quantity - $previousStock;
+    /**
+     * POS / website sale — deducts sellable stock and logs type "sale".
+     */
+    public function recordSale(
+        Product $product,
+        int $quantity,
+        string $reference,
+        ?int $userId = null,
+        ?string $documentType = null,
+        ?int $documentId = null,
+    ): StockMovement {
+        if ($quantity < 1) {
+            throw new InvalidArgumentException('Quantity must be at least 1.');
+        }
 
-        if ($delta === 0) {
-            throw new InvalidArgumentException('Opening quantity matches current stock.');
+        $userId ??= Auth::id();
+        $product = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
+        $previousStock = $product->stock_quantity;
+
+        if ($quantity > $previousStock) {
+            throw new InvalidArgumentException("Insufficient stock for {$product->name}. Available: {$previousStock}");
+        }
+
+        $currentStock = $previousStock - $quantity;
+
+        $movement = StockMovement::create([
+            'shop_id' => $product->shop_id,
+            'product_id' => $product->id,
+            'user_id' => $userId,
+            'type' => 'sale',
+            'reason' => 'sale',
+            'quantity' => $quantity,
+            'previous_stock' => $previousStock,
+            'current_stock' => $currentStock,
+            'reference' => $reference,
+            'document_type' => $documentType ?? 'order',
+            'document_id' => $documentId,
+            'location_id' => $this->defaultStore($product->shop_id)?->id,
+        ]);
+
+        $product->update(['stock_quantity' => $currentStock]);
+
+        return $movement;
+    }
+
+    /**
+     * Restore stock from refund / return / cancel — skips if already restocked for this document.
+     */
+    public function restockForDocument(
+        Product $product,
+        int $quantity,
+        string $reference,
+        string $documentType,
+        int $documentId,
+        string $reason = 'order_return',
+        ?int $userId = null,
+    ): ?StockMovement {
+        $alreadyRestocked = StockMovement::where('shop_id', $product->shop_id)
+            ->where('product_id', $product->id)
+            ->where('document_type', $documentType)
+            ->where('document_id', $documentId)
+            ->where('type', 'in')
+            ->exists();
+
+        if ($alreadyRestocked) {
+            return null;
         }
 
         return $this->apply(
             $product,
-            $delta > 0 ? 'in' : 'out',
-            abs($delta),
+            'in',
+            $quantity,
+            $reference,
+            $reason,
+            $userId,
+            $documentType,
+            $documentId,
+            $this->defaultStore($product->shop_id)?->id,
+        );
+    }
+
+    public function setOpeningStock(Product $product, int $quantity, ?int $userId = null): StockMovement
+    {
+        if ($this->hasOpeningInventory($product)) {
+            throw new InvalidArgumentException('Opening inventory already recorded. Use Stock Adjustment.');
+        }
+
+        if ($product->stock_quantity !== 0) {
+            throw new InvalidArgumentException(
+                "{$product->name} already has {$product->stock_quantity} units on hand. Use Stock Adjustment instead."
+            );
+        }
+
+        if ($quantity < 1) {
+            throw new InvalidArgumentException('Opening quantity must be at least 1.');
+        }
+
+        return $this->apply(
+            $product,
+            'in',
+            $quantity,
             'Opening inventory set to ' . $quantity,
             'opening_inventory',
             $userId,

@@ -19,7 +19,7 @@
                         <x-input-label for="logo" :value="__('Brand Logo')" />
                         @if($brand->logo_path)
                             <div class="mb-2">
-                                <img src="{{ Storage::url($brand->logo_path) }}" alt="{{ $brand->name }}" class="h-16 object-contain">
+                                <img src="{{ public_storage_url($brand->logo_path) }}" alt="{{ $brand->name }}" class="h-16 object-contain">
                             </div>
                         @endif
                         <input id="logo" name="logo" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.svg,image/png,image/jpeg,image/webp" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">

@@ -11,6 +11,7 @@ class WebsiteService
 {
     public function shop(): ?Shop
     {
+        // Single-store installation: one active shop for the whole system.
         return Shop::query()->where('is_active', true)->orderBy('id')->first();
     }
 
@@ -115,7 +116,7 @@ class WebsiteService
     public function productImageUrl($product): string
     {
         if ($product->image) {
-            return \Illuminate\Support\Facades\Storage::url($product->image);
+            return public_storage_url($product->image);
         }
 
         return config('website_assets.products.' . $product->barcode)
@@ -126,7 +127,7 @@ class WebsiteService
     public function categoryImageUrl($category): string
     {
         if ($category->image_path ?? null) {
-            return \Illuminate\Support\Facades\Storage::url($category->image_path);
+            return public_storage_url($category->image_path);
         }
 
         $slug = $category->slug ?? \Illuminate\Support\Str::slug($category->name);

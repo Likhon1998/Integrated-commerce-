@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ShopScoped;
 use App\Models\Product;
+use App\Models\StockMovement;
+use App\Services\AccountService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 
@@ -11,13 +13,33 @@ class OpeningInventoryController extends Controller
 {
     use ShopScoped;
 
-    public function __construct(protected StockService $stock) {}
+    public function __construct(
+        protected StockService $stock,
+        protected AccountService $accounts,
+    ) {}
 
     public function index()
     {
         $this->stock->ensureDefaultLocations($this->shopId());
-        $products = Product::where('shop_id', $this->shopId())->orderBy('name')->get();
-        return view('supply.opening-inventory.index', compact('products'));
+
+        $openedProductIds = StockMovement::where('shop_id', $this->shopId())
+            ->where('document_type', 'opening_inventory')
+            ->pluck('product_id')
+            ->unique();
+
+        $products = Product::where('shop_id', $this->shopId())
+            ->whereNotIn('id', $openedProductIds)
+            ->where('stock_quantity', 0)
+            ->orderBy('name')
+            ->get();
+
+        $openedRecords = StockMovement::where('shop_id', $this->shopId())
+            ->where('document_type', 'opening_inventory')
+            ->with('product:id,name,stock_quantity')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('supply.opening-inventory.index', compact('products', 'openedRecords'));
     }
 
     public function store(Request $request)
@@ -33,10 +55,23 @@ class OpeningInventoryController extends Controller
             $this->stock->transaction(function () use ($request, &$updated) {
                 foreach ($request->items as $row) {
                     $product = Product::where('shop_id', $this->shopId())->findOrFail($row['product_id']);
-                    if ((int) $row['quantity'] === (int) $product->stock_quantity) {
+
+                    $alreadyOpened = StockMovement::where('shop_id', $this->shopId())
+                        ->where('product_id', $product->id)
+                        ->where('document_type', 'opening_inventory')
+                        ->exists();
+
+                    if ($alreadyOpened) {
                         continue;
                     }
-                    $this->stock->setOpeningStock($product, (int) $row['quantity']);
+
+                    $quantity = (int) $row['quantity'];
+                    if ($quantity === 0) {
+                        continue;
+                    }
+
+                    $movement = $this->stock->setOpeningStock($product, $quantity);
+                    $this->accounts->postOpeningInventory($movement);
                     $updated++;
                 }
             });
@@ -44,7 +79,12 @@ class OpeningInventoryController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        if ($updated === 0) {
+            return redirect()->route('supply.opening-inventory.index')
+                ->with('error', 'No opening stock was saved. Enter a quantity greater than 0 for new products.');
+        }
+
         return redirect()->route('supply.opening-inventory.index')
-            ->with('success', "Opening inventory saved. {$updated} product(s) updated and synced to POS & web store.");
+            ->with('success', "Opening inventory saved. {$updated} product(s) set. Use Stock Adjustment for later changes.");
     }
 }

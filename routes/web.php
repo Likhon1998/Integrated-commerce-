@@ -25,7 +25,6 @@ use App\Http\Controllers\ReorderLevelController;
 use App\Http\Controllers\SalesReturnController;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockLocationController;
-use App\Http\Controllers\StockTransferController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WebsiteController;
 use Illuminate\Support\Facades\Route;
@@ -71,7 +70,7 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::get('/stock-ledger', fn () => redirect()->route('supply.adjustments.index'))->name('stock.index');
     Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])->name('stock.store');
 
-    Route::prefix('supply')->name('supply.')->group(function () {
+    Route::prefix('supply')->name('supply.')->middleware('can:manage inventory')->group(function () {
         Route::get('/opening-inventory', [OpeningInventoryController::class, 'index'])->name('opening-inventory.index');
         Route::post('/opening-inventory', [OpeningInventoryController::class, 'store'])->name('opening-inventory.store');
         Route::get('/reorder-levels', [ReorderLevelController::class, 'index'])->name('reorder-levels.index');
@@ -86,11 +85,6 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::post('/stores', [StockLocationController::class, 'storeSave'])->name('stores.store');
         Route::get('/stores/{location}/edit', [StockLocationController::class, 'storeEdit'])->name('stores.edit');
         Route::put('/stores/{location}', [StockLocationController::class, 'storeUpdate'])->name('stores.update');
-        Route::get('/warehouses', [StockLocationController::class, 'warehouses'])->name('warehouses.index');
-        Route::get('/warehouses/create', [StockLocationController::class, 'warehouseCreate'])->name('warehouses.create');
-        Route::post('/warehouses', [StockLocationController::class, 'warehouseSave'])->name('warehouses.store');
-        Route::get('/warehouses/{location}/edit', [StockLocationController::class, 'warehouseEdit'])->name('warehouses.edit');
-        Route::put('/warehouses/{location}', [StockLocationController::class, 'warehouseUpdate'])->name('warehouses.update');
         Route::resource('purchase-orders', PurchaseOrderController::class)->only(['index', 'create', 'store', 'show']);
         Route::post('/purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
         Route::get('/purchase-returns', [PurchaseReturnController::class, 'index'])->name('purchase-returns.index');
@@ -99,9 +93,6 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::get('/sales-returns', [SalesReturnController::class, 'index'])->name('sales-returns.index');
         Route::get('/sales-returns/create', [SalesReturnController::class, 'create'])->name('sales-returns.create');
         Route::post('/sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
-        Route::get('/stock-transfers', [StockTransferController::class, 'index'])->name('stock-transfers.index');
-        Route::get('/stock-transfers/create', [StockTransferController::class, 'create'])->name('stock-transfers.create');
-        Route::post('/stock-transfers', [StockTransferController::class, 'store'])->name('stock-transfers.store');
     });
 
     Route::get('/sales-ledger', [SalesLedgerController::class, 'index'])->name('sales.index');

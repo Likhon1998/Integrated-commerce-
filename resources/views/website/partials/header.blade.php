@@ -25,7 +25,7 @@
             <div class="flex items-center gap-5">
                 <a href="{{ route('home') }}" class="flex items-center gap-2.5 shrink-0 no-underline">
                     @if($settings->logo_path ?? false)
-                        <img src="{{ Storage::url($settings->logo_path) }}" alt="" class="gaget-logo-icon object-contain p-1">
+                        <img src="{{ public_storage_url($settings->logo_path) }}" alt="" class="gaget-logo-icon object-contain p-1">
                     @else
                         <div class="gaget-logo-icon">
                             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>

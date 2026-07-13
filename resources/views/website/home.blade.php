@@ -39,7 +39,7 @@
                     </div>
                     <div class="gaget-hero-visual">
                         @if($slide->image_path)
-                            <img src="{{ Storage::url($slide->image_path) }}" alt="{{ $slide->title }}">
+                            <img src="{{ public_storage_url($slide->image_path) }}" alt="{{ $slide->title }}">
                         @else
                             <img src="{{ config('website_assets.hero') }}" alt="{{ $slide->title }}">
                             <img src="{{ config('website_assets.hero_secondary') }}" alt="" class="hidden lg:block" style="max-height:300px">
@@ -136,7 +136,7 @@
                         <a href="{{ $banner->button_url ?? route('website.shop') }}" class="gaget-promo-btn">{{ $banner->button_text ?? 'Shop Now' }}</a>
                     @endif
                 </div>
-                <img src="{{ $banner->image_path ? Storage::url($banner->image_path) : config('website_assets.promos.'.$promoImgs[$idx % 3]) }}" alt="" class="gaget-promo-img">
+                <img src="{{ $banner->image_path ? public_storage_url($banner->image_path) : config('website_assets.promos.'.$promoImgs[$idx % 3]) }}" alt="" class="gaget-promo-img">
             </div>
         @empty
             <div class="gaget-promo gaget-promo-dark">
@@ -199,7 +199,7 @@
     <div class="gaget-brands-row">
         @forelse($brands as $brand)
             <a href="{{ route('website.brand', \Illuminate\Support\Str::slug($brand->name)) }}" class="gaget-brand-logo no-underline">
-                @if($brand->logo_path)<img src="{{ Storage::url($brand->logo_path) }}" alt="{{ $brand->name }}">@else{{ $brand->name }}@endif
+                @if($brand->logo_path)<img src="{{ public_storage_url($brand->logo_path) }}" alt="{{ $brand->name }}">@else{{ $brand->name }}@endif
             </a>
         @empty
             @foreach(['Apple','Samsung','Sony','Bose','Canon','Dell','Xiaomi'] as $b)<span class="gaget-brand-logo">{{ $b }}</span>@endforeach

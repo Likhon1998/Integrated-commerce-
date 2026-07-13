@@ -7,8 +7,8 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Customer;
-use App\Models\StockMovement;
 use App\Services\AccountService;
+use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +16,10 @@ use Carbon\Carbon;
 
 class PosController extends Controller
 {
-    public function __construct(protected AccountService $accounts) {}
+    public function __construct(
+        protected AccountService $accounts,
+        protected StockService $stock,
+    ) {}
     /**
      * Load the POS Terminal
      */
@@ -158,36 +161,29 @@ class PosController extends Controller
                     'subtotal' => $subtotal,
                 ]);
 
-                StockMovement::create([
-                    'shop_id' => $shopId,
-                    'product_id' => $product->id,
-                    'user_id' => $user->id,
-                    'type' => 'sale', 
-                    'quantity' => $item['qty'],
-                    'previous_stock' => $product->stock_quantity,
-                    'current_stock' => $product->stock_quantity - $item['qty'],
-                    'reference' => 'Sale - ' . $invoiceNo,
-                ]);
-
-                $product->decrement('stock_quantity', $item['qty']);
+                $this->stock->recordSale(
+                    $product,
+                    (int) $item['qty'],
+                    'Sale - ' . $invoiceNo,
+                    $user->id,
+                    'order',
+                    $order->id,
+                );
             }
 
-            // 6. 🚀 RESTOCK THE RETURNED ITEM (If this is an exchange)
+            // 6. Restock returned item on exchange
             if ($isExchange && $request->return_product_id) {
                 $returnProduct = Product::where('shop_id', $shopId)->find($request->return_product_id);
-                if ($returnProduct) {
-                    $returnProduct->increment('stock_quantity', $request->return_qty);
-                    
-                    StockMovement::create([
-                        'shop_id' => $shopId,
-                        'product_id' => $returnProduct->id,
-                        'user_id' => $user->id,
-                        'type' => 'in',
-                        'quantity' => $request->return_qty,
-                        'previous_stock' => $returnProduct->stock_quantity - $request->return_qty,
-                        'current_stock' => $returnProduct->stock_quantity,
-                        'reference' => 'Exchange Return for ' . $invoiceNo,
-                    ]);
+                if ($returnProduct && (int) $request->return_qty > 0) {
+                    $this->stock->restockForDocument(
+                        $returnProduct,
+                        (int) $request->return_qty,
+                        'Exchange return for ' . $invoiceNo,
+                        'exchange_return',
+                        $order->id,
+                        'exchange_return',
+                        $user->id,
+                    );
                 }
             }
 
@@ -321,31 +317,33 @@ class PosController extends Controller
                 // 4. Save Items and Deduct Stock
                 foreach ($offlineOrder['items'] as $item) {
                     $product = Product::where('shop_id', $shopId)->find($item['id']);
-                    
-                    if ($product) {
-                        $subtotal = $product->selling_price * $item['qty'];
 
-                        OrderItem::create([
-                            'order_id' => $order->id,
-                            'product_id' => $product->id,
-                            'quantity' => $item['qty'],
-                            'unit_price' => $product->selling_price,
-                            'subtotal' => $subtotal,
-                        ]);
-
-                        StockMovement::create([
-                            'shop_id' => $shopId,
-                            'product_id' => $product->id,
-                            'user_id' => $userId,
-                            'type' => 'sale',
-                            'quantity' => $item['qty'],
-                            'previous_stock' => $product->stock_quantity,
-                            'current_stock' => $product->stock_quantity - $item['qty'],
-                            'reference' => 'Offline Sync - ' . $invoiceNo,
-                        ]);
-
-                        $product->decrement('stock_quantity', $item['qty']);
+                    if (! $product) {
+                        throw new \Exception('Product not found for offline sync item.');
                     }
+
+                    if ($product->stock_quantity < $item['qty']) {
+                        throw new \Exception("Insufficient stock for {$product->name} during offline sync.");
+                    }
+
+                    $subtotal = $product->selling_price * $item['qty'];
+
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'quantity' => $item['qty'],
+                        'unit_price' => $product->selling_price,
+                        'subtotal' => $subtotal,
+                    ]);
+
+                    $this->stock->recordSale(
+                        $product,
+                        (int) $item['qty'],
+                        'Offline sync - ' . $invoiceNo,
+                        $userId,
+                        'order',
+                        $order->id,
+                    );
                 }
                 $syncedCount++;
 

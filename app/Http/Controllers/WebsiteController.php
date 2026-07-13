@@ -8,8 +8,8 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
-use App\Models\StockMovement;
 use App\Services\AccountService;
+use App\Services\StockService;
 use App\Services\WebsiteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +19,7 @@ class WebsiteController extends Controller
     public function __construct(
         private WebsiteService $website,
         private AccountService $accounts,
+        private StockService $stock,
     ) {}
 
     public function home()
@@ -158,6 +159,19 @@ class WebsiteController extends Controller
         $shopAdmin = \App\Models\User::where('shop_id', $shopId)->first();
         $fallbackUserId = $shopAdmin?->id ?? 1;
 
+        foreach ($request->cart as $item) {
+            $product = Product::where('shop_id', $shopId)->find($item['id']);
+            if (! $product) {
+                return response()->json(['success' => false, 'message' => 'A product in your cart is no longer available.']);
+            }
+            if ($product->stock_quantity < $item['qty']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Not enough stock for {$product->name}. Only {$product->stock_quantity} left.",
+                ]);
+            }
+        }
+
         try {
             DB::beginTransaction();
 
@@ -183,22 +197,16 @@ class WebsiteController extends Controller
                     'subtotal' => $item['price'] * $item['qty'],
                 ]);
 
-                $product = Product::find($item['id']);
-                if ($product) {
-                    $previousStock = $product->stock_quantity;
-                    $product->decrement('stock_quantity', $item['qty']);
+                $product = Product::where('shop_id', $shopId)->findOrFail($item['id']);
 
-                    StockMovement::create([
-                        'shop_id' => $shopId,
-                        'product_id' => $product->id,
-                        'user_id' => $fallbackUserId,
-                        'type' => 'sale',
-                        'quantity' => $item['qty'],
-                        'previous_stock' => $previousStock,
-                        'current_stock' => $previousStock - $item['qty'],
-                        'reference' => 'Website Order - ' . $order->invoice_no,
-                    ]);
-                }
+                $this->stock->recordSale(
+                    $product,
+                    (int) $item['qty'],
+                    'Website order - ' . $order->invoice_no,
+                    $fallbackUserId,
+                    'order',
+                    $order->id,
+                );
             }
 
             $order->load('items.product');

@@ -4,9 +4,9 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 {{ __('Add New Product') }}
             </h2>
-            <a href="{{ route('products.index') }}" class="text-sm font-bold text-gray-500 hover:text-indigo-600 transition flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-indigo-50">
+            <a href="{{ $returnTo['url'] }}" class="text-sm font-bold text-gray-500 hover:text-indigo-600 transition flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-indigo-50">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                Back to Inventory
+                {{ $returnTo['label'] }}
             </a>
         </div>
     </x-slot>
@@ -36,6 +36,9 @@
 
             <form action="{{ route('products.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
+                @if($returnTo['key'])
+                    <input type="hidden" name="return_to" value="{{ $returnTo['key'] }}">
+                @endif
                 <div class="p-6 space-y-6">
                     
                     <div class="md:col-span-2 mb-2">
@@ -150,16 +153,12 @@
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Initial Stock Quantity</label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                                </div>
-                                <input type="number" name="stock_quantity" value="{{ old('stock_quantity', 0) }}" required
-                                       class="pl-10 block w-full rounded-lg border-gray-300 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5 transition">
-                            </div>
-                            @error('stock_quantity') <p class="text-red-500 text-xs mt-1 font-medium">{{ $message }}</p> @enderror
+                        <div class="md:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                            <p class="text-sm font-bold text-indigo-900">Stock quantity</p>
+                            <p class="mt-1 text-sm text-indigo-800/80">
+                                New products start with <strong>0 stock</strong>. After saving, set quantities in
+                                <a href="{{ route('supply.opening-inventory.index') }}" class="font-bold underline hover:text-indigo-600">Opening Inventory</a>.
+                            </p>
                         </div>
 
                         <div>
@@ -178,7 +177,7 @@
                 </div>
 
                 <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
-                    <a href="{{ route('products.index') }}" class="px-5 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm">
+                    <a href="{{ $returnTo['url'] }}" class="px-5 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm">
                         Cancel
                     </a>
                     <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition shadow-md shadow-indigo-600/20 flex items-center gap-2">

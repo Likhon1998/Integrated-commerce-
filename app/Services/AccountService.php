@@ -7,6 +7,7 @@ use App\Models\AccountEntry;
 use App\Models\AccountTransaction;
 use App\Models\Counter;
 use App\Models\Order;
+use App\Models\StockMovement;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -288,6 +289,52 @@ class AccountService
                 ['account' => $petty, 'debit' => 0, 'credit' => $amount, 'counter_id' => null],
             ],
             userId: Auth::id(),
+        );
+    }
+
+    public function postOpeningInventory(StockMovement $movement): void
+    {
+        if ($this->transactionExists($movement->shop_id, 'opening_inventory', StockMovement::class, $movement->id)) {
+            return;
+        }
+
+        $movement->loadMissing('product');
+        $product = $movement->product;
+
+        if (! $product) {
+            return;
+        }
+
+        $this->ensureShopAccounts($movement->shop_id);
+
+        $value = (float) $product->cost_price * $movement->quantity;
+
+        if ($value <= 0) {
+            return;
+        }
+
+        $inventory = $this->getAccount($movement->shop_id, 'INVENTORY');
+        $equity = $this->getAccount($movement->shop_id, 'EQUITY');
+
+        $lines = $movement->type === 'in'
+            ? [
+                ['account' => $inventory, 'debit' => $value, 'credit' => 0, 'counter_id' => null],
+                ['account' => $equity, 'debit' => 0, 'credit' => $value, 'counter_id' => null],
+            ]
+            : [
+                ['account' => $inventory, 'debit' => 0, 'credit' => $value, 'counter_id' => null],
+                ['account' => $equity, 'debit' => $value, 'credit' => 0, 'counter_id' => null],
+            ];
+
+        $this->createTransaction(
+            shopId: $movement->shop_id,
+            type: 'opening_inventory',
+            referenceType: StockMovement::class,
+            referenceId: $movement->id,
+            description: 'Opening inventory - ' . $product->name,
+            date: $movement->created_at,
+            lines: $lines,
+            userId: $movement->user_id,
         );
     }
 

@@ -32,7 +32,16 @@ class StockTransferController extends Controller
     public function create()
     {
         $this->stock->ensureDefaultLocations($this->shopId());
-        $locations = StockLocation::where('shop_id', $this->shopId())->where('is_active', true)->orderBy('type')->orderBy('name')->get();
+
+        if (config('store.single_shop_mode', true)) {
+            $locations = StockLocation::where('shop_id', $this->shopId())
+                ->where('is_active', true)
+                ->orderByRaw("CASE type WHEN 'store' THEN 0 ELSE 1 END")
+                ->orderBy('name')
+                ->get();
+        } else {
+            $locations = StockLocation::where('shop_id', $this->shopId())->where('is_active', true)->orderBy('type')->orderBy('name')->get();
+        }
         $products = Product::where('shop_id', $this->shopId())->orderBy('name')->get();
         return view('supply.stock-transfers.create', compact('locations', 'products'));
     }

@@ -5,13 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\AccountService;
+use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        protected StockService $stock,
+        protected AccountService $accounts,
+    ) {}
     public function index()
     {
         $products = Product::where('shop_id', Auth::user()->shop_id)
@@ -22,12 +29,13 @@ class ProductController extends Controller
         return view('products.index', compact('products'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $categories = Category::where('shop_id', Auth::user()->shop_id)->orderBy('name')->get();
         $brands = Brand::where('shop_id', Auth::user()->shop_id)->where('is_active', true)->orderBy('name')->get();
+        $returnTo = $this->productReturnRoute($request->query('from'));
 
-        return view('products.create', compact('categories', 'brands'));
+        return view('products.create', compact('categories', 'brands', 'returnTo'));
     }
 
     public function store(Request $request)
@@ -37,14 +45,15 @@ class ProductController extends Controller
             'barcode' => 'required|string|unique:products,barcode',
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
-            'stock_quantity' => 'required|integer',
             'category_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'return_to' => 'nullable|in:opening-inventory',
         ]);
 
-        $data = $request->except('image');
+        $data = $request->except(['image', 'stock_quantity', 'return_to']);
         $data['shop_id'] = Auth::user()->shop_id;
+        $data['stock_quantity'] = 0;
         $data = $this->applyBrandData($data);
 
         if ($request->hasFile('image')) {
@@ -53,7 +62,17 @@ class ProductController extends Controller
 
         Product::create($data);
 
-        return redirect()->route('products.index')->with('success', 'Product added successfully to inventory!');
+        if ($request->input('return_to') === 'opening-inventory') {
+            return redirect()->route('supply.opening-inventory.index')->with(
+                'success',
+                'Product added. Enter the opening quantity below.'
+            );
+        }
+
+        return redirect()->route('products.index')->with(
+            'success',
+            'Product added. Set stock quantities in Stock & Supply → Opening Inventory.'
+        );
     }
 
     public function edit(Product $product)
@@ -79,13 +98,12 @@ class ProductController extends Controller
             'barcode' => 'required|string|unique:products,barcode,' . $product->id,
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
-            'stock_quantity' => 'required|integer',
             'category_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
-        $data = $request->except('image');
+        $data = $request->except(['image', 'stock_quantity']);
         $data = $this->applyBrandData($data);
 
         if ($request->hasFile('image')) {
@@ -130,7 +148,7 @@ class ProductController extends Controller
         $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
         $header = array_map('strtolower', array_map('trim', fgetcsv($handle) ?: []));
 
-        $required = ['name', 'barcode', 'cost_price', 'selling_price', 'stock_quantity'];
+        $required = ['name', 'barcode', 'cost_price', 'selling_price'];
         foreach ($required as $col) {
             if (!in_array($col, $header)) {
                 fclose($handle);
@@ -140,7 +158,10 @@ class ProductController extends Controller
 
         $imported = 0;
         $skipped = 0;
+        $stockSet = 0;
         $row = 1;
+
+        $this->stock->ensureDefaultLocations($shopId);
 
         while (($line = fgetcsv($handle)) !== false) {
             $row++;
@@ -179,27 +200,42 @@ class ProductController extends Controller
                 $brandName = $brand->name;
             }
 
-            Product::create([
-                'shop_id' => $shopId,
-                'category_id' => $categoryId,
-                'brand_id' => $brandId,
-                'brand_name' => $brandName,
-                'name' => trim($data['name']),
-                'barcode' => trim($data['barcode']),
-                'sku' => $data['sku'] ?? null,
-                'cost_price' => (float) ($data['cost_price'] ?? 0),
-                'selling_price' => (float) ($data['selling_price'] ?? 0),
-                'stock_quantity' => (int) ($data['stock_quantity'] ?? 0),
-                'alert_quantity' => (int) ($data['alert_quantity'] ?? 5),
-                'is_published' => true,
-            ]);
+            $openingQty = (int) ($data['stock_quantity'] ?? 0);
 
-            $imported++;
+            DB::transaction(function () use ($shopId, $categoryId, $brandId, $brandName, $data, $openingQty, &$imported, &$stockSet) {
+                $product = Product::create([
+                    'shop_id' => $shopId,
+                    'category_id' => $categoryId,
+                    'brand_id' => $brandId,
+                    'brand_name' => $brandName,
+                    'name' => trim($data['name']),
+                    'barcode' => trim($data['barcode']),
+                    'sku' => $data['sku'] ?? null,
+                    'cost_price' => (float) ($data['cost_price'] ?? 0),
+                    'selling_price' => (float) ($data['selling_price'] ?? 0),
+                    'stock_quantity' => 0,
+                    'alert_quantity' => (int) ($data['alert_quantity'] ?? 5),
+                    'is_published' => true,
+                ]);
+
+                if ($openingQty > 0) {
+                    $movement = $this->stock->setOpeningStock($product, $openingQty);
+                    $this->accounts->postOpeningInventory($movement);
+                    $stockSet++;
+                }
+
+                $imported++;
+            });
         }
 
         fclose($handle);
 
-        return redirect()->route('products.index')->with('success', "CSV import complete: {$imported} added, {$skipped} skipped.");
+        $message = "CSV import complete: {$imported} added, {$skipped} skipped.";
+        if ($stockSet > 0) {
+            $message .= " Opening stock recorded for {$stockSet} product(s).";
+        }
+
+        return redirect()->route('products.index')->with('success', $message);
     }
 
     public function barcodes(Request $request)
@@ -227,5 +263,22 @@ class ProductController extends Controller
         }
 
         return $data;
+    }
+
+    private function productReturnRoute(?string $from): array
+    {
+        if ($from === 'opening-inventory') {
+            return [
+                'url' => route('supply.opening-inventory.index'),
+                'key' => 'opening-inventory',
+                'label' => 'Back to Opening Inventory',
+            ];
+        }
+
+        return [
+            'url' => route('products.index'),
+            'key' => null,
+            'label' => 'Back to Inventory',
+        ];
     }
 }

@@ -137,7 +137,7 @@ class WebsiteSeeder extends Seeder
                     'cost_price' => $p['price'] * 0.7,
                     'selling_price' => $p['price'],
                     'original_price' => $p['original'],
-                    'stock_quantity' => 50,
+                    'stock_quantity' => 0,
                     'brand_name' => $p['brand'],
                     'rating' => $p['rating'],
                     'review_count' => $p['reviews'],
