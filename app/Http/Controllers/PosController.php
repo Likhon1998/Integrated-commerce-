@@ -24,8 +24,7 @@ class PosController extends Controller
     {
         $user = Auth::user();
 
-        // 🚨 SECURITY CHECK: Admins have full access. Staff MUST have a counter.
-        if (!$user->counter_id && $user->role !== 'Shop Owner' && !$user->hasRole('Shop Owner')) {
+        if (!$user->canAccessPos()) {
             return redirect()->route('dashboard')->with('error', 'Access Denied: You must be assigned to a specific Counter before you can access the POS terminal. Please contact your Admin.');
         }
 
@@ -53,8 +52,7 @@ class PosController extends Controller
     {
         $user = Auth::user();
 
-        // 🚨 BACKEND SECURITY CHECK: Admins bypass this.
-        if (!$user->counter_id && $user->role !== 'Shop Owner' && !$user->hasRole('Shop Owner')) {
+        if (!$user->canAccessPos()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Transaction Blocked: No Counter assigned to your account.'
@@ -264,8 +262,7 @@ class PosController extends Controller
     {
         $user = Auth::user();
         
-        // 🚨 SECURITY CHECK: Admins bypass this.
-        if (!$user->counter_id && $user->role !== 'Shop Owner' && !$user->hasRole('Shop Owner')) {
+        if (!$user->canAccessPos()) {
             return response()->json(['success' => false, 'message' => 'No counter assigned. Sync blocked.'], 403);
         }
 

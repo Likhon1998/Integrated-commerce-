@@ -43,5 +43,8 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $shopOwnerRole = Role::firstOrCreate(['name' => 'Shop Owner', 'guard_name' => 'web']);
         $shopOwnerRole->syncPermissions(Permission::all());
+
+        $adminRole = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
+        $adminRole->syncPermissions(Permission::all());
     }
 }

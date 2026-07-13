@@ -15,22 +15,27 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
         ]);
 
-        $shop = Shop::create([
-            'name' => 'Nexa POS Master Shop',
-            'email' => 'admin@nexapos.com',
-            'phone' => '01700000000',
-            'address' => 'Dhaka, Bangladesh',
-            'is_active' => true,
-        ]);
+        $shop = Shop::firstOrCreate(
+            ['email' => 'admin@nexapos.com'],
+            [
+                'name' => 'Nexa POS Master Shop',
+                'phone' => '01700000000',
+                'address' => 'Dhaka, Bangladesh',
+                'is_active' => true,
+            ]
+        );
 
-        $admin = User::create([
-            'shop_id' => $shop->id,
-            'role' => 'Shop Owner',
-            'name' => 'Store Admin',
-            'email' => 'admin@nexapos.com',
-            'password' => Hash::make('password'),
-        ]);
+        $admin = User::updateOrCreate(
+            ['email' => 'admin@nexapos.com'],
+            [
+                'shop_id' => $shop->id,
+                'role' => 'admin',
+                'name' => 'Store Admin',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+            ]
+        );
 
-        $admin->assignRole('Shop Owner');
+        $admin->syncRoles(['Shop Owner']);
     }
 }

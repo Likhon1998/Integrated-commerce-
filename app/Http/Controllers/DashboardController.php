@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\{Order, Product, Customer};
+use App\Services\StockService;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
@@ -13,6 +14,8 @@ class DashboardController extends Controller
         $user = Auth::user();
         $shop = $user->shop;
         $shopId = $user->shop_id;
+
+        app(StockService::class)->ensureDefaultLocations($shopId);
 
         $queryOrders = Order::where('shop_id', $shopId);
         $queryProducts = Product::where('shop_id', $shopId);

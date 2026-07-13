@@ -24,7 +24,7 @@
                 </div>
             </div>
 
-            @if(!$user->counter_id && !$user->hasRole('Shop Owner') && $user->role !== 'Shop Owner')
+            @if(!$user->canAccessPos())
                 <div class="flex items-center justify-between bg-amber-50 border border-amber-200/70 rounded-xl px-4 py-3">
                     <div class="flex items-center gap-3">
                         <div class="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">

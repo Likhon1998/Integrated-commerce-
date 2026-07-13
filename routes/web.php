@@ -17,7 +17,16 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SalesLedgerController;
 use App\Http\Controllers\StaffController;
-use App\Http\Controllers\StockLedgerController;
+use App\Http\Controllers\DamageProductController;
+use App\Http\Controllers\OpeningInventoryController;
+use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\PurchaseReturnController;
+use App\Http\Controllers\ReorderLevelController;
+use App\Http\Controllers\SalesReturnController;
+use App\Http\Controllers\StockAdjustmentController;
+use App\Http\Controllers\StockLocationController;
+use App\Http\Controllers\StockTransferController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WebsiteController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,8 +68,41 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::get('/products-import/csv', [ProductController::class, 'importForm'])->name('products.import');
     Route::post('/products-import/csv', [ProductController::class, 'importStore'])->name('products.import.store');
     Route::get('/products-barcodes/print', [ProductController::class, 'barcodes'])->name('products.barcodes');
-    Route::get('/stock-ledger', [StockLedgerController::class, 'index'])->name('stock.index');
-    Route::post('/stock-ledger', [StockLedgerController::class, 'store'])->name('stock.store');
+    Route::get('/stock-ledger', fn () => redirect()->route('supply.adjustments.index'))->name('stock.index');
+    Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])->name('stock.store');
+
+    Route::prefix('supply')->name('supply.')->group(function () {
+        Route::get('/opening-inventory', [OpeningInventoryController::class, 'index'])->name('opening-inventory.index');
+        Route::post('/opening-inventory', [OpeningInventoryController::class, 'store'])->name('opening-inventory.store');
+        Route::get('/reorder-levels', [ReorderLevelController::class, 'index'])->name('reorder-levels.index');
+        Route::put('/reorder-levels', [ReorderLevelController::class, 'update'])->name('reorder-levels.update');
+        Route::get('/adjustments', [StockAdjustmentController::class, 'index'])->name('adjustments.index');
+        Route::post('/adjustments', [StockAdjustmentController::class, 'store'])->name('adjustments.store');
+        Route::get('/damage-products', [DamageProductController::class, 'index'])->name('damage-products.index');
+        Route::post('/damage-products', [DamageProductController::class, 'store'])->name('damage-products.store');
+        Route::resource('suppliers', SupplierController::class)->except(['show']);
+        Route::get('/stores', [StockLocationController::class, 'stores'])->name('stores.index');
+        Route::get('/stores/create', [StockLocationController::class, 'storeCreate'])->name('stores.create');
+        Route::post('/stores', [StockLocationController::class, 'storeSave'])->name('stores.store');
+        Route::get('/stores/{location}/edit', [StockLocationController::class, 'storeEdit'])->name('stores.edit');
+        Route::put('/stores/{location}', [StockLocationController::class, 'storeUpdate'])->name('stores.update');
+        Route::get('/warehouses', [StockLocationController::class, 'warehouses'])->name('warehouses.index');
+        Route::get('/warehouses/create', [StockLocationController::class, 'warehouseCreate'])->name('warehouses.create');
+        Route::post('/warehouses', [StockLocationController::class, 'warehouseSave'])->name('warehouses.store');
+        Route::get('/warehouses/{location}/edit', [StockLocationController::class, 'warehouseEdit'])->name('warehouses.edit');
+        Route::put('/warehouses/{location}', [StockLocationController::class, 'warehouseUpdate'])->name('warehouses.update');
+        Route::resource('purchase-orders', PurchaseOrderController::class)->only(['index', 'create', 'store', 'show']);
+        Route::post('/purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
+        Route::get('/purchase-returns', [PurchaseReturnController::class, 'index'])->name('purchase-returns.index');
+        Route::get('/purchase-returns/create', [PurchaseReturnController::class, 'create'])->name('purchase-returns.create');
+        Route::post('/purchase-returns', [PurchaseReturnController::class, 'store'])->name('purchase-returns.store');
+        Route::get('/sales-returns', [SalesReturnController::class, 'index'])->name('sales-returns.index');
+        Route::get('/sales-returns/create', [SalesReturnController::class, 'create'])->name('sales-returns.create');
+        Route::post('/sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
+        Route::get('/stock-transfers', [StockTransferController::class, 'index'])->name('stock-transfers.index');
+        Route::get('/stock-transfers/create', [StockTransferController::class, 'create'])->name('stock-transfers.create');
+        Route::post('/stock-transfers', [StockTransferController::class, 'store'])->name('stock-transfers.store');
+    });
 
     Route::get('/sales-ledger', [SalesLedgerController::class, 'index'])->name('sales.index');
 

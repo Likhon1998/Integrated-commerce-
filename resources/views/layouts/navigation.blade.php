@@ -13,7 +13,7 @@
         </a>
     </div>
 
-    <nav class="p-4 space-y-1.5 flex-1 overflow-y-auto" x-data="{ inventoryOpen: {{ request()->routeIs('brands.*', 'categories.*', 'products.*') ? 'true' : 'false' }}, analyticsOpen: {{ request()->routeIs('analytics.*') ? 'true' : 'false' }}, accountsOpen: {{ request()->routeIs('accounts.*') ? 'true' : 'false' }} }">
+    <nav class="p-4 space-y-1.5 flex-1 overflow-y-auto" x-data="{ inventoryOpen: {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, supplyOpen: {{ request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, analyticsOpen: {{ request()->routeIs('analytics.*') ? 'true' : 'false' }}, accountsOpen: {{ request()->routeIs('accounts.*') ? 'true' : 'false' }} }">
 
         @can('view dashboard')
         <a href="{{ route('dashboard') }}" 
@@ -25,60 +25,61 @@
 
         @can('manage inventory')
         <div class="pt-2">
-            <button @click="inventoryOpen = !inventoryOpen" 
-                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('brands.*', 'categories.*', 'products.*') ? 'text-white bg-slate-800' : 'hover:bg-slate-800 hover:text-white' }}">
+            <button @click="inventoryOpen = !inventoryOpen"
+                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'text-white bg-slate-800' : 'hover:bg-slate-800 hover:text-white' }}">
                 <div class="flex items-center">
-                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('brands.*', 'categories.*', 'products.*') ? 'text-indigo-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'text-indigo-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                     <span>Inventory</span>
                 </div>
                 <svg :class="inventoryOpen ? 'rotate-180' : ''" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
 
-            <div x-show="inventoryOpen" 
+            <div x-show="inventoryOpen"
                  x-cloak
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0 transform -translate-y-2"
                  x-transition:enter-end="opacity-100 transform translate-y-0"
                  class="mt-1 ml-4 pl-4 border-l border-slate-700 space-y-1">
-                
-                <a href="{{ route('brands.index') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('brands.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Brand
-                </a>
 
-                <a href="{{ route('categories.index') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('categories.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Category
-                </a>
-                
-                <a href="{{ route('products.index') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.index') || request()->routeIs('products.edit') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Product List
-                </a>
-
-                <a href="{{ route('products.create') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.create') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Add Product
-                </a>
-
-                <a href="{{ route('products.import') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.import*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Add CSV Product
-                </a>
-
-                <a href="{{ route('products.barcodes') }}" target="_blank"
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.barcodes') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Print Bar Code
-                </a>
+                <a href="{{ route('brands.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('brands.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Brand</a>
+                <a href="{{ route('categories.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('categories.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Category</a>
+                <a href="{{ route('products.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.index', 'products.edit') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Product List</a>
+                <a href="{{ route('products.create') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.create') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Add Product</a>
+                <a href="{{ route('products.import') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.import*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Add CSV Product</a>
+                <a href="{{ route('products.barcodes') }}" target="_blank" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.barcodes') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Print Bar Code</a>
             </div>
         </div>
 
         <div class="pt-2">
-            <a href="{{ route('stock.index') }}" 
-               class="{{ request()->routeIs('stock.*') ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white' }} flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm">
-                <svg class="w-5 h-5 mr-3 {{ request()->routeIs('stock.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                Stock Ledger
-            </a>
+            <button @click="supplyOpen = !supplyOpen" 
+                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('supply.*', 'stock.*') ? 'text-white bg-slate-800' : 'hover:bg-slate-800 hover:text-white' }}">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('supply.*', 'stock.*') ? 'text-indigo-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    <span>Stock & Supply</span>
+                </div>
+                <svg :class="supplyOpen ? 'rotate-180' : ''" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+
+            <div x-show="supplyOpen" 
+                 x-cloak
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 transform -translate-y-2"
+                 x-transition:enter-end="opacity-100 transform translate-y-0"
+                 class="mt-1 ml-4 pl-4 border-l border-slate-700 space-y-1">
+
+                <a href="{{ route('products.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors text-slate-400 hover:text-white hover:bg-slate-800">Product Inventory</a>
+                <a href="{{ route('supply.opening-inventory.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.opening-inventory.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Opening Inventory</a>
+                <a href="{{ route('supply.purchase-orders.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.purchase-orders.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Purchase Order</a>
+                <a href="{{ route('supply.reorder-levels.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.reorder-levels.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Reorder Level</a>
+                <a href="{{ route('supply.purchase-returns.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.purchase-returns.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Purchase Return</a>
+                <a href="{{ route('supply.sales-returns.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.sales-returns.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Sales Return</a>
+                <a href="{{ route('supply.adjustments.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.adjustments.*', 'stock.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Stock Adjustment</a>
+                <a href="{{ route('supply.stock-transfers.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.stock-transfers.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Stock Transfer</a>
+                <a href="{{ route('supply.damage-products.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.damage-products.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Damage Product</a>
+                <a href="{{ route('supply.stores.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.stores.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Store</a>
+                <a href="{{ route('supply.warehouses.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.warehouses.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Warehouse</a>
+                <a href="{{ route('supply.suppliers.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.suppliers.*') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">Supplier</a>
+            </div>
         </div>
         @endcan
 
@@ -189,7 +190,7 @@
                 </a>
                 <a href="{{ route('analytics.inventory') }}" 
                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.inventory') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                    Inventory
+                    Stock Overview
                 </a>
                 <a href="{{ route('analytics.balance') }}" 
                    class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.balance') ? 'text-white bg-indigo-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800' }}">

@@ -62,4 +62,18 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Counter::class);
     }
+
+    public function isShopOwner(): bool
+    {
+        if (in_array($this->role, ['admin', 'shop_owner', 'Shop Owner', 'superadmin'], true)) {
+            return true;
+        }
+
+        return $this->hasRole(['Shop Owner', 'Admin']);
+    }
+
+    public function canAccessPos(): bool
+    {
+        return $this->counter_id !== null || $this->isShopOwner();
+    }
 }
