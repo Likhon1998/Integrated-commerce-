@@ -18,9 +18,15 @@ class SalesLedgerController extends Controller
     ) {}
     public function index(Request $request)
     {
-        $shopId = Auth::user()->shop_id;
+        $user = Auth::user();
+        $shopId = $user->shop_id;
         
-        $query = Order::where('shop_id', $shopId)->with(['customer', 'user']);
+        $query = Order::where('shop_id', $shopId)->with(['customer', 'user', 'counter']);
+
+        // Cashiers only see their own counter sales
+        if (! $user->isAdminUser() && $user->counter_id) {
+            $query->where('counter_id', $user->counter_id);
+        }
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -46,8 +52,14 @@ class SalesLedgerController extends Controller
 
     public function refund(Order $order)
     {
-        if ($order->shop_id !== Auth::user()->shop_id) {
+        $user = Auth::user();
+
+        if ($order->shop_id !== $user->shop_id) {
             abort(403, 'Unauthorized action.');
+        }
+
+        if (! $user->isAdminUser() && $user->counter_id && (int) $order->counter_id !== (int) $user->counter_id) {
+            abort(403, 'You can only refund sales from your counter.');
         }
 
         if (in_array($order->status, ['refunded', 'cancelled', 'returned'])) {

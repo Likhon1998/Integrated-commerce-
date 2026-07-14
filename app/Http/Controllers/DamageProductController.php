@@ -23,7 +23,12 @@ class DamageProductController extends Controller
             ->latest()
             ->paginate(15);
 
-        return view('supply.damage-products.index', compact('products', 'damages'));
+        $todayDamagedQty = (int) \App\Models\StockMovement::where('shop_id', $this->shopId())
+            ->where('reason', 'damage')
+            ->whereDate('created_at', now()->toDateString())
+            ->sum('quantity');
+
+        return view('supply.damage-products.index', compact('products', 'damages', 'todayDamagedQty'));
     }
 
     public function store(Request $request)

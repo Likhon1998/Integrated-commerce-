@@ -43,22 +43,30 @@ class ProductController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'barcode' => 'required|string|unique:products,barcode',
+            'sku' => 'nullable|string|max:100',
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
+            'original_price' => 'nullable|numeric|min:0',
+            'short_description' => 'nullable|string|max:2000',
             'category_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_2' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_3' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'is_published' => 'nullable|boolean',
+            'is_new_arrival' => 'nullable|boolean',
+            'is_featured' => 'nullable|boolean',
             'return_to' => 'nullable|in:opening-inventory',
         ]);
 
-        $data = $request->except(['image', 'stock_quantity', 'return_to']);
+        $data = $request->except(['image', 'image_2', 'image_3', 'stock_quantity', 'return_to', 'is_published', 'is_new_arrival', 'is_featured']);
         $data['shop_id'] = Auth::user()->shop_id;
         $data['stock_quantity'] = 0;
+        $data['is_published'] = $request->boolean('is_published', true);
+        $data['is_new_arrival'] = $request->boolean('is_new_arrival');
+        $data['is_featured'] = $request->boolean('is_featured');
         $data = $this->applyBrandData($data);
-
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('products', 'public');
-        }
+        $data = array_merge($data, $this->storeProductImages($request));
 
         Product::create($data);
 
@@ -96,22 +104,34 @@ class ProductController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'barcode' => 'required|string|unique:products,barcode,' . $product->id,
+            'sku' => 'nullable|string|max:100',
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
+            'original_price' => 'nullable|numeric|min:0',
+            'short_description' => 'nullable|string|max:2000',
             'category_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_2' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_3' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'remove_image' => 'nullable|boolean',
+            'remove_image_2' => 'nullable|boolean',
+            'remove_image_3' => 'nullable|boolean',
+            'is_published' => 'nullable|boolean',
+            'is_new_arrival' => 'nullable|boolean',
+            'is_featured' => 'nullable|boolean',
         ]);
 
-        $data = $request->except(['image', 'stock_quantity']);
+        $data = $request->except([
+            'image', 'image_2', 'image_3', 'stock_quantity',
+            'remove_image', 'remove_image_2', 'remove_image_3',
+            'is_published', 'is_new_arrival', 'is_featured',
+        ]);
+        $data['is_published'] = $request->boolean('is_published');
+        $data['is_new_arrival'] = $request->boolean('is_new_arrival');
+        $data['is_featured'] = $request->boolean('is_featured');
         $data = $this->applyBrandData($data);
-
-        if ($request->hasFile('image')) {
-            if ($product->image) {
-                Storage::disk('public')->delete($product->image);
-            }
-            $data['image'] = $request->file('image')->store('products', 'public');
-        }
+        $data = array_merge($data, $this->storeProductImages($request, $product));
 
         $product->update($data);
 
@@ -124,8 +144,8 @@ class ProductController extends Controller
             abort(403, 'Unauthorized access.');
         }
 
-        if ($product->image) {
-            Storage::disk('public')->delete($product->image);
+        foreach ($product->imagePaths() as $path) {
+            Storage::disk('public')->delete($path);
         }
 
         $product->delete();
@@ -263,6 +283,32 @@ class ProductController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Handle up to 3 product images (primary + gallery). Keys: image, image_2, image_3.
+     */
+    private function storeProductImages(Request $request, ?Product $existing = null): array
+    {
+        $out = [];
+        $slots = ['image', 'image_2', 'image_3'];
+
+        foreach ($slots as $slot) {
+            $removeKey = 'remove_'.$slot;
+            if ($existing && $request->boolean($removeKey) && $existing->{$slot}) {
+                Storage::disk('public')->delete($existing->{$slot});
+                $out[$slot] = null;
+            }
+
+            if ($request->hasFile($slot)) {
+                if ($existing && $existing->{$slot}) {
+                    Storage::disk('public')->delete($existing->{$slot});
+                }
+                $out[$slot] = $request->file($slot)->store('products', 'public');
+            }
+        }
+
+        return $out;
     }
 
     private function productReturnRoute(?string $from): array

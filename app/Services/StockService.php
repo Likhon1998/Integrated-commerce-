@@ -281,9 +281,9 @@ class StockService
         return $prefix . '-' . $shopId . '-' . now()->format('Ymd') . '-' . strtoupper(substr(uniqid(), -5));
     }
 
-    public function receivePurchaseItem(Product $product, int $quantity, string $poNumber, ?int $userId = null, ?int $documentId = null): void
+    public function receivePurchaseItem(Product $product, int $quantity, string $poNumber, ?int $userId = null, ?int $documentId = null): StockMovement
     {
-        $this->apply(
+        return $this->apply(
             $product,
             'in',
             $quantity,

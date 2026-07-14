@@ -1,21 +1,127 @@
-<x-supply-layout title="New Purchase Return" subtitle="Stock will be deducted from POS and web store.">
-    <form method="POST" action="{{ route('supply.purchase-returns.store') }}" class="space-y-6" x-data="{ rows: [0] }">
+<x-supply-layout title="New Purchase Return" subtitle="Return goods to a supplier. Stock ↓ on POS/web · Accounts Payable ↓.">
+    @php
+        $productOptions = $products->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->name,
+            'cost' => (float) $p->cost_price,
+            'stock' => (int) $p->stock_quantity,
+        ])->values();
+
+        $poOptions = $purchaseOrders->map(fn ($po) => [
+            'id' => $po->id,
+            'label' => $po->po_number . ' — ' . ($po->supplier->name ?? ''),
+            'supplier_id' => $po->supplier_id,
+        ])->values();
+    @endphp
+
+    <div class="mb-5 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+        <p class="font-semibold text-gray-800 mb-1">How it works</p>
+        <ol class="list-decimal list-inside space-y-1 text-xs sm:text-sm">
+            <li>Pick the supplier (and optional linked Purchase Order)</li>
+            <li>Select products you are sending back + qty + cost</li>
+            <li>Stock decreases · Inventory asset ↓ · Accounts Payable ↓</li>
+        </ol>
+    </div>
+
+    @if($suppliers->isEmpty())
+        <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Add a <a href="{{ route('supply.suppliers.create') }}" class="font-bold underline">supplier</a> first.
+        </div>
+    @endif
+
+    <form method="POST"
+          action="{{ route('supply.purchase-returns.store') }}"
+          class="space-y-5"
+          x-data="{
+              products: @js($productOptions),
+              rows: [{ key: Date.now(), product_id: '', quantity: 1, unit_cost: 0 }],
+              addRow() { this.rows.push({ key: Date.now()+Math.random(), product_id: '', quantity: 1, unit_cost: 0 }); },
+              removeRow(i) { this.rows.length > 1 ? this.rows.splice(i,1) : this.rows=[{ key: Date.now(), product_id: '', quantity: 1, unit_cost: 0 }]; },
+              onProduct(row) {
+                  const p = this.products.find(x => String(x.id) === String(row.product_id));
+                  if (p) row.unit_cost = Number(p.cost) || 0;
+              },
+              stock(row) {
+                  const p = this.products.find(x => String(x.id) === String(row.product_id));
+                  return p ? p.stock : '—';
+              },
+              line(row) { return (Number(row.quantity)||0) * (Number(row.unit_cost)||0); },
+              total() { return this.rows.reduce((s,r)=>s+this.line(r),0); },
+              money(n) { return '৳'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+          }"
+          @if($suppliers->isEmpty() || $products->isEmpty()) onsubmit="return false" @endif>
         @csrf
-        <div class="bg-white rounded-2xl border p-6 grid md:grid-cols-2 gap-4">
-            <div><label class="text-xs font-bold text-gray-500 uppercase">Supplier</label><select name="supplier_id" class="w-full rounded-xl border-gray-200 mt-1" required>@foreach($suppliers as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach</select></div>
-            <div><label class="text-xs font-bold text-gray-500 uppercase">Linked PO (optional)</label><select name="purchase_order_id" class="w-full rounded-xl border-gray-200 mt-1"><option value="">—</option>@foreach($purchaseOrders as $po)<option value="{{ $po->id }}">{{ $po->po_number }}</option>@endforeach</select></div>
-            <div class="md:col-span-2"><label class="text-xs font-bold text-gray-500 uppercase">Notes</label><textarea name="notes" class="w-full rounded-xl border-gray-200 mt-1" rows="2"></textarea></div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div>
+                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Supplier</label>
+                <select name="supplier_id" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
+                    <option value="">Select…</option>
+                    @foreach($suppliers as $s)
+                        <option value="{{ $s->id }}">{{ $s->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Linked PO (optional)</label>
+                <select name="purchase_order_id" class="w-full text-sm rounded-lg border-gray-200 py-1.5">
+                    <option value="">—</option>
+                    @foreach($purchaseOrders as $po)
+                        <option value="{{ $po->id }}">{{ $po->po_number }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Notes</label>
+                <input type="text" name="notes" placeholder="Optional" class="w-full text-sm rounded-lg border-gray-200 py-1.5 placeholder:text-gray-400">
+            </div>
         </div>
-        <div class="bg-white rounded-2xl border p-6">
-            <div class="flex justify-between mb-4"><h3 class="font-bold">Return Items</h3><button type="button" @click="rows.push(Date.now())" class="text-indigo-600 font-bold text-sm">+ Add Row</button></div>
-            <template x-for="(row, index) in rows" :key="row">
-                <div class="grid md:grid-cols-4 gap-3 mb-3">
-                    <select :name="'items['+index+'][product_id]'" class="rounded-xl border-gray-200 md:col-span-2" required>@foreach($products as $p)<option value="{{ $p->id }}">{{ $p->name }} ({{ $p->stock_quantity }} in stock)</option>@endforeach</select>
-                    <input type="number" :name="'items['+index+'][quantity]'" placeholder="Qty" min="1" class="rounded-xl border-gray-200" required>
-                    <input type="number" step="0.01" :name="'items['+index+'][unit_cost]'" placeholder="Unit cost" min="0" class="rounded-xl border-gray-200" required>
-                </div>
-            </template>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+                <h3 class="text-sm font-bold">Return lines</h3>
+                <button type="button" @click="addRow()" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-lg">+ Add line</button>
+            </div>
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-[10px] uppercase tracking-wider text-gray-400 border-b">
+                        <th class="text-left font-semibold px-4 py-2">Product</th>
+                        <th class="font-semibold px-2 py-2 w-20">Stock</th>
+                        <th class="font-semibold px-2 py-2 w-24">Qty</th>
+                        <th class="font-semibold px-2 py-2 w-28">Unit cost</th>
+                        <th class="text-right font-semibold px-2 py-2 w-28">Total</th>
+                        <th class="w-10"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(row, index) in rows" :key="row.key">
+                        <tr class="border-b border-gray-50">
+                            <td class="px-4 py-2">
+                                <select :name="'items['+index+'][product_id]'" x-model="row.product_id" @change="onProduct(row)" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
+                                    <option value="">Select…</option>
+                                    <template x-for="p in products" :key="p.id">
+                                        <option :value="p.id" x-text="p.name"></option>
+                                    </template>
+                                </select>
+                            </td>
+                            <td class="px-2 py-2 text-center text-xs text-gray-500" x-text="stock(row)"></td>
+                            <td class="px-2 py-2"><input type="number" :name="'items['+index+'][quantity]'" x-model.number="row.quantity" min="1" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required></td>
+                            <td class="px-2 py-2"><input type="number" step="0.01" :name="'items['+index+'][unit_cost]'" x-model.number="row.unit_cost" min="0" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required></td>
+                            <td class="px-2 py-2 text-right font-semibold" x-text="money(line(row))"></td>
+                            <td class="px-2 py-2 text-center"><button type="button" @click="removeRow(index)" class="text-gray-400 hover:text-red-500 text-lg">&times;</button></td>
+                        </tr>
+                    </template>
+                </tbody>
+                <tfoot>
+                    <tr class="bg-slate-50">
+                        <td colspan="4" class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Return total</td>
+                        <td class="px-2 py-3 text-right text-sm font-bold" x-text="money(total())"></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
-        <button class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold">Submit Return</button>
+
+        <button class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-5 py-2 rounded-lg font-bold">Submit purchase return</button>
     </form>
 </x-supply-layout>

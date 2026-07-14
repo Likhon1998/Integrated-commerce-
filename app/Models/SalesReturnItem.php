@@ -21,4 +21,9 @@ class SalesReturnItem extends Model
     {
         return $this->belongsTo(OrderItem::class);
     }
+
+    public function salesReturn()
+    {
+        return $this->belongsTo(SalesReturn::class);
+    }
 }

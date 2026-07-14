@@ -207,4 +207,49 @@
     </div>
 </section>
 
+@if(($featuredReviews ?? collect())->isNotEmpty())
+<section class="gaget-section">
+    <div class="gaget-section-header">
+        <h2 class="gaget-section-title">What customers say</h2>
+    </div>
+    <div class="grid gap-4 md:grid-cols-3">
+        @foreach($featuredReviews as $review)
+            <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                <div class="mb-2 text-amber-500 text-sm">{{ str_repeat('★', (int) $review->rating) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</div>
+                <p class="text-sm text-slate-600 leading-relaxed">“{{ $review->body }}”</p>
+                <div class="mt-4 text-sm font-bold text-slate-900">{{ $review->customer_name }}</div>
+                @if($review->customer_title)
+                    <div class="text-xs text-slate-400">{{ $review->customer_title }}</div>
+                @endif
+            </div>
+        @endforeach
+    </div>
+</section>
+@endif
+
+@if(($latestBlogs ?? collect())->isNotEmpty())
+<section class="gaget-section">
+    <div class="gaget-section-header">
+        <h2 class="gaget-section-title">From the blog</h2>
+        <a href="{{ route('website.blogs') }}" class="gaget-section-link">View all →</a>
+    </div>
+    <div class="grid gap-4 md:grid-cols-3">
+        @foreach($latestBlogs as $post)
+            <a href="{{ route('website.blog', $post->slug) }}" class="rounded-2xl border border-slate-100 overflow-hidden bg-white shadow-sm no-underline hover:border-indigo-200 transition">
+                @if($post->cover_image)
+                    <img src="{{ public_storage_url($post->cover_image) }}" alt="" class="h-40 w-full object-cover">
+                @else
+                    <div class="h-40 bg-slate-100"></div>
+                @endif
+                <div class="p-4">
+                    <div class="text-xs text-slate-400">{{ optional($post->published_at)->format('M d, Y') }}</div>
+                    <div class="mt-1 font-bold text-slate-900">{{ $post->title }}</div>
+                    <p class="mt-1 text-sm text-slate-500 line-clamp-2">{{ $post->excerpt }}</p>
+                </div>
+            </a>
+        @endforeach
+    </div>
+</section>
+@endif
+
 @endsection

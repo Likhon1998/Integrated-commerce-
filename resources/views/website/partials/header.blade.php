@@ -12,8 +12,9 @@
         </div>
         <div class="flex items-center gap-5">
             <a href="{{ route('website.track') }}">Track Order</a>
-            <a href="{{ route('login') }}">Help Center</a>
-            <span class="font-semibold text-slate-700 cursor-pointer select-none">{{ $settings->currency_code ?? 'USD' }} ▾</span>
+            <a href="{{ route('website.faqs') }}">Help Center</a>
+            <a href="{{ route('website.blogs') }}">Blog</a>
+            <span class="font-semibold text-slate-700">{{ $settings->currency_code ?? 'USD' }}</span>
         </div>
     </div>
 </div>
@@ -49,14 +50,6 @@
                 </form>
 
                 <div class="flex items-center ml-auto">
-                    <button type="button" class="gaget-action-btn hidden md:flex">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                        Wishlist
-                    </button>
-                    <button type="button" class="gaget-action-btn hidden md:flex">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-                        Compare
-                    </button>
                     <button type="button" @click="cartOpen=true" class="gaget-action-btn">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                         Cart
@@ -118,6 +111,8 @@
 
                         <a href="{{ route('website.shop', ['filter'=>'deals']) }}" class="gaget-nav-link">Deals</a>
                         <a href="{{ route('website.shop', ['filter'=>'new']) }}" class="gaget-nav-link">New Arrivals</a>
+                        <a href="{{ route('website.blogs') }}" class="gaget-nav-link">Blog</a>
+                        <a href="{{ route('website.faqs') }}" class="gaget-nav-link">FAQ</a>
 
                         <div class="gaget-nav-dropdown">
                             <a href="{{ route('home') }}#brands" class="gaget-nav-link gaget-nav-link--dropdown">
@@ -136,7 +131,11 @@
                             </div>
                         </div>
 
-                        <a href="{{ route('login') }}" class="gaget-nav-link">Contact</a>
+                        @if($settings->contact_email ?? false)
+                            <a href="mailto:{{ $settings->contact_email }}" class="gaget-nav-link">Contact</a>
+                        @else
+                            <a href="{{ route('website.faqs') }}" class="gaget-nav-link">Contact</a>
+                        @endif
                     @endforelse
                 </div>
             </div>

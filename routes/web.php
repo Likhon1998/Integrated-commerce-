@@ -6,6 +6,7 @@ use App\Http\Controllers\AiChatController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CounterController;
+use App\Http\Controllers\CounterSessionController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExchangeController;
@@ -27,6 +28,12 @@ use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockLocationController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WebsiteController;
+use App\Http\Controllers\Cms\LandingPageController;
+use App\Http\Controllers\Cms\HomeSlideController;
+use App\Http\Controllers\Cms\PageController as CmsPageController;
+use App\Http\Controllers\Cms\BlogController as CmsBlogController;
+use App\Http\Controllers\Cms\FaqController as CmsFaqController;
+use App\Http\Controllers\Cms\ReviewController as CmsReviewController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -44,11 +51,25 @@ Route::get('/product/{product}', [WebsiteController::class, 'product'])->name('w
 Route::get('/track-order', [WebsiteController::class, 'trackOrderForm'])->name('website.track');
 Route::post('/track-order', [WebsiteController::class, 'trackOrder'])->name('website.track.submit');
 Route::post('/checkout', [WebsiteController::class, 'checkout'])->name('website.checkout');
+Route::get('/page/{slug}', [WebsiteController::class, 'page'])->name('website.page');
+Route::get('/blog', [WebsiteController::class, 'blogs'])->name('website.blogs');
+Route::get('/blog/{slug}', [WebsiteController::class, 'blog'])->name('website.blog');
+Route::get('/faq', [WebsiteController::class, 'faqs'])->name('website.faqs');
 
-Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::class])->group(function () {
+Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::class, \App\Http\Middleware\EnsureStaffOpeningBalance::class])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/refresh-session', function () { return response()->json(['status' => 'Nexa POS Active']); });
+
+    Route::prefix('cms')->name('cms.')->middleware('can:manage website')->group(function () {
+        Route::get('/landing', [LandingPageController::class, 'edit'])->name('landing.edit');
+        Route::put('/landing', [LandingPageController::class, 'update'])->name('landing.update');
+        Route::resource('slides', HomeSlideController::class)->except(['show']);
+        Route::resource('pages', CmsPageController::class)->except(['show']);
+        Route::resource('blogs', CmsBlogController::class)->except(['show']);
+        Route::resource('faqs', CmsFaqController::class)->except(['show']);
+        Route::resource('reviews', CmsReviewController::class)->except(['show']);
+    });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -85,11 +106,17 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::post('/stores', [StockLocationController::class, 'storeSave'])->name('stores.store');
         Route::get('/stores/{location}/edit', [StockLocationController::class, 'storeEdit'])->name('stores.edit');
         Route::put('/stores/{location}', [StockLocationController::class, 'storeUpdate'])->name('stores.update');
-        Route::resource('purchase-orders', PurchaseOrderController::class)->only(['index', 'create', 'store', 'show']);
+        Route::resource('purchase-orders', PurchaseOrderController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
         Route::post('/purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
+        Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
+        Route::post('/purchase-orders/{purchaseOrder}/pay', [PurchaseOrderController::class, 'pay'])->name('purchase-orders.pay');
         Route::get('/purchase-returns', [PurchaseReturnController::class, 'index'])->name('purchase-returns.index');
         Route::get('/purchase-returns/create', [PurchaseReturnController::class, 'create'])->name('purchase-returns.create');
         Route::post('/purchase-returns', [PurchaseReturnController::class, 'store'])->name('purchase-returns.store');
+    });
+
+    // Sales returns — cashiers need this without full inventory access
+    Route::prefix('supply')->name('supply.')->middleware('can:process sales returns')->group(function () {
         Route::get('/sales-returns', [SalesReturnController::class, 'index'])->name('sales-returns.index');
         Route::get('/sales-returns/create', [SalesReturnController::class, 'create'])->name('sales-returns.create');
         Route::post('/sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
@@ -147,6 +174,14 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::post('/staff/{staff}/toggle-suspend', [StaffController::class, 'toggleSuspend'])->name('staff.toggle-suspend');
 
     Route::resource('counters', CounterController::class)->except(['create', 'show', 'edit']);
+
+    Route::get('/counter-sessions', [CounterSessionController::class, 'index'])->name('counters.sessions.index');
+    Route::get('/opening-balance', [CounterSessionController::class, 'openTodayForm'])->name('counters.sessions.open-today');
+    Route::post('/opening-balance', [CounterSessionController::class, 'openTodayStore'])->name('counters.sessions.open-today.store');
+    Route::post('/counter-sessions/open', [CounterSessionController::class, 'open'])->name('counters.sessions.open');
+    Route::get('/counter-sessions/{session}', [CounterSessionController::class, 'show'])->name('counters.sessions.show');
+    Route::get('/counter-sessions/{session}/close', [CounterSessionController::class, 'closeForm'])->name('counters.sessions.close-form');
+    Route::post('/counter-sessions/{session}/close', [CounterSessionController::class, 'close'])->name('counters.sessions.close');
 
     Route::get('/online-orders', [OnlineOrderController::class, 'index'])->name('online-orders.index');
     Route::post('/online-orders/{order}/status', [OnlineOrderController::class, 'updateStatus'])->name('online-orders.update-status');

@@ -11,7 +11,7 @@
         </div>
     </x-slot>
 
-    <div class="py-6 max-w-4xl mx-auto sm:px-6 lg:px-8" x-data="{ imagePreview: null }">
+    <div class="py-6 max-w-4xl mx-auto sm:px-6 lg:px-8">
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             
             <div class="bg-slate-50 border-b border-gray-100 p-6 flex justify-between items-center">
@@ -21,7 +21,7 @@
                     </div>
                     <div>
                         <h3 class="text-lg font-black text-gray-800">Product Specification</h3>
-                        <p class="text-xs text-gray-500 font-medium mt-0.5">Define pricing, stock levels, and visual identifiers.</p>
+                        <p class="text-xs text-gray-500 font-medium mt-0.5">Pricing, stock, photos, and store details customers see online.</p>
                     </div>
                 </div>
 
@@ -41,33 +41,7 @@
                 @endif
                 <div class="p-6 space-y-6">
                     
-                    <div class="md:col-span-2 mb-2">
-                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Product Image (Optional)</label>
-                        
-                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-200 border-dashed rounded-xl hover:border-indigo-500 hover:bg-indigo-50/50 transition-colors group cursor-pointer relative overflow-hidden"
-                             @click="document.getElementById('file-upload').click()">
-                             
-                            <div x-show="!imagePreview" class="space-y-2 text-center">
-                                <svg class="mx-auto h-12 w-12 text-gray-300 group-hover:text-indigo-500 transition-colors" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                </svg>
-                                <div class="flex text-sm text-gray-600 justify-center">
-                                    <span class="relative cursor-pointer bg-transparent rounded-md font-bold text-indigo-600 hover:text-indigo-500 focus-within:outline-none">
-                                        <span>Click to upload a picture</span>
-                                        <input id="file-upload" name="image" type="file" class="sr-only" accept="image/jpeg,image/png,image/webp,image/jpg"
-                                               @change="imagePreview = URL.createObjectURL($event.target.files[0])">
-                                    </span>
-                                </div>
-                                <p class="text-xs text-gray-400 font-medium">PNG, JPG, WEBP up to 2MB</p>
-                            </div>
-
-                            <div x-show="imagePreview" style="display: none;" class="text-center">
-                                <img :src="imagePreview" class="mx-auto h-32 w-auto object-contain rounded-lg shadow-sm mb-3">
-                                <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">Click to change picture</span>
-                            </div>
-                        </div>
-                        @error('image') <p class="text-red-500 text-xs mt-1 font-medium">{{ $message }}</p> @enderror
-                    </div>
+                    @include('products.partials.image-uploads')
 
                     <div class="md:col-span-2">
                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Product Name <span class="text-red-500">*</span></label>
@@ -77,7 +51,7 @@
                             </div>
                             <input type="text" name="name" value="{{ old('name') }}" required autofocus
                                    class="pl-10 block w-full rounded-lg border-gray-300 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5 transition"
-                                   placeholder="e.g. Coca Cola 500ml">
+                                   placeholder="e.g. iPhone 15 Pro Max">
                         </div>
                         @error('name') <p class="text-red-500 text-xs mt-1 font-medium">{{ $message }}</p> @enderror
                     </div>
@@ -128,10 +102,10 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Cost Price (৳)</label>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Cost Price (Tk)</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-gray-400 font-bold text-sm">৳</span>
+                                    <span class="text-gray-400 font-bold text-sm">Tk</span>
                                 </div>
                                 <input type="number" step="0.01" name="cost_price" value="{{ old('cost_price') }}" required
                                        class="pl-10 block w-full rounded-lg border-gray-300 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5 transition">
@@ -140,10 +114,10 @@
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Selling Price (৳)</label>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Selling Price (Tk)</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-indigo-500 font-bold text-sm">৳</span>
+                                    <span class="text-indigo-500 font-bold text-sm">Tk</span>
                                 </div>
                                 <input type="number" step="0.01" name="selling_price" value="{{ old('selling_price') }}" required
                                        class="pl-10 block w-full rounded-lg border-gray-300 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5 transition font-bold text-indigo-600">
@@ -152,12 +126,15 @@
                         </div>
                     </div>
 
+                    @include('products.partials.storefront-fields')
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="md:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
                             <p class="text-sm font-bold text-indigo-900">Stock quantity</p>
                             <p class="mt-1 text-sm text-indigo-800/80">
                                 New products start with <strong>0 stock</strong>. After saving, set quantities in
-                                <a href="{{ route('supply.opening-inventory.index') }}" class="font-bold underline hover:text-indigo-600">Opening Inventory</a>.
+                                <a href="{{ route('supply.opening-inventory.index') }}" class="font-bold underline hover:text-indigo-600">Opening Inventory</a>
+                                so the item can appear for sale online.
                             </p>
                         </div>
 

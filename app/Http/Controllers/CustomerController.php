@@ -10,7 +10,21 @@ class CustomerController extends Controller
 {
     public function index()
     {
-        $customers = Customer::where('shop_id', Auth::user()->shop_id)->latest()->get();
+        $user = Auth::user();
+        $shopId = $user->shop_id;
+
+        $query = Customer::where('shop_id', $shopId);
+
+        // Cashiers: only customers who purchased at their counter
+        if (! $user->isAdminUser() && $user->counter_id) {
+            $query->whereHas('orders', function ($q) use ($user) {
+                $q->where('shop_id', $user->shop_id)
+                    ->where('counter_id', $user->counter_id);
+            });
+        }
+
+        $customers = $query->latest()->get();
+
         return view('customers.index', compact('customers'));
     }
 

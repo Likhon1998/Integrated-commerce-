@@ -20,6 +20,7 @@ class AccountService
         ['code' => 'REVENUE', 'name' => 'Sales Revenue', 'type' => 'income'],
         ['code' => 'COGS', 'name' => 'Cost of Goods Sold', 'type' => 'expense'],
         ['code' => 'INVENTORY', 'name' => 'Inventory Asset', 'type' => 'asset'],
+        ['code' => 'AP', 'name' => 'Accounts Payable', 'type' => 'liability'],
         ['code' => 'PETTY', 'name' => 'Petty Cash', 'type' => 'asset'],
         ['code' => 'WEB-COD', 'name' => 'Online COD Receivable', 'type' => 'asset'],
         ['code' => 'WEB-CASH', 'name' => 'Online Settlement Cash', 'type' => 'asset'],
@@ -101,6 +102,7 @@ class AccountService
 
         return match ($account->type) {
             'asset', 'expense' => $opening + $debits - $credits,
+            'liability', 'equity', 'income' => $opening + $credits - $debits,
             default => $opening + $credits - $debits,
         };
     }
@@ -255,6 +257,63 @@ class AccountService
         );
     }
 
+    /**
+     * Partial/full sales return: reverse revenue for refund amount + restore inventory asset for returned cost.
+     */
+    public function postSalesReturn(\App\Models\SalesReturn $return): void
+    {
+        if ($this->transactionExists($return->shop_id, 'sales_return', \App\Models\SalesReturn::class, $return->id)) {
+            return;
+        }
+
+        $return->loadMissing(['items.product', 'order']);
+        $order = $return->order;
+
+        if (! $order) {
+            return;
+        }
+
+        $this->ensureShopAccounts($return->shop_id);
+
+        $refund = (float) $return->total_refund;
+        $cogs = $return->items->sum(function ($item) {
+            return (float) ($item->product?->cost_price ?? 0) * $item->quantity;
+        });
+
+        $paymentAccount = $order->counter_id
+            ? $this->resolvePaymentAccount($order)
+            : ($this->transactionExists($order->shop_id, 'web_settlement', Order::class, $order->id)
+                ? $this->getAccount($order->shop_id, 'WEB-CASH')
+                : $this->getAccount($order->shop_id, 'WEB-COD'));
+
+        $lines = [];
+
+        if ($refund > 0) {
+            $lines[] = ['account' => $this->getAccount($return->shop_id, 'REVENUE'), 'debit' => $refund, 'credit' => 0, 'counter_id' => $order->counter_id];
+            $lines[] = ['account' => $paymentAccount, 'debit' => 0, 'credit' => $refund, 'counter_id' => $order->counter_id];
+        }
+
+        if ($cogs > 0) {
+            $lines[] = ['account' => $this->getAccount($return->shop_id, 'INVENTORY'), 'debit' => $cogs, 'credit' => 0, 'counter_id' => $order->counter_id];
+            $lines[] = ['account' => $this->getAccount($return->shop_id, 'COGS'), 'debit' => 0, 'credit' => $cogs, 'counter_id' => $order->counter_id];
+        }
+
+        if ($lines === []) {
+            return;
+        }
+
+        $this->createTransaction(
+            shopId: $return->shop_id,
+            type: 'sales_return',
+            referenceType: \App\Models\SalesReturn::class,
+            referenceId: $return->id,
+            description: 'Sales return ' . $return->return_number . ' for ' . $order->invoice_no,
+            date: now(),
+            lines: $lines,
+            userId: $return->user_id ?? Auth::id(),
+        );
+    }
+
     public function postTransfer(int $shopId, Account $from, Account $to, float $amount, string $description, ?int $counterId = null): void
     {
         $this->createTransaction(
@@ -335,6 +394,135 @@ class AccountService
             date: $movement->created_at,
             lines: $lines,
             userId: $movement->user_id,
+        );
+    }
+
+    /**
+     * Purchase receive: Dr Inventory / Cr Accounts Payable
+     */
+    public function postPurchaseReceive(StockMovement $movement, float $unitCost, ?string $poNumber = null): void
+    {
+        if ($this->transactionExists($movement->shop_id, 'purchase_receive', StockMovement::class, $movement->id)) {
+            return;
+        }
+
+        $movement->loadMissing('product');
+        $product = $movement->product;
+
+        if (! $product) {
+            return;
+        }
+
+        $this->ensureShopAccounts($movement->shop_id);
+
+        $value = round($unitCost * $movement->quantity, 2);
+        if ($value <= 0) {
+            return;
+        }
+
+        $this->createTransaction(
+            shopId: $movement->shop_id,
+            type: 'purchase_receive',
+            referenceType: StockMovement::class,
+            referenceId: $movement->id,
+            description: 'Purchase receive' . ($poNumber ? ' - ' . $poNumber : '') . ' - ' . $product->name,
+            date: $movement->created_at,
+            lines: [
+                ['account' => $this->getAccount($movement->shop_id, 'INVENTORY'), 'debit' => $value, 'credit' => 0, 'counter_id' => null],
+                ['account' => $this->getAccount($movement->shop_id, 'AP'), 'debit' => 0, 'credit' => $value, 'counter_id' => null],
+            ],
+            userId: $movement->user_id,
+        );
+    }
+
+    /**
+     * Purchase return: Dr Accounts Payable / Cr Inventory
+     */
+    public function postPurchaseReturn(StockMovement $movement, float $unitCost, ?string $returnNumber = null): void
+    {
+        if ($this->transactionExists($movement->shop_id, 'purchase_return', StockMovement::class, $movement->id)) {
+            return;
+        }
+
+        $movement->loadMissing('product');
+        $product = $movement->product;
+
+        if (! $product) {
+            return;
+        }
+
+        $this->ensureShopAccounts($movement->shop_id);
+
+        $value = round($unitCost * $movement->quantity, 2);
+        if ($value <= 0) {
+            return;
+        }
+
+        $this->createTransaction(
+            shopId: $movement->shop_id,
+            type: 'purchase_return',
+            referenceType: StockMovement::class,
+            referenceId: $movement->id,
+            description: 'Purchase return' . ($returnNumber ? ' - ' . $returnNumber : '') . ' - ' . $product->name,
+            date: $movement->created_at,
+            lines: [
+                ['account' => $this->getAccount($movement->shop_id, 'AP'), 'debit' => $value, 'credit' => 0, 'counter_id' => null],
+                ['account' => $this->getAccount($movement->shop_id, 'INVENTORY'), 'debit' => 0, 'credit' => $value, 'counter_id' => null],
+            ],
+            userId: $movement->user_id,
+        );
+    }
+
+    /**
+     * Pay supplier: Dr Accounts Payable / Cr Cash (or other payment account)
+     */
+    public function postSupplierPayment(int $shopId, float $amount, Account $paymentAccount, string $description, ?int $userId = null): void
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Payment amount must be greater than zero.');
+        }
+
+        $this->ensureShopAccounts($shopId);
+
+        $this->createTransaction(
+            shopId: $shopId,
+            type: 'supplier_payment',
+            referenceType: null,
+            referenceId: null,
+            description: $description,
+            date: now(),
+            lines: [
+                ['account' => $this->getAccount($shopId, 'AP'), 'debit' => $amount, 'credit' => 0, 'counter_id' => null],
+                ['account' => $paymentAccount, 'debit' => 0, 'credit' => $amount, 'counter_id' => $paymentAccount->counter_id],
+            ],
+            userId: $userId ?? Auth::id(),
+        );
+    }
+
+    /**
+     * Opening float into a counter cash account (from Petty Cash).
+     */
+    public function postCounterFloat(int $shopId, Account $counterCash, float $amount, string $description, ?int $userId = null): void
+    {
+        if ($amount <= 0) {
+            return;
+        }
+
+        $this->ensureShopAccounts($shopId);
+        $petty = $this->getAccount($shopId, 'PETTY');
+
+        $this->createTransaction(
+            shopId: $shopId,
+            type: 'counter_open',
+            referenceType: null,
+            referenceId: null,
+            description: $description,
+            date: now(),
+            lines: [
+                ['account' => $counterCash, 'debit' => $amount, 'credit' => 0, 'counter_id' => $counterCash->counter_id],
+                ['account' => $petty, 'debit' => 0, 'credit' => $amount, 'counter_id' => null],
+            ],
+            userId: $userId ?? Auth::id(),
         );
     }
 

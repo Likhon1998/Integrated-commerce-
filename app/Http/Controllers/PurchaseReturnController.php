@@ -8,15 +8,20 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnItem;
 use App\Models\Supplier;
+use App\Services\AccountService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class PurchaseReturnController extends Controller
 {
     use ShopScoped;
 
-    public function __construct(protected StockService $stock) {}
+    public function __construct(
+        protected StockService $stock,
+        protected AccountService $accounts,
+    ) {}
 
     public function index()
     {
@@ -32,24 +37,40 @@ class PurchaseReturnController extends Controller
     {
         $suppliers = Supplier::where('shop_id', $this->shopId())->where('is_active', true)->orderBy('name')->get();
         $products = Product::where('shop_id', $this->shopId())->orderBy('name')->get();
-        $purchaseOrders = PurchaseOrder::where('shop_id', $this->shopId())->whereIn('status', ['partial', 'received'])->latest()->get();
+        $purchaseOrders = PurchaseOrder::where('shop_id', $this->shopId())
+            ->whereIn('status', ['partial', 'received'])
+            ->with('supplier')
+            ->latest()
+            ->get();
+
         return view('supply.purchase-returns.create', compact('suppliers', 'products', 'purchaseOrders'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'supplier_id' => 'required|exists:suppliers,id',
-            'purchase_order_id' => 'nullable|exists:purchase_orders,id',
+            'supplier_id' => [
+                'required',
+                Rule::exists('suppliers', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())),
+            ],
+            'purchase_order_id' => [
+                'nullable',
+                Rule::exists('purchase_orders', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())),
+            ],
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => [
+                'required',
+                Rule::exists('products', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())),
+            ],
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0',
         ]);
 
         try {
             $this->stock->transaction(function () use ($request) {
+                $this->accounts->ensureShopAccounts($this->shopId());
+
                 $total = 0;
                 $return = PurchaseReturn::create([
                     'shop_id' => $this->shopId(),
@@ -71,8 +92,9 @@ class PurchaseReturnController extends Controller
                         'unit_cost' => $item['unit_cost'],
                         'subtotal' => $subtotal,
                     ]);
+
                     $product = Product::where('shop_id', $this->shopId())->findOrFail($item['product_id']);
-                    $this->stock->apply(
+                    $movement = $this->stock->apply(
                         $product,
                         'out',
                         (int) $item['quantity'],
@@ -82,6 +104,13 @@ class PurchaseReturnController extends Controller
                         'purchase_return',
                         $return->id,
                     );
+
+                    $this->accounts->postPurchaseReturn(
+                        $movement,
+                        (float) $item['unit_cost'],
+                        $return->return_number,
+                    );
+
                     $total += $subtotal;
                 }
 
@@ -91,6 +120,7 @@ class PurchaseReturnController extends Controller
             return back()->withInput()->with('error', $e->getMessage());
         }
 
-        return redirect()->route('supply.purchase-returns.index')->with('success', 'Purchase return recorded. Stock synced.');
+        return redirect()->route('supply.purchase-returns.index')
+            ->with('success', 'Purchase return recorded. Stock and Accounts Payable updated.');
     }
 }

@@ -6,21 +6,13 @@
         </div>
     </x-slot>
 
-    <div class="py-6 max-w-4xl mx-auto sm:px-6 lg:px-8" x-data="{ imagePreview: '{{ $product->image ? asset('storage/' . $product->image) : '' }}' }">
+    <div class="py-6 max-w-4xl mx-auto sm:px-6 lg:px-8">
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <form action="{{ route('products.update', $product) }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 @method('PUT')
                 <div class="p-6 space-y-6">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Product Image</label>
-                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-200 border-dashed rounded-xl hover:border-indigo-500 cursor-pointer" @click="document.getElementById('file-upload').click()">
-                            <div x-show="imagePreview" class="text-center">
-                                <img :src="imagePreview" class="mx-auto h-32 w-auto object-contain rounded-lg shadow-sm mb-3">
-                            </div>
-                            <input id="file-upload" name="image" type="file" class="sr-only" accept="image/*" @change="imagePreview = URL.createObjectURL($event.target.files[0])">
-                        </div>
-                    </div>
+                    @include('products.partials.image-uploads', ['product' => $product])
 
                     <div>
                         <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Product Name *</label>
@@ -54,14 +46,16 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Cost Price</label>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Cost Price (Tk)</label>
                             <input type="number" step="0.01" name="cost_price" value="{{ old('cost_price', $product->cost_price) }}" required class="block w-full rounded-lg border-gray-300 bg-slate-50 sm:text-sm py-2.5">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Selling Price</label>
+                            <label class="block text-xs font-bold text-gray-700 uppercase mb-2">Selling Price (Tk)</label>
                             <input type="number" step="0.01" name="selling_price" value="{{ old('selling_price', $product->selling_price) }}" required class="block w-full rounded-lg border-gray-300 bg-slate-50 sm:text-sm py-2.5">
                         </div>
                     </div>
+
+                    @include('products.partials.storefront-fields', ['product' => $product])
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>

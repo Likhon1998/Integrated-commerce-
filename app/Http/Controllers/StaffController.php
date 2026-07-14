@@ -2,27 +2,39 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Counter;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
 
 class StaffController extends Controller
 {
+    protected array $adminRoleNames = ['Shop Owner', 'Admin'];
+
     public function index()
     {
         $user = Auth::user();
         $shop = $user->shop;
 
-        if (!$shop) {
+        if (! $shop) {
             abort(403, 'You do not have a shop assigned.');
         }
 
+        // Admins must never stay assigned to a till
+        User::where('shop_id', $shop->id)
+            ->where(function ($q) {
+                $q->whereIn('role', ['admin', 'Admin', 'shop_owner', 'Shop Owner', 'superadmin'])
+                    ->orWhereHas('roles', fn ($r) => $r->whereIn('name', $this->adminRoleNames));
+            })
+            ->whereNotNull('counter_id')
+            ->update(['counter_id' => null]);
+
         $staff = User::where('shop_id', $shop->id)->with(['roles', 'counter'])->latest()->get();
-        $roles = Role::whereNotIn('name', ['Shop Owner'])->get();
-        $counters = Counter::where('shop_id', $shop->id)->where('is_active', true)->get();
+        $roles = $this->assignableRoles();
+        $counters = Counter::where('shop_id', $shop->id)->where('is_active', true)->orderBy('name')->get();
 
         return view('staff.index', compact('staff', 'shop', 'roles', 'counters'));
     }
@@ -32,12 +44,12 @@ class StaffController extends Controller
         $user = Auth::user();
         $shop = $user->shop;
 
-        if (!$shop) {
+        if (! $shop) {
             abort(403, 'No shop assigned.');
         }
 
-        $counters = Counter::where('shop_id', $shop->id)->where('is_active', true)->get();
-        $roles = Role::whereNotIn('name', ['Shop Owner'])->get();
+        $counters = Counter::where('shop_id', $shop->id)->where('is_active', true)->orderBy('name')->get();
+        $roles = $this->assignableRoles();
 
         return view('staff.create', compact('roles', 'counters', 'shop'));
     }
@@ -46,38 +58,28 @@ class StaffController extends Controller
     {
         $user = Auth::user();
 
-        if ($request->shop_id != $user->shop_id) {
+        if ((int) $request->shop_id !== (int) $user->shop_id) {
             abort(403, 'Unauthorized shop assignment.');
         }
 
-        $request->validate([
-            'shop_id' => 'required|exists:shops,id',
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8',
-            'role' => 'required|string|exists:roles,name',
-            'counter_id' => [
-                'nullable',
-                function ($attribute, $value, $fail) use ($user) {
-                    if ($value && !Counter::where('id', $value)->where('shop_id', $user->shop_id)->exists()) {
-                        $fail('The selected counter does not belong to this shop.');
-                    }
-                },
-            ],
-        ]);
+        $data = $this->validatedStaff($request, $user->shop_id);
+
+        if (in_array($data['role'], $this->adminRoleNames, true)) {
+            return back()->withInput()->with('error', 'Admin / Shop Owner accounts cannot be created from Staff. They cannot be assigned to a counter.');
+        }
 
         $staff = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
             'shop_id' => $user->shop_id,
-            'role' => $request->role,
-            'counter_id' => $request->counter_id ?: null,
+            'role' => $data['role'],
+            'counter_id' => $data['counter_id'],
         ]);
 
-        $staff->assignRole($request->role);
+        $staff->assignRole($data['role']);
 
-        return redirect()->route('staff.index')->with('success', 'Staff member added successfully!');
+        return redirect()->route('staff.index')->with('success', 'Staff created and assigned to counter successfully.');
     }
 
     public function edit(User $staff)
@@ -86,8 +88,11 @@ class StaffController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $roles = Role::whereNotIn('name', ['Shop Owner'])->get();
-        $counters = Counter::where('shop_id', $staff->shop_id)->where('is_active', true)->get();
+        $staff->clearCounterIfAdmin();
+        $staff->refresh();
+
+        $roles = $this->assignableRoles();
+        $counters = Counter::where('shop_id', $staff->shop_id)->where('is_active', true)->orderBy('name')->get();
 
         return view('staff.edit', compact('staff', 'roles', 'counters'));
     }
@@ -98,26 +103,27 @@ class StaffController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $request->validate([
-            'role' => 'required|string|exists:roles,name',
-            'counter_id' => [
-                'nullable',
-                function ($attribute, $value, $fail) use ($staff) {
-                    if ($value && !Counter::where('id', $value)->where('shop_id', $staff->shop_id)->exists()) {
-                        $fail('The selected counter does not belong to this shop.');
-                    }
-                },
-            ],
-        ]);
+        if ($staff->isAdminUser()) {
+            // Admin/owner profile: role locked, always no counter
+            $staff->update(['counter_id' => null]);
+
+            return redirect()->route('staff.index')->with('success', 'Admin has no counter assignment (by design).');
+        }
+
+        $data = $this->validatedStaff($request, $staff->shop_id, updating: true, staff: $staff);
+
+        if (in_array($data['role'], $this->adminRoleNames, true)) {
+            return back()->withInput()->with('error', 'Cannot promote staff to Admin/Shop Owner here.');
+        }
 
         $staff->update([
-            'role' => $request->role,
-            'counter_id' => $request->counter_id ?: null,
+            'role' => $data['role'],
+            'counter_id' => $data['counter_id'],
         ]);
 
-        $staff->syncRoles([$request->role]);
+        $staff->syncRoles([$data['role']]);
 
-        return redirect()->route('staff.index')->with('success', 'Staff access updated successfully!');
+        return redirect()->route('staff.index')->with('success', 'Staff counter / role updated.');
     }
 
     public function destroy(User $staff)
@@ -132,8 +138,8 @@ class StaffController extends Controller
             return redirect()->route('staff.index')->with('error', 'You cannot delete your own account.');
         }
 
-        if ($staff->hasRole('Shop Owner') || $staff->role === 'Shop Owner') {
-            return redirect()->route('staff.index')->with('error', 'Action Denied: You cannot delete a Shop Owner.');
+        if ($staff->isAdminUser()) {
+            return redirect()->route('staff.index')->with('error', 'Action Denied: You cannot delete an Admin / Shop Owner.');
         }
 
         $staff->delete();
@@ -153,10 +159,43 @@ class StaffController extends Controller
             return back()->with('error', 'You cannot suspend your own account!');
         }
 
-        $staff->update(['is_suspended' => !$staff->is_suspended]);
+        if ($staff->isAdminUser()) {
+            return back()->with('error', 'You cannot suspend an Admin / Shop Owner.');
+        }
+
+        $staff->update(['is_suspended' => ! $staff->is_suspended]);
 
         $status = $staff->is_suspended ? 'suspended and locked out' : 'reactivated';
 
         return back()->with('success', "Staff member {$staff->name} has been successfully {$status}.");
+    }
+
+    protected function assignableRoles()
+    {
+        return Role::whereNotIn('name', $this->adminRoleNames)->orderBy('name')->get();
+    }
+
+    protected function validatedStaff(Request $request, int $shopId, bool $updating = false, ?User $staff = null): array
+    {
+        $rules = [
+            'role' => [
+                'required',
+                'string',
+                Rule::exists('roles', 'name')->where(fn ($q) => $q->whereNotIn('name', $this->adminRoleNames)),
+            ],
+            'counter_id' => [
+                'required',
+                Rule::exists('counters', 'id')->where(fn ($q) => $q->where('shop_id', $shopId)->where('is_active', true)),
+            ],
+        ];
+
+        if (! $updating) {
+            $rules['shop_id'] = 'required|exists:shops,id';
+            $rules['name'] = 'required|string|max:255';
+            $rules['email'] = 'required|string|email|max:255|unique:users,email';
+            $rules['password'] = 'required|string|min:8';
+        }
+
+        return $request->validate($rules);
     }
 }

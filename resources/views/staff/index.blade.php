@@ -88,15 +88,18 @@
                                 </td>
                                 
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    @if($member->counter)
+                                    @if($member->isAdminUser())
+                                        <span class="text-xs font-bold text-violet-700 bg-violet-50 px-2.5 py-1 rounded border border-violet-100 inline-flex items-center gap-1.5">
+                                            No counter (admin)
+                                        </span>
+                                    @elseif($member->counter)
                                         <div class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-100 inline-flex items-center gap-1.5">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                                             {{ $member->counter->name }}
                                         </div>
                                     @else
-                                        <span class="text-xs font-medium text-gray-400 italic flex items-center gap-1">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                                            Not Assigned
+                                        <span class="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded border border-amber-100 inline-flex items-center gap-1">
+                                            POS Locked — assign counter
                                         </span>
                                     @endif
                                 </td>
@@ -123,7 +126,7 @@
                                             Edit
                                         </a>
                                         
-                                        @if($member->id !== Auth::id() && !$member->hasRole('Shop Owner') && $member->role !== 'Shop Owner')
+                                        @if($member->id !== Auth::id() && !$member->isAdminUser())
                                             
                                             <form action="{{ route('staff.toggle-suspend', $member->id) }}" method="POST" class="inline" 
                                                   onsubmit="return confirm('Are you sure you want to {{ $member->is_suspended ? 'reactivate' : 'suspend' }} this employee?');">

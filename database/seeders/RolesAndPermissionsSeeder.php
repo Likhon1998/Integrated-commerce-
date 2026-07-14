@@ -15,12 +15,14 @@ class RolesAndPermissionsSeeder extends Seeder
         $permissions = [
             'view dashboard',
             'process pos sales',
+            'process sales returns',
             'manage inventory',
             'view sales ledger',
             'manage staff',
             'manage roles',
             'manage counters',
             'use ai chat',
+            'manage website',
         ];
 
         foreach ($permissions as $permission) {
@@ -31,14 +33,17 @@ class RolesAndPermissionsSeeder extends Seeder
         $cashierRole->syncPermissions([
             'view dashboard',
             'process pos sales',
+            'process sales returns',
         ]);
 
         $managerRole = Role::firstOrCreate(['name' => 'Manager', 'guard_name' => 'web']);
         $managerRole->syncPermissions([
             'view dashboard',
             'process pos sales',
+            'process sales returns',
             'manage inventory',
             'view sales ledger',
+            'manage website',
         ]);
 
         $shopOwnerRole = Role::firstOrCreate(['name' => 'Shop Owner', 'guard_name' => 'web']);

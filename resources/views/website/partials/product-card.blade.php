@@ -9,9 +9,6 @@
     @if($discount > 0)
         <span class="gaget-discount-badge">-{{ $discount }}%</span>
     @endif
-    <button type="button" class="gaget-wishlist-btn" title="Wishlist">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-    </button>
     <a href="{{ route('website.product', $product) }}" class="gaget-product-img">
         <img src="{{ $img }}" alt="{{ $product->name }}" loading="lazy">
     </a>
@@ -30,5 +27,10 @@
                 <span class="gaget-price-old">{{ $ws->formatPrice($product->original_price, $settings) }}</span>
             @endif
         </div>
+        <button type="button"
+                class="mt-3 w-full rounded-xl bg-slate-900 text-white text-sm font-bold py-2.5 hover:bg-indigo-600 transition"
+                @click.prevent="addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}})">
+            Add to cart
+        </button>
     </div>
 </div>

@@ -31,13 +31,28 @@ class PosController extends Controller
             return redirect()->route('dashboard')->with('error', 'Access Denied: You must be assigned to a specific Counter before you can access the POS terminal. Please contact your Admin.');
         }
 
+        // Cashiers assigned to a counter must enter today's opening cash first
+        if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
+            return redirect()
+                ->route('counters.sessions.open-today')
+                ->with('error', 'Enter your opening cash for today before using the POS.');
+        }
+
         $shopId = $user->shop_id;
         $categories = Category::where('shop_id', $shopId)->get();
         
         // Only show products that belong to this shop and are in stock
         $products = Product::where('shop_id', $shopId)
-            ->where('stock_quantity', '>', 0)
+            ->orderBy('name')
             ->get();
+
+        $openSession = null;
+        if ($user->counter_id) {
+            $counter = \App\Models\Counter::find($user->counter_id);
+            $openSession = $counter
+                ? app(\App\Services\CounterSessionService::class)->currentOpen($counter)
+                : null;
+        }
 
         // 🚀 CATCH EXCHANGE PARAMETERS (If redirected from Sales Ledger)
         $exchangeOrder = $request->query('exchange_order');
@@ -45,7 +60,15 @@ class PosController extends Controller
         $returnQty = $request->query('return_qty');
         $credit = $request->query('credit', 0);
 
-        return view('pos.index', compact('categories', 'products', 'exchangeOrder', 'returnProduct', 'returnQty', 'credit'));
+        return view('pos.index', compact(
+            'categories',
+            'products',
+            'exchangeOrder',
+            'returnProduct',
+            'returnQty',
+            'credit',
+            'openSession',
+        ));
     }
 
     /**
@@ -59,6 +82,14 @@ class PosController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Transaction Blocked: No Counter assigned to your account.'
+            ], 403);
+        }
+
+        if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Enter today\'s opening cash before making sales.',
+                'redirect' => route('counters.sessions.open-today'),
             ], 403);
         }
 
@@ -260,6 +291,10 @@ class PosController extends Controller
         
         if (!$user->canAccessPos()) {
             return response()->json(['success' => false, 'message' => 'No counter assigned. Sync blocked.'], 403);
+        }
+
+        if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
+            return response()->json(['success' => false, 'message' => 'Enter today\'s opening cash before syncing sales.'], 403);
         }
 
         $shopId = $user->shop_id;

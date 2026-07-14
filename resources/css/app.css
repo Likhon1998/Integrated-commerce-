@@ -1,3 +1,47 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Admin panel: moderate / compact typography (POS + storefront keep their own layouts) */
+@layer base {
+    body.admin-panel {
+        font-size: 13.5px;
+        line-height: 1.5;
+        letter-spacing: 0.005em;
+    }
+
+    body.admin-panel input,
+    body.admin-panel select,
+    body.admin-panel textarea,
+    body.admin-panel button {
+        font-size: inherit;
+    }
+}
+
+@layer utilities {
+    body.admin-panel .text-4xl { font-size: 1.65rem !important; line-height: 1.25 !important; }
+    body.admin-panel .text-3xl { font-size: 1.4rem !important; line-height: 1.3 !important; }
+    body.admin-panel .text-2xl { font-size: 1.2rem !important; line-height: 1.35 !important; }
+    body.admin-panel .text-xl  { font-size: 1.05rem !important; line-height: 1.4 !important; }
+    body.admin-panel .text-lg  { font-size: 0.98rem !important; line-height: 1.45 !important; }
+    body.admin-panel .text-base { font-size: 0.9rem !important; line-height: 1.5 !important; }
+    body.admin-panel .text-sm  { font-size: 0.8125rem !important; line-height: 1.45 !important; }
+    body.admin-panel .text-xs  { font-size: 0.72rem !important; line-height: 1.4 !important; }
+
+    /* Keep tiny labels readable but not huge */
+    body.admin-panel .text-\[11px\],
+    body.admin-panel .text-\[10px\] {
+        font-size: 0.68rem !important;
+    }
+}
+
+/* Hide scrollbars but keep scroll (sidebar + admin main) */
+.admin-scroll-hide {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge legacy */
+}
+.admin-scroll-hide::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}

@@ -47,6 +47,12 @@ class AuthenticatedSessionController extends Controller
         // 3. If they are NOT suspended, let them into the dashboard safely
         $request->session()->regenerate();
 
+        $user = $request->user();
+
+        if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
+            return redirect()->route('counters.sessions.open-today');
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

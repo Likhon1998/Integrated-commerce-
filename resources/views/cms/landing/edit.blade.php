@@ -1,0 +1,127 @@
+<x-cms-layout
+    title="Landing Page"
+    subtitle="Store branding, trust features, and homepage promo banners. Changes sync to the public website."
+    previewUrl="{{ route('home') }}"
+>
+    <form method="POST" action="{{ route('cms.landing.update') }}" enctype="multipart/form-data" class="space-y-6"
+          x-data="{
+            features: @js($features->map(fn($f)=>['id'=>$f->id,'icon'=>$f->icon,'title'=>$f->title,'subtitle'=>$f->subtitle,'sort_order'=>$f->sort_order,'is_active'=>$f->is_active])->values()),
+            banners: @js($banners->map(fn($b)=>['id'=>$b->id,'title'=>$b->title,'subtitle'=>$b->subtitle,'price_from'=>$b->price_from,'button_text'=>$b->button_text,'button_url'=>$b->button_url,'theme'=>$b->theme,'sort_order'=>$b->sort_order,'is_active'=>$b->is_active,'image_path'=>$b->image_path])->values()),
+            addFeature(){ this.features.push({id:null,icon:'truck',title:'',subtitle:'',sort_order:this.features.length,is_active:true}) },
+            addBanner(){ this.banners.push({id:null,title:'',subtitle:'',price_from:'',button_text:'Shop Now',button_url:'/shop',theme:'dark',sort_order:this.banners.length,is_active:true,image_path:null}) }
+          }">
+        @csrf
+        @method('PUT')
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 class="text-base font-bold text-slate-900">Store identity</h3>
+            <p class="text-sm text-slate-500 mt-1">Shown in the website header, footer, and browser title.</p>
+            <div class="mt-5 grid gap-4 md:grid-cols-2">
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Store name</label>
+                    <input name="store_name" value="{{ old('store_name', $settings->store_name) }}" class="mt-1 w-full rounded-xl border-slate-200" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Logo</label>
+                    <input type="file" name="logo" accept="image/*" class="mt-1 w-full rounded-xl border-slate-200 text-sm">
+                    @if($settings->logo_path)
+                        <img src="{{ public_storage_url($settings->logo_path) }}" alt="" class="mt-2 h-10 object-contain">
+                    @endif
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Currency code</label>
+                    <input name="currency_code" value="{{ old('currency_code', $settings->currency_code) }}" class="mt-1 w-full rounded-xl border-slate-200" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Currency symbol</label>
+                    <input name="currency_symbol" value="{{ old('currency_symbol', $settings->currency_symbol) }}" class="mt-1 w-full rounded-xl border-slate-200" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Special offer text</label>
+                    <input name="special_offer_text" value="{{ old('special_offer_text', $settings->special_offer_text) }}" class="mt-1 w-full rounded-xl border-slate-200">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Trusted-by text</label>
+                    <input name="trusted_by_text" value="{{ old('trusted_by_text', $settings->trusted_by_text) }}" class="mt-1 w-full rounded-xl border-slate-200">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Contact email</label>
+                    <input type="email" name="contact_email" value="{{ old('contact_email', $settings->contact_email) }}" class="mt-1 w-full rounded-xl border-slate-200">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-slate-500">Contact phone</label>
+                    <input name="contact_phone" value="{{ old('contact_phone', $settings->contact_phone) }}" class="mt-1 w-full rounded-xl border-slate-200">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-xs font-bold uppercase text-slate-500">Address</label>
+                    <textarea name="contact_address" rows="2" class="mt-1 w-full rounded-xl border-slate-200">{{ old('contact_address', $settings->contact_address) }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Homepage features</h3>
+                    <p class="text-sm text-slate-500">Icons under the hero (shipping, warranty, etc.).</p>
+                </div>
+                <button type="button" @click="addFeature()" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">+ Feature</button>
+            </div>
+            <div class="mt-4 space-y-3">
+                <template x-for="(f, i) in features" :key="i">
+                    <div class="grid gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 md:grid-cols-12">
+                        <input type="hidden" :name="'features['+i+'][id]'" :value="f.id || ''">
+                        <input :name="'features['+i+'][icon]'" x-model="f.icon" placeholder="icon" class="md:col-span-2 rounded-lg border-slate-200 text-sm">
+                        <input :name="'features['+i+'][title]'" x-model="f.title" placeholder="Title" class="md:col-span-3 rounded-lg border-slate-200 text-sm">
+                        <input :name="'features['+i+'][subtitle]'" x-model="f.subtitle" placeholder="Subtitle" class="md:col-span-4 rounded-lg border-slate-200 text-sm">
+                        <input type="number" :name="'features['+i+'][sort_order]'" x-model="f.sort_order" class="md:col-span-1 rounded-lg border-slate-200 text-sm">
+                        <label class="md:col-span-1 flex items-center gap-1 text-xs font-semibold text-slate-600">
+                            <input type="checkbox" :name="'features['+i+'][is_active]'" value="1" x-model="f.is_active" class="rounded border-slate-300"> On
+                        </label>
+                        <button type="button" @click="features.splice(i,1)" class="md:col-span-1 text-xs font-bold text-rose-600">Remove</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">Promo banners</h3>
+                    <p class="text-sm text-slate-500">Homepage promo cards linked to shop collections.</p>
+                </div>
+                <button type="button" @click="addBanner()" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">+ Banner</button>
+            </div>
+            <div class="mt-4 space-y-4">
+                <template x-for="(b, i) in banners" :key="i">
+                    <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4 space-y-2">
+                        <input type="hidden" :name="'banners['+i+'][id]'" :value="b.id || ''">
+                        <div class="grid gap-2 md:grid-cols-2">
+                            <input :name="'banners['+i+'][title]'" x-model="b.title" placeholder="Title" class="rounded-lg border-slate-200 text-sm">
+                            <input :name="'banners['+i+'][subtitle]'" x-model="b.subtitle" placeholder="Subtitle" class="rounded-lg border-slate-200 text-sm">
+                            <input type="number" step="0.01" :name="'banners['+i+'][price_from]'" x-model="b.price_from" placeholder="Price from" class="rounded-lg border-slate-200 text-sm">
+                            <input :name="'banners['+i+'][button_url]'" x-model="b.button_url" placeholder="Button URL" class="rounded-lg border-slate-200 text-sm">
+                            <input :name="'banners['+i+'][button_text]'" x-model="b.button_text" placeholder="Button text" class="rounded-lg border-slate-200 text-sm">
+                            <select :name="'banners['+i+'][theme]'" x-model="b.theme" class="rounded-lg border-slate-200 text-sm">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <input type="file" :name="'banners['+i+'][image]'" accept="image/*" class="text-sm">
+                            <input type="number" :name="'banners['+i+'][sort_order]'" x-model="b.sort_order" class="w-20 rounded-lg border-slate-200 text-sm">
+                            <label class="flex items-center gap-1 text-xs font-semibold text-slate-600">
+                                <input type="checkbox" :name="'banners['+i+'][is_active]'" value="1" x-model="b.is_active" class="rounded border-slate-300"> Active
+                            </label>
+                            <button type="button" @click="banners.splice(i,1)" class="text-xs font-bold text-rose-600">Remove</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div class="flex justify-end">
+            <button class="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Save landing page</button>
+        </div>
+    </form>
+</x-cms-layout>

@@ -32,17 +32,21 @@ class WebsiteController extends Controller
         $shopId = $this->website->shopId();
         abort_unless($shopId, 404);
 
-        $query = Product::where('shop_id', $shopId)->where('stock_quantity', '>', 0)->with('category');
+        $query = $this->website->catalogQuery($shopId)->with(['category', 'brand']);
 
         if ($request->filled('category')) {
-            $query->whereHas('category', fn ($q) => $q->where('slug', $request->category));
+            $query->whereHas('category', function ($q) use ($request) {
+                $q->where('slug', $request->category)
+                    ->orWhere('id', $request->category);
+            });
         }
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('brand_name', 'like', "%{$search}%");
+                    ->orWhere('brand_name', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%");
             });
         }
 
@@ -50,12 +54,16 @@ class WebsiteController extends Controller
             $query->whereNotNull('original_price')
                 ->whereColumn('original_price', '>', 'selling_price');
         } elseif ($request->filter === 'new') {
-            $query->latest();
+            $query->where(function ($q) {
+                $q->where('is_new_arrival', true)->orWhere('created_at', '>=', now()->subDays(30));
+            })->latest();
         } elseif ($request->filter === 'bestsellers') {
+            $query->orderByDesc('is_best_seller')->orderByDesc('review_count')->latest();
+        } else {
             $query->latest();
         }
 
-        $products = $query->latest()->paginate(12);
+        $products = $query->paginate(12)->withQueryString();
         $categories = Category::where('shop_id', $shopId)->orderBy('name')->get();
 
         return view('website.shop', array_merge($this->website->homepageData(), compact('products', 'categories')));
@@ -66,10 +74,18 @@ class WebsiteController extends Controller
         $shopId = $this->website->shopId();
         abort_unless($shopId, 404);
 
-        $category = Category::where('shop_id', $shopId)->where('slug', $slug)->firstOrFail();
-        $products = Product::where('shop_id', $shopId)
+        $category = Category::where('shop_id', $shopId)
+            ->where(function ($q) use ($slug) {
+                $q->where('slug', $slug)->orWhere('id', $slug);
+            })
+            ->firstOrFail();
+
+        if (blank($category->slug)) {
+            $category->save(); // triggers slug generation
+        }
+
+        $products = $this->website->catalogQuery($shopId)
             ->where('category_id', $category->id)
-            ->where('stock_quantity', '>', 0)
             ->with(['category', 'brand'])
             ->latest()
             ->paginate(12);
@@ -95,8 +111,7 @@ class WebsiteController extends Controller
 
         abort_unless($brand, 404);
 
-        $products = Product::where('shop_id', $shopId)
-            ->where('stock_quantity', '>', 0)
+        $products = $this->website->catalogQuery($shopId)
             ->where(function ($q) use ($brand) {
                 $q->where('brand_id', $brand->id)
                     ->orWhere('brand_name', $brand->name);
@@ -117,21 +132,61 @@ class WebsiteController extends Controller
     public function product(Product $product)
     {
         $shopId = $this->website->shopId();
-        abort_unless($shopId && $product->shop_id === $shopId && $product->stock_quantity > 0, 404);
+        $published = $product->is_published !== false;
+        abort_unless($shopId && $product->shop_id === $shopId && $product->stock_quantity > 0 && $published, 404);
 
-        $related = Product::where('shop_id', $shopId)
-            ->where('stock_quantity', '>', 0)
+        $related = $this->website->catalogQuery($shopId)
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->take(4)
             ->get();
 
-        return view('website.product', array_merge($this->website->homepageData(), compact('product', 'related')));
+        $reviews = \App\Models\CmsReview::where('shop_id', $shopId)
+            ->where('is_published', true)
+            ->where(function ($q) use ($product) {
+                $q->where('product_id', $product->id)->orWhereNull('product_id');
+            })
+            ->orderByDesc('is_featured')
+            ->orderBy('sort_order')
+            ->take(8)
+            ->get();
+
+        return view('website.product', array_merge($this->website->homepageData(), compact('product', 'related', 'reviews')));
     }
 
     public function trackOrderForm()
     {
         return view('website.track-order', $this->website->homepageData());
+    }
+
+    public function page(string $slug)
+    {
+        $page = $this->website->publishedPage($slug);
+        abort_unless($page, 404);
+
+        return view('website.cms-page', array_merge($this->website->homepageData(), compact('page')));
+    }
+
+    public function blogs()
+    {
+        $blogs = $this->website->publishedBlogs();
+
+        return view('website.blogs', array_merge($this->website->homepageData(), compact('blogs')));
+    }
+
+    public function blog(string $slug)
+    {
+        $blog = $this->website->publishedBlog($slug);
+        abort_unless($blog, 404);
+
+        return view('website.blog-show', array_merge($this->website->homepageData(), compact('blog')));
+    }
+
+    public function faqs()
+    {
+        $faqs = $this->website->publishedFaqs();
+
+        return view('website.faqs', array_merge($this->website->homepageData(), compact('faqs')));
     }
 
     public function checkout(Request $request)
@@ -161,7 +216,7 @@ class WebsiteController extends Controller
 
         foreach ($request->cart as $item) {
             $product = Product::where('shop_id', $shopId)->find($item['id']);
-            if (! $product) {
+            if (! $product || $product->is_published === false) {
                 return response()->json(['success' => false, 'message' => 'A product in your cart is no longer available.']);
             }
             if ($product->stock_quantity < $item['qty']) {

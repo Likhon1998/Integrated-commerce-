@@ -1,89 +1,126 @@
 <x-app-layout>
-    <div class="max-w-4xl mx-auto pt-8 pb-12 px-4 sm:px-6">
-        
-        <div class="mb-6 flex justify-between items-center">
-            <h2 class="text-3xl font-black text-slate-900">Add Staff Credential</h2>
-            <a href="{{ route('staff.index') }}" class="text-sm font-bold text-indigo-600 hover:underline">Back to List</a>
+    <div class="max-w-3xl mx-auto pt-6 pb-12 px-4 sm:px-6">
+
+        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+                <a href="{{ route('staff.index') }}" class="inline-flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:text-indigo-800 mb-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    Back to staff
+                </a>
+                <h2 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Add staff</h2>
+                <p class="mt-1 text-sm text-slate-500">Create a login and assign a counter. Staff must enter opening cash each day before POS.</p>
+            </div>
         </div>
 
+        @if (session('error'))
+            <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{{ session('error') }}</div>
+        @endif
+
         @if ($errors->any())
-            <div class="mb-6 bg-red-50 border border-red-200 text-red-700 px-6 py-5 rounded-2xl shadow-sm">
-                <div class="flex items-center gap-2 mb-2">
-                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    <p class="font-black text-sm uppercase tracking-widest text-red-800">Please fix these errors:</p>
-                </div>
-                <ul class="list-disc pl-6 text-sm font-bold text-red-600">
-                    @foreach ($errors->all() as $error) <li>{{ $error }}</li> @endforeach
+            <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
+                <p class="text-sm font-bold text-red-900 mb-2">Please fix the following:</p>
+                <ul class="list-disc pl-5 text-sm font-medium text-red-700 space-y-1">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
                 </ul>
             </div>
         @endif
 
-        <div class="bg-white rounded-[24px] shadow-sm border border-gray-200 p-8">
-            <form action="{{ route('staff.store') }}" method="POST">
-                @csrf
+        @if($counters->isEmpty())
+            <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p class="text-sm font-semibold text-amber-900">Add at least one counter before creating staff.</p>
+                <a href="{{ route('counters.index') }}" class="text-sm font-bold text-indigo-700 hover:underline whitespace-nowrap">Manage counters →</a>
+            </div>
+        @endif
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-gray-100">
-                    
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase mb-2">Shop Assignment (Locked) *</label>
-                        <div class="relative group">
-                            <div class="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3.5 font-bold text-gray-500 flex items-center gap-3 cursor-not-allowed">
-                                <svg class="w-5 h-5 text-slate-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                                {{ $shop->name }}
-                            </div>
-                            <input type="hidden" name="shop_id" value="{{ $shop->id }}">
-                        </div>
-                    </div>
+        <form action="{{ route('staff.store') }}" method="POST" class="space-y-5">
+            @csrf
+            <input type="hidden" name="shop_id" value="{{ $shop->id }}">
 
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase mb-2">Assign to Counter</label>
-                        <select name="counter_id" class="w-full rounded-xl border-gray-300 font-bold focus:ring-indigo-500 py-3.5">
-                            <option value="">No Specific Counter (Floating)</option>
-                            @foreach($counters as $counter)
-                                <option value="{{ $counter->id }}" {{ old('counter_id') == $counter->id ? 'selected' : '' }}>
-                                    📍 {{ $counter->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
+            {{-- Shop (locked) --}}
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 shrink-0">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
                 </div>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Shop</p>
+                    <p class="text-sm font-bold text-slate-800">{{ $shop->name }}</p>
+                </div>
+            </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase mb-2">Employee Name *</label>
-                        <input type="text" name="name" value="{{ old('name') }}" required class="w-full rounded-xl {{ $errors->has('name') ? 'border-red-400 bg-red-50' : 'border-gray-300' }} py-3.5 font-bold focus:ring-indigo-500" placeholder="John Doe">
+            {{-- Profile --}}
+            <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+                <h3 class="text-sm font-bold text-slate-900 mb-1">Profile</h3>
+                <p class="text-xs text-slate-500 mb-5">Login details this employee will use.</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label for="name" class="block text-xs font-bold text-slate-500 mb-1.5">Full name *</label>
+                        <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus
+                               placeholder="e.g. Karim Hossain"
+                               class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3 font-semibold {{ $errors->has('name') ? 'border-red-400 bg-red-50' : '' }}">
                     </div>
                     <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase mb-2">System Role *</label>
-                        <select name="role" required class="w-full rounded-xl {{ $errors->has('role') ? 'border-red-400 bg-red-50' : 'border-gray-300' }} py-3.5 font-bold focus:ring-indigo-500">
-                            <option value="">-- Select Role --</option>
+                        <label for="email" class="block text-xs font-bold text-slate-500 mb-1.5">Email *</label>
+                        <input id="email" type="email" name="email" value="{{ old('email') }}" required
+                               placeholder="staff@shop.com"
+                               class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3 font-semibold {{ $errors->has('email') ? 'border-red-400 bg-red-50' : '' }}">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-xs font-bold text-slate-500 mb-1.5">Password *</label>
+                        <input id="password" type="password" name="password" required minlength="8"
+                               placeholder="Min. 8 characters"
+                               class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3 font-semibold {{ $errors->has('password') ? 'border-red-400 bg-red-50' : '' }}">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Access --}}
+            <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+                <h3 class="text-sm font-bold text-slate-900 mb-1">POS access</h3>
+                <p class="text-xs text-slate-500 mb-5">Role and counter. Admin accounts are not created here.</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="role" class="block text-xs font-bold text-slate-500 mb-1.5">Role *</label>
+                        <select id="role" name="role" required
+                                class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3 font-semibold {{ $errors->has('role') ? 'border-red-400 bg-red-50' : '' }}">
+                            <option value="">Select role…</option>
                             @foreach($roles as $role)
-                                <option value="{{ $role->name }}" {{ old('role') == $role->name ? 'selected' : '' }}>{{ ucfirst($role->name) }}</option>
+                                <option value="{{ $role->name }}" @selected(old('role') == $role->name)>{{ ucfirst($role->name) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label for="counter_id" class="block text-xs font-bold text-slate-500 mb-1.5">Assigned counter *</label>
+                        <select id="counter_id" name="counter_id" required @disabled($counters->isEmpty())
+                                class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3 font-semibold disabled:opacity-50 {{ $errors->has('counter_id') ? 'border-red-400 bg-red-50' : '' }}">
+                            <option value="">Select counter…</option>
+                            @foreach($counters as $counter)
+                                <option value="{{ $counter->id }}" @selected(old('counter_id') == $counter->id)>{{ $counter->name }}</option>
                             @endforeach
                         </select>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase mb-2">Email Address *</label>
-                        <input type="email" name="email" value="{{ old('email') }}" required class="w-full rounded-xl {{ $errors->has('email') ? 'border-red-400 bg-red-50' : 'border-gray-300' }} py-3.5 font-bold focus:ring-indigo-500" placeholder="staff@example.com">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-black text-slate-500 uppercase mb-2">Password *</label>
-                        <input type="password" name="password" required class="w-full rounded-xl {{ $errors->has('password') ? 'border-red-400 bg-red-50' : 'border-gray-300' }} py-3.5 font-bold focus:ring-indigo-500" placeholder="••••••••">
-                    </div>
+                <div class="mt-4 rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3 text-xs text-indigo-900 font-medium leading-relaxed">
+                    After login, this staff member must enter the <strong>opening cash</strong> for their counter before using the POS that day.
                 </div>
+            </div>
 
-                <div class="text-right">
-                    <button type="submit" class="bg-indigo-600 text-white px-8 py-3.5 rounded-xl font-black shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition active:scale-95 flex items-center gap-2 ml-auto">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        Create Staff Credential
-                    </button>
-                </div>
-
-            </form>
-        </div>
+            <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-1">
+                <a href="{{ route('staff.index') }}"
+                   class="inline-flex justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                    Cancel
+                </a>
+                <button type="submit"
+                        @disabled($counters->isEmpty())
+                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-6 py-2.5 shadow-sm transition disabled:opacity-50 disabled:pointer-events-none">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                    Create staff
+                </button>
+            </div>
+        </form>
     </div>
 </x-app-layout>

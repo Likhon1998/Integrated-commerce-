@@ -24,4 +24,14 @@ class Counter extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function sessions()
+    {
+        return $this->hasMany(CounterSession::class);
+    }
+
+    public function openSession()
+    {
+        return $this->hasOne(CounterSession::class)->where('status', 'open')->latestOfMany('opened_at');
+    }
 }

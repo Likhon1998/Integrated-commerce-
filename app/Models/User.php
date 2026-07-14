@@ -65,15 +65,65 @@ class User extends Authenticatable
 
     public function isShopOwner(): bool
     {
-        if (in_array($this->role, ['admin', 'shop_owner', 'Shop Owner', 'superadmin'], true)) {
+        if (in_array($this->role, ['admin', 'shop_owner', 'Shop Owner', 'superadmin', 'Admin'], true)) {
             return true;
         }
 
         return $this->hasRole(['Shop Owner', 'Admin']);
     }
 
+    /**
+     * Shop Owner / Admin never work a fixed till — they oversee all counters.
+     */
+    public function isAdminUser(): bool
+    {
+        return $this->isShopOwner();
+    }
+
+    /**
+     * Floor staff who sell on POS need a counter assignment.
+     */
+    public function requiresCounter(): bool
+    {
+        return ! $this->isAdminUser();
+    }
+
     public function canAccessPos(): bool
     {
-        return $this->counter_id !== null || $this->isShopOwner();
+        if ($this->isAdminUser()) {
+            return true;
+        }
+
+        return $this->counter_id !== null;
+    }
+
+    /**
+     * Floor staff with a till must open cash each calendar day.
+     */
+    public function requiresDailyOpeningBalance(): bool
+    {
+        return $this->requiresCounter() && $this->counter_id !== null;
+    }
+
+    public function hasTodayOpenSession(): bool
+    {
+        if (! $this->counter_id) {
+            return true;
+        }
+
+        return \App\Models\CounterSession::where('counter_id', $this->counter_id)
+            ->where('status', 'open')
+            ->whereDate('opened_at', now()->toDateString())
+            ->exists();
+    }
+
+    /**
+     * Keep admin accounts forever unassigned to any counter.
+     */
+    public function clearCounterIfAdmin(): void
+    {
+        if ($this->isAdminUser() && $this->counter_id !== null) {
+            $this->forceFill(['counter_id' => null])->saveQuietly();
+        }
     }
 }
