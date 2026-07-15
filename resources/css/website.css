@@ -120,6 +120,133 @@
     display: flex; align-items: center; justify-content: center;
     padding: 0 4px;
 }
+.gaget-action-wrap {
+    position: relative;
+}
+.gaget-hover-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 300px;
+    background: #fff;
+    border: 1px solid var(--g-border);
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+    z-index: 60;
+    padding: 12px;
+}
+.gaget-hover-panel::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+}
+.gaget-hover-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 4px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 13px;
+    color: #0f172a;
+    font-weight: 700;
+}
+.gaget-hover-panel__head strong {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--g-blue);
+    background: #eff6ff;
+    border-radius: 999px;
+    padding: 3px 8px;
+}
+.gaget-hover-panel__empty {
+    padding: 18px 8px;
+    text-align: center;
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 0;
+}
+.gaget-hover-panel__list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.gaget-hover-panel__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+}
+.gaget-hover-panel__row:hover { background: #f8fafc; }
+.gaget-hover-panel__row img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    background: #f8fafc;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+.gaget-hover-panel__row p {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.gaget-hover-panel__row span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--g-blue);
+}
+.gaget-hover-panel__foot {
+    border-top: 1px solid #f1f5f9;
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.gaget-hover-panel__total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #64748b;
+    padding: 0 4px;
+}
+.gaget-hover-panel__total strong {
+    font-size: 14px;
+    color: #0f172a;
+}
+.gaget-hover-panel__cta {
+    display: block;
+    width: 100%;
+    text-align: center;
+    background: var(--g-blue);
+    color: #fff !important;
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-decoration: none;
+    cursor: pointer;
+}
+.gaget-hover-panel__cta:hover { filter: brightness(1.05); }
 
 /* ── NAVBAR (full bleed navy) ── */
 .gaget-navbar {

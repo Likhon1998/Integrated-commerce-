@@ -4,136 +4,278 @@
     $images = $ws->productImageUrls($product);
     $img = $images[0];
     $reviews = $reviews ?? collect();
+    $variantOptions = $variantOptions ?? ['colors' => [], 'storages' => []];
     $discountPct = ($product->original_price && $product->original_price > $product->selling_price)
         ? (int) round((1 - ($product->selling_price / $product->original_price)) * 100)
         : 0;
+    $displayName = $product->variant_group
+        ? trim(preg_replace('/\s*(128GB|256GB|512GB|1TB|64GB|32GB)\s*$/i', '', $product->name))
+        : $product->name;
+    if ($displayName === '') {
+        $displayName = $product->name;
+    }
 @endphp
 @section('content')
-<div class="max-w-7xl mx-auto px-4 py-6 sm:py-8">
-    <p class="text-xs text-slate-400 mb-5">
+<div class="max-w-7xl mx-auto px-4 py-5 sm:py-6">
+    {{-- Breadcrumbs --}}
+    <nav class="text-xs text-slate-400 mb-4 flex flex-wrap items-center gap-1">
         <a href="{{ route('home') }}" class="hover:text-slate-600">Home</a>
-        <span class="mx-1">/</span>
+        <span>/</span>
         @if($product->category)
             <a href="{{ route('website.shop', ['category' => $product->category_id]) }}" class="hover:text-slate-600">{{ $product->category->name }}</a>
-            <span class="mx-1">/</span>
-        @else
-            <a href="{{ route('website.shop') }}" class="hover:text-slate-600">Shop</a>
-            <span class="mx-1">/</span>
+            <span>/</span>
         @endif
-        <span class="text-slate-600">{{ $product->name }}</span>
-    </p>
+        @if($product->brand_name || $product->brand)
+            <span class="text-slate-500">{{ $product->brand_name ?? $product->brand?->name }}</span>
+            <span>/</span>
+        @endif
+        <span class="text-slate-600">{{ $displayName }}</span>
+    </nav>
 
-    <div class="grid lg:grid-cols-2 gap-8 lg:gap-10"
-         x-data="{ active: 0, images: @js($images) }">
-        {{-- Gallery --}}
-        <div class="flex gap-3">
+    <div class="grid lg:grid-cols-12 gap-6 lg:gap-8"
+         x-data="{ active: 0, images: @js($images), tab: 'description' }">
+
+        {{-- Gallery column --}}
+        <div class="lg:col-span-5 flex gap-3">
             @if(count($images) > 1)
-                <div class="flex flex-col gap-2 w-14 sm:w-16 shrink-0">
+                <div class="flex flex-col gap-2 w-14 shrink-0">
                     @foreach($images as $i => $url)
                         <button type="button"
                                 @click="active = {{ $i }}"
-                                :class="active === {{ $i }} ? 'border-blue-600' : 'border-slate-200 hover:border-slate-300'"
+                                :class="active === {{ $i }} ? 'border-blue-600 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300'"
                                 class="aspect-square rounded-lg border bg-white overflow-hidden p-1 transition">
                             <img src="{{ $url }}" alt="" class="w-full h-full object-contain">
                         </button>
                     @endforeach
                 </div>
             @endif
-            <div class="flex-1 bg-slate-50 rounded-xl p-5 flex flex-col items-center justify-center border border-slate-100 min-h-[280px] sm:min-h-[360px]">
-                <img :src="images[active]" alt="{{ $product->name }}" class="max-h-[340px] w-full object-contain">
-                @if(count($images) > 1)
-                    <p class="mt-3 text-[11px] text-slate-400">Click a thumbnail to switch photos</p>
+            <div class="flex-1 relative bg-slate-50 rounded-xl border border-slate-100 p-4 sm:p-6 flex items-center justify-center min-h-[260px] sm:min-h-[340px]">
+                @if($discountPct > 0)
+                    <span class="absolute top-3 left-3 text-[10px] font-semibold bg-red-500 text-white px-2 py-0.5 rounded">-{{ $discountPct }}%</span>
                 @endif
+                <img :src="images[active]" alt="{{ $product->name }}" class="max-h-[300px] sm:max-h-[360px] w-full object-contain">
             </div>
         </div>
 
-        {{-- Buy panel --}}
-        <div class="lg:pt-1">
+        {{-- Product info --}}
+        <div class="lg:col-span-4">
             <div class="flex flex-wrap items-center gap-2 mb-2">
                 @if($product->is_new_arrival)
-                    <span class="text-[10px] font-semibold uppercase tracking-wide bg-blue-600 text-white px-2 py-0.5 rounded">New</span>
+                    <span class="text-[10px] font-semibold uppercase bg-emerald-500 text-white px-2 py-0.5 rounded">New</span>
                 @endif
                 @if($product->brand_name || $product->brand)
                     <span class="text-xs font-medium text-blue-600">{{ $product->brand_name ?? $product->brand?->name }}</span>
-                @elseif($product->category)
-                    <span class="text-xs font-medium text-blue-600">{{ $product->category->name }}</span>
                 @endif
             </div>
 
-            <h1 class="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight mb-3">{{ $product->name }}</h1>
+            <h1 class="text-lg sm:text-xl font-semibold text-slate-900 leading-snug mb-2">{{ $displayName }}</h1>
 
             @if($product->rating > 0 || $reviews->isNotEmpty())
-                <div class="flex items-center gap-1 mb-3">
+                <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-slate-500">
                     @php $stars = $product->rating > 0 ? round($product->rating) : (int) round($reviews->avg('rating')); @endphp
-                    @for($i=1;$i<=5;$i++)<span class="text-sm {{ $i<=$stars?'text-amber-400':'text-slate-200' }}">★</span>@endfor
-                    <span class="text-xs text-slate-500 ml-1.5">({{ $product->review_count ?: $reviews->count() }} reviews)</span>
+                    <span class="flex text-amber-400">
+                        @for($i=1;$i<=5;$i++)<span class="{{ $i<=$stars?'':'text-slate-200' }}">★</span>@endfor
+                    </span>
+                    <span>({{ $product->review_count ?: $reviews->count() }} Reviews)</span>
                 </div>
             @endif
 
-            <div class="flex flex-wrap items-baseline gap-2.5 mb-4 pb-4 border-b border-slate-100">
-                <span class="text-xl font-semibold text-blue-600">{{ $ws->formatPrice($product->selling_price, $settings) }}</span>
+            <div class="flex flex-wrap items-baseline gap-2 mb-4 pb-4 border-b border-slate-100">
+                <span class="text-lg font-semibold text-blue-600">{{ $ws->formatPrice($product->selling_price, $settings) }}</span>
                 @if($product->original_price && $product->original_price > $product->selling_price)
                     <span class="text-sm text-slate-400 line-through">{{ $ws->formatPrice($product->original_price, $settings) }}</span>
                     @if($discountPct > 0)
-                        <span class="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">{{ $discountPct }}% OFF</span>
+                        <span class="text-[10px] font-medium text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">{{ $discountPct }}% OFF</span>
                     @endif
                 @endif
             </div>
 
-            @if($product->short_description)
-                <div class="text-sm text-slate-600 leading-relaxed mb-5 whitespace-pre-line max-w-prose">{{ $product->short_description }}</div>
+            {{-- Storage variants --}}
+            @if(count($variantOptions['storages']) > 0)
+                <div class="mb-4">
+                    <p class="text-xs font-medium text-slate-700 mb-2">
+                        Storage: <span class="text-slate-500">{{ $product->storage ?? '—' }}</span>
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach($variantOptions['storages'] as $opt)
+                            <a href="{{ $opt['url'] }}"
+                               class="px-3 py-1.5 rounded-lg border text-xs font-medium transition
+                                      {{ $opt['active'] ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-slate-200 text-slate-600 hover:border-slate-300 bg-white' }}">
+                                {{ $opt['label'] }}
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @elseif($product->storage)
+                <p class="text-xs text-slate-600 mb-4">Storage: <span class="font-medium">{{ $product->storage }}</span></p>
             @endif
 
-            <p class="text-sm mb-5 {{ $product->stock_quantity > 0 ? 'text-emerald-600' : 'text-red-600' }}">
-                @if($product->stock_quantity > 0)
-                    <span class="inline-flex items-center gap-1.5 font-medium">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                        In Stock ({{ $product->stock_quantity }} available)
-                    </span>
-                @else
-                    Out of Stock
-                @endif
-            </p>
-
-            @if($product->stock_quantity > 0)
-                <div class="flex flex-wrap items-center gap-2.5" x-data="{ qty: 1 }">
-                    <div class="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white h-10">
-                        <button type="button" @click="qty = Math.max(1, qty - 1)" class="w-9 h-full text-sm font-medium text-slate-500 hover:bg-slate-50">−</button>
-                        <span class="w-8 text-center text-sm font-medium text-slate-800" x-text="qty"></span>
-                        <button type="button" @click="qty = Math.min({{ (int) $product->stock_quantity }}, qty + 1)" class="w-9 h-full text-sm font-medium text-slate-500 hover:bg-slate-50">+</button>
+            {{-- Color variants --}}
+            @if(count($variantOptions['colors']) > 0)
+                <div class="mb-4">
+                    <p class="text-xs font-medium text-slate-700 mb-2">
+                        Color: <span class="text-slate-500">{{ $product->color ?? '—' }}</span>
+                    </p>
+                    <div class="flex flex-wrap gap-2.5">
+                        @foreach($variantOptions['colors'] as $opt)
+                            <a href="{{ $opt['url'] }}"
+                               title="{{ $opt['label'] }}"
+                               class="w-8 h-8 rounded-full border-2 transition shrink-0
+                                      {{ $opt['active'] ? 'border-blue-600 ring-2 ring-blue-100 ring-offset-1' : 'border-slate-200 hover:border-slate-400' }}"
+                               style="background-color: {{ $opt['hex'] }}; {{ in_array(strtolower($opt['hex']), ['#f8fafc', '#ffffff', '#e8e6e3', '#d4cfc8']) ? 'box-shadow: inset 0 0 0 1px rgba(0,0,0,.08)' : '' }}">
+                            </a>
+                        @endforeach
                     </div>
+                </div>
+            @elseif($product->color)
+                <p class="text-xs text-slate-600 mb-4">Color: <span class="font-medium">{{ $product->color }}</span></p>
+            @endif
+
+            <div class="mb-4" x-data="{ qty: 1 }">
+                <div class="flex flex-wrap items-center gap-3 mb-3">
+                    <div class="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white h-9">
+                        <button type="button" @click="qty = Math.max(1, qty - 1)" class="w-8 h-full text-sm text-slate-500 hover:bg-slate-50">−</button>
+                        <span class="w-8 text-center text-sm font-medium text-slate-800" x-text="qty"></span>
+                        <button type="button" @click="qty = Math.min({{ (int) $product->stock_quantity }}, qty + 1)" class="w-8 h-full text-sm text-slate-500 hover:bg-slate-50">+</button>
+                    </div>
+
+                    @if($product->stock_quantity > 0)
+                        <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                            In Stock · Ships today
+                        </span>
+                    @else
+                        <span class="text-xs font-medium text-red-600">Out of Stock</span>
+                    @endif
+                </div>
+
+                @if($product->stock_quantity > 0)
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <button type="button"
+                                @click="for (let i = 0; i < qty; i++) addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}}); cartOpen=true"
+                                class="flex-1 h-10 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition inline-flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            Add to Cart
+                        </button>
+                        <button type="button"
+                                @click="for (let i = 0; i < qty; i++) addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}}); cartOpen=true; checkoutOpen=true"
+                                class="flex-1 h-10 border border-slate-300 text-slate-800 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                            Buy Now
+                        </button>
+                    </div>
+                @endif
+                @php
+                    $listItem = [
+                        'id' => $product->id,
+                        'name' => $product->name,
+                        'price' => (float) $product->selling_price,
+                        'image' => $img,
+                        'url' => route('website.product', $product),
+                        'category' => $product->category?->name ?? $product->brand_name ?? 'Electronics',
+                        'rating' => (float) ($product->rating ?? 0),
+                    ];
+                @endphp
+                <div class="flex gap-2">
                     <button type="button"
-                            @click="for (let i = 0; i < qty; i++) addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}}); cartOpen=true"
-                            class="h-10 bg-blue-600 text-white px-5 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
-                        Add to Cart
+                            class="flex-1 h-9 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:border-rose-200 hover:text-rose-600 inline-flex items-center justify-center gap-1.5"
+                            :class="inWishlist({{ $product->id }}) && '!border-rose-200 !text-rose-600'"
+                            @click="toggleWishlist(@js($listItem))">
+                        <svg class="w-4 h-4" :fill="inWishlist({{ $product->id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                        <span x-text="inWishlist({{ $product->id }}) ? 'Wishlisted' : 'Wishlist'"></span>
                     </button>
+                    <button type="button"
+                            class="flex-1 h-9 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:border-blue-200 hover:text-blue-600 inline-flex items-center justify-center gap-1.5"
+                            :class="inCompare({{ $product->id }}) && '!border-blue-200 !text-blue-600'"
+                            @click="toggleCompare(@js($listItem))">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                        <span x-text="inCompare({{ $product->id }}) ? 'In compare' : 'Compare'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {{-- Sidebar --}}
+        <div class="lg:col-span-3 space-y-4">
+            <div class="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-3">
+                @foreach([
+                    ['Free Shipping', 'On orders over Tk 500'],
+                    ['30-Day Returns', 'Easy return policy'],
+                    ['1 Year Warranty', 'Manufacturer warranty'],
+                    ['Secure Payment', 'Cash on delivery'],
+                ] as [$title, $sub])
+                    <div class="flex gap-3 items-start">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-slate-800">{{ $title }}</p>
+                            <p class="text-[11px] text-slate-500">{{ $sub }}</p>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            @if($related->count())
+                <div class="rounded-xl border border-slate-100 p-4">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">You may also like</h3>
+                    <div class="space-y-3">
+                        @foreach($related->take(3) as $rel)
+                            @php $relImg = $ws->productImageUrl($rel); @endphp
+                            <a href="{{ route('website.product', $rel) }}" class="flex gap-3 group">
+                                <img src="{{ $relImg }}" alt="" class="w-14 h-14 object-contain rounded-lg bg-slate-50 border border-slate-100">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-xs font-medium text-slate-800 group-hover:text-blue-600 line-clamp-2">{{ $rel->name }}</p>
+                                    <p class="text-xs font-semibold text-blue-600 mt-0.5">{{ $ws->formatPrice($rel->selling_price, $settings) }}</p>
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
             @endif
         </div>
     </div>
 
-    @if($reviews->isNotEmpty())
-    <section class="mt-10 pt-8 border-t border-slate-100">
-        <h2 class="text-base font-semibold text-slate-900 mb-4">Customer reviews</h2>
-        <div class="grid gap-3 md:grid-cols-2">
-            @foreach($reviews as $review)
-                <div class="rounded-xl border border-slate-100 bg-white p-4">
-                    <div class="mb-1.5 text-amber-500 text-xs">{{ str_repeat('★', (int) $review->rating) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</div>
-                    <p class="text-sm text-slate-600 leading-relaxed">“{{ $review->body }}”</p>
-                    <div class="mt-2 text-sm font-medium text-slate-800">{{ $review->customer_name }}</div>
-                    @if($review->customer_title)
-                        <div class="text-xs text-slate-400">{{ $review->customer_title }}</div>
-                    @endif
-                </div>
-            @endforeach
+    {{-- Tabs: Description --}}
+    @if($product->short_description || $reviews->isNotEmpty())
+    <section class="mt-8 pt-6 border-t border-slate-100" x-data="{ tab: 'description' }">
+        <div class="flex gap-6 border-b border-slate-100 mb-5">
+            @if($product->short_description)
+                <button type="button" @click="tab='description'"
+                        :class="tab==='description' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'"
+                        class="pb-2 text-sm font-medium border-b-2 transition">Description</button>
+            @endif
+            @if($reviews->isNotEmpty())
+                <button type="button" @click="tab='reviews'"
+                        :class="tab==='reviews' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'"
+                        class="pb-2 text-sm font-medium border-b-2 transition">Reviews ({{ $reviews->count() }})</button>
+            @endif
         </div>
+
+        @if($product->short_description)
+            <div x-show="tab==='description'" class="max-w-3xl">
+                <h3 class="text-sm font-semibold text-slate-900 mb-2">About this item</h3>
+                <div class="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{{ $product->short_description }}</div>
+            </div>
+        @endif
+
+        @if($reviews->isNotEmpty())
+            <div x-show="tab==='reviews'" x-cloak class="grid gap-3 md:grid-cols-2 max-w-4xl">
+                @foreach($reviews as $review)
+                    <div class="rounded-xl border border-slate-100 bg-white p-4">
+                        <div class="mb-1 text-amber-400 text-xs">{{ str_repeat('★', (int) $review->rating) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</div>
+                        <p class="text-sm text-slate-600">“{{ $review->body }}”</p>
+                        <p class="mt-2 text-xs font-medium text-slate-800">{{ $review->customer_name }}</p>
+                    </div>
+                @endforeach
+            </div>
+        @endif
     </section>
     @endif
 
     @if($related->count())
-    <section class="mt-10 pt-8 border-t border-slate-100">
-        <h2 class="text-base font-semibold text-slate-900 mb-4">Related products</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <section class="mt-8 pt-6 border-t border-slate-100 lg:hidden">
+        <h2 class="text-sm font-semibold text-slate-900 mb-3">Related products</h2>
+        <div class="grid grid-cols-2 gap-3">
             @foreach($related as $rel)
                 @include('website.partials.product-card', ['product' => $rel])
             @endforeach

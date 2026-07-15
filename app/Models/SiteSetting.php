@@ -9,6 +9,18 @@ class SiteSetting extends Model
     protected $fillable = [
         'default_shop_id', 'store_name', 'logo_path',
         'currency_code', 'currency_symbol', 'special_offer_text',
+        'blog_hero_kicker', 'blog_hero_title', 'blog_hero_subtitle', 'blog_hero_image',
+        'blog_newsletter_title', 'blog_newsletter_text',
+        'faq_hero_title', 'faq_hero_subtitle',
+        'faq_help_title', 'faq_help_text', 'faq_help_button',
+        'contact_hero_kicker', 'contact_hero_title', 'contact_hero_subtitle',
+        'contact_chat_title', 'contact_chat_text', 'contact_chat_status',
+        'contact_email_card_title', 'contact_email_card_text',
+        'contact_phone_card_title', 'contact_phone_card_text',
+        'contact_hours_title', 'contact_hours_weekday', 'contact_hours_weekend',
+        'contact_form_title', 'contact_form_subtitle',
+        'contact_map_embed', 'contact_website_url',
+        'contact_newsletter_title', 'contact_newsletter_text',
         'trusted_by_text', 'contact_email', 'contact_phone',
         'contact_address', 'social_links',
     ];

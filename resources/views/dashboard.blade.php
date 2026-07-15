@@ -259,7 +259,7 @@
 
     <div class="grid grid-cols-2 gap-3">
         @can('process pos sales')
-        <a href="{{ route('pos.index') }}" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition">Launch POS Terminal</a>
+        <a href="{{ route('pos.index') }}" target="_blank" rel="noopener" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition">Launch POS Terminal</a>
         @endcan
         @can('manage inventory')
             <a href="{{ route('products.index') }}" class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition">Manage Products</a>

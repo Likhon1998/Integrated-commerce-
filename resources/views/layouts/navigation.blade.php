@@ -101,7 +101,10 @@
                 <a href="{{ route('cms.landing.edit') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.landing.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Landing Page</a>
                 <a href="{{ route('cms.pages.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.pages.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Pages</a>
                 <a href="{{ route('cms.blogs.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.blogs.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Blogs</a>
+                <a href="{{ route('cms.blog-categories.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.blog-categories.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Blog Categories</a>
                 <a href="{{ route('cms.faqs.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.faqs.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">FAQ</a>
+                <a href="{{ route('cms.faq-categories.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.faq-categories.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">FAQ Categories</a>
+                <a href="{{ route('cms.contact.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.contact.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Contact</a>
                 <a href="{{ route('cms.slides.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.slides.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Home Slide</a>
                 <a href="{{ route('cms.reviews.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.reviews.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Reviews</a>
             </div>
@@ -321,7 +324,7 @@
 
     <div class="flex items-center gap-2 ml-auto">
         @can('process pos sales')
-            <a href="{{ route('pos.index') }}"
+            <a href="{{ route('pos.index') }}" target="_blank" rel="noopener"
                class="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
                 POS Terminal
             </a>

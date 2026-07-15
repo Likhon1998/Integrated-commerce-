@@ -235,15 +235,14 @@
     </div>
     <div class="grid gap-4 md:grid-cols-3">
         @foreach($latestBlogs as $post)
-            <a href="{{ route('website.blog', $post->slug) }}" class="rounded-2xl border border-slate-100 overflow-hidden bg-white shadow-sm no-underline hover:border-indigo-200 transition">
-                @if($post->cover_image)
-                    <img src="{{ public_storage_url($post->cover_image) }}" alt="" class="h-40 w-full object-cover">
-                @else
-                    <div class="h-40 bg-slate-100"></div>
-                @endif
+            <a href="{{ route('website.blog', $post->slug) }}" class="rounded-2xl border border-slate-100 overflow-hidden bg-white shadow-sm no-underline hover:border-blue-100 transition">
+                <img src="{{ $post->coverUrl() }}" alt="" class="h-40 w-full object-cover bg-slate-50">
                 <div class="p-4">
-                    <div class="text-xs text-slate-400">{{ optional($post->published_at)->format('M d, Y') }}</div>
-                    <div class="mt-1 font-bold text-slate-900">{{ $post->title }}</div>
+                    @if($post->category)
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-blue-600">{{ $post->category->name }}</div>
+                    @endif
+                    <div class="text-xs text-slate-400 mt-0.5">{{ optional($post->published_at)->format('M d, Y') }} · {{ $post->viewsLabel() }}</div>
+                    <div class="mt-1 font-bold text-slate-900 text-sm">{{ $post->title }}</div>
                     <p class="mt-1 text-sm text-slate-500 line-clamp-2">{{ $post->excerpt }}</p>
                 </div>
             </a>

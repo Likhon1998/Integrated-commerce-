@@ -32,7 +32,10 @@ use App\Http\Controllers\Cms\LandingPageController;
 use App\Http\Controllers\Cms\HomeSlideController;
 use App\Http\Controllers\Cms\PageController as CmsPageController;
 use App\Http\Controllers\Cms\BlogController as CmsBlogController;
+use App\Http\Controllers\Cms\BlogCategoryController as CmsBlogCategoryController;
 use App\Http\Controllers\Cms\FaqController as CmsFaqController;
+use App\Http\Controllers\Cms\FaqCategoryController as CmsFaqCategoryController;
+use App\Http\Controllers\Cms\ContactController as CmsContactController;
 use App\Http\Controllers\Cms\ReviewController as CmsReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,7 +57,12 @@ Route::post('/checkout', [WebsiteController::class, 'checkout'])->name('website.
 Route::get('/page/{slug}', [WebsiteController::class, 'page'])->name('website.page');
 Route::get('/blog', [WebsiteController::class, 'blogs'])->name('website.blogs');
 Route::get('/blog/{slug}', [WebsiteController::class, 'blog'])->name('website.blog');
+Route::post('/newsletter/subscribe', [WebsiteController::class, 'subscribeNewsletter'])->name('website.newsletter');
 Route::get('/faq', [WebsiteController::class, 'faqs'])->name('website.faqs');
+Route::get('/contact', [WebsiteController::class, 'contact'])->name('website.contact');
+Route::post('/contact', [WebsiteController::class, 'submitContact'])->name('website.contact.submit');
+Route::get('/wishlist', [WebsiteController::class, 'wishlist'])->name('website.wishlist');
+Route::get('/compare', [WebsiteController::class, 'compare'])->name('website.compare');
 
 Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::class, \App\Http\Middleware\EnsureStaffOpeningBalance::class])->group(function () {
 
@@ -66,8 +74,18 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::put('/landing', [LandingPageController::class, 'update'])->name('landing.update');
         Route::resource('slides', HomeSlideController::class)->except(['show']);
         Route::resource('pages', CmsPageController::class)->except(['show']);
+        Route::put('/blogs-settings', [CmsBlogController::class, 'updateSettings'])->name('blogs.settings');
+        Route::post('/blogs-settings', [CmsBlogController::class, 'updateSettings']);
         Route::resource('blogs', CmsBlogController::class)->except(['show']);
+        Route::resource('blog-categories', CmsBlogCategoryController::class)->except(['show', 'create', 'edit']);
+        Route::post('/faqs-settings', [CmsFaqController::class, 'updateSettings'])->name('faqs.settings');
         Route::resource('faqs', CmsFaqController::class)->except(['show']);
+        Route::resource('faq-categories', CmsFaqCategoryController::class)->except(['show', 'create', 'edit']);
+        Route::get('/contact', [CmsContactController::class, 'index'])->name('contact.index');
+        Route::post('/contact-settings', [CmsContactController::class, 'updateSettings'])->name('contact.settings');
+        Route::get('/contact/messages/{message}', [CmsContactController::class, 'showMessage'])->name('contact.messages.show');
+        Route::post('/contact/messages/{message}/read', [CmsContactController::class, 'markRead'])->name('contact.messages.read');
+        Route::delete('/contact/messages/{message}', [CmsContactController::class, 'destroyMessage'])->name('contact.messages.destroy');
         Route::resource('reviews', CmsReviewController::class)->except(['show']);
     });
 

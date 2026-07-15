@@ -227,7 +227,11 @@ class PosController extends Controller
                 'success' => true,
                 'message' => 'Payment completed successfully!',
                 'order_id' => $order->id,
-                'change' => $order->change_amount
+                'invoice_no' => $order->invoice_no,
+                'change' => $order->change_amount,
+                'paid_amount' => $order->paid_amount,
+                'total_amount' => $order->total_amount,
+                'receipt_url' => route('pos.receipt', $order),
             ]);
 
         } catch (\Exception $e) {

@@ -141,6 +141,8 @@ class WebsiteController extends Controller
             ->take(4)
             ->get();
 
+        $variantOptions = $this->website->productVariantOptions($product);
+
         $reviews = \App\Models\CmsReview::where('shop_id', $shopId)
             ->where('is_published', true)
             ->where(function ($q) use ($product) {
@@ -151,7 +153,7 @@ class WebsiteController extends Controller
             ->take(8)
             ->get();
 
-        return view('website.product', array_merge($this->website->homepageData(), compact('product', 'related', 'reviews')));
+        return view('website.product', array_merge($this->website->homepageData(), compact('product', 'related', 'reviews', 'variantOptions')));
     }
 
     public function trackOrderForm()
@@ -167,11 +169,14 @@ class WebsiteController extends Controller
         return view('website.cms-page', array_merge($this->website->homepageData(), compact('page')));
     }
 
-    public function blogs()
+    public function blogs(Request $request)
     {
-        $blogs = $this->website->publishedBlogs();
+        $data = $this->website->blogPageData(
+            $request->query('q'),
+            $request->query('category')
+        );
 
-        return view('website.blogs', array_merge($this->website->homepageData(), compact('blogs')));
+        return view('website.blogs', $data);
     }
 
     public function blog(string $slug)
@@ -179,14 +184,86 @@ class WebsiteController extends Controller
         $blog = $this->website->publishedBlog($slug);
         abort_unless($blog, 404);
 
-        return view('website.blog-show', array_merge($this->website->homepageData(), compact('blog')));
+        $blog->increment('views_count');
+        $blog->refresh();
+
+        $related = \App\Models\CmsBlog::where('shop_id', $blog->shop_id)
+            ->published()
+            ->where('id', '!=', $blog->id)
+            ->when($blog->category_id, fn ($q) => $q->where('category_id', $blog->category_id))
+            ->latest('published_at')
+            ->take(3)
+            ->get();
+
+        return view('website.blog-show', array_merge($this->website->homepageData(), [
+            'blog' => $blog,
+            'relatedPosts' => $related,
+            'popularPosts' => $this->website->popularBlogs(4),
+            'blogCategories' => $this->website->blogCategories(),
+        ]));
     }
 
-    public function faqs()
+    public function subscribeNewsletter(Request $request)
     {
-        $faqs = $this->website->publishedFaqs();
+        $request->validate(['email' => 'required|email|max:255']);
 
-        return view('website.faqs', array_merge($this->website->homepageData(), compact('faqs')));
+        $shopId = $this->website->shopId();
+        abort_unless($shopId, 404);
+
+        \App\Models\CmsNewsletterSubscriber::firstOrCreate(
+            ['shop_id' => $shopId, 'email' => strtolower(trim($request->email))]
+        );
+
+        return back()->with('newsletter_success', 'Thanks for subscribing!');
+    }
+
+    public function faqs(Request $request)
+    {
+        return view('website.faqs', $this->website->faqPageData(
+            $request->query('q'),
+            $request->query('category')
+        ));
+    }
+
+    public function contact()
+    {
+        return view('website.contact', $this->website->contactPageData());
+    }
+
+    public function submitContact(Request $request)
+    {
+        $shopId = $this->website->shopId();
+        abort_unless($shopId, 404);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:255',
+            'subject' => 'required|string|max:200',
+            'order_number' => 'nullable|string|max:80',
+            'message' => 'required|string|max:5000',
+        ]);
+
+        \App\Models\CmsContactMessage::create([
+            'shop_id' => $shopId,
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'subject' => $data['subject'],
+            'order_number' => $data['order_number'] ?? null,
+            'message' => $data['message'],
+            'is_read' => false,
+        ]);
+
+        return back()->with('contact_success', 'Thanks! Your message has been sent. We\'ll get back to you soon.');
+    }
+
+    public function wishlist()
+    {
+        return view('website.wishlist', $this->website->homepageData());
+    }
+
+    public function compare()
+    {
+        return view('website.compare', $this->website->homepageData());
     }
 
     public function checkout(Request $request)

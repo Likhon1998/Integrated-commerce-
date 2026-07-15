@@ -44,6 +44,10 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'barcode' => 'required|string|unique:products,barcode',
             'sku' => 'nullable|string|max:100',
+            'variant_group' => 'nullable|string|max:120',
+            'color' => 'nullable|string|max:80',
+            'color_hex' => 'nullable|string|max:7',
+            'storage' => 'nullable|string|max:40',
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
             'original_price' => 'nullable|numeric|min:0',
@@ -56,8 +60,12 @@ class ProductController extends Controller
             'is_published' => 'nullable|boolean',
             'is_new_arrival' => 'nullable|boolean',
             'is_featured' => 'nullable|boolean',
+            'stock_quantity' => 'nullable|integer|min:0',
+            'alert_quantity' => 'nullable|integer|min:0',
             'return_to' => 'nullable|in:opening-inventory',
         ]);
+
+        $openingQty = (int) $request->input('stock_quantity', 0);
 
         $data = $request->except(['image', 'image_2', 'image_3', 'stock_quantity', 'return_to', 'is_published', 'is_new_arrival', 'is_featured']);
         $data['shop_id'] = Auth::user()->shop_id;
@@ -66,21 +74,35 @@ class ProductController extends Controller
         $data['is_new_arrival'] = $request->boolean('is_new_arrival');
         $data['is_featured'] = $request->boolean('is_featured');
         $data = $this->applyBrandData($data);
+        $data = $this->normalizeVariantFields($data);
         $data = array_merge($data, $this->storeProductImages($request));
 
-        Product::create($data);
+        $product = DB::transaction(function () use ($data, $openingQty) {
+            $product = Product::create($data);
+
+            if ($openingQty > 0) {
+                $this->stock->ensureDefaultLocations($product->shop_id);
+                $movement = $this->stock->setOpeningStock($product, $openingQty);
+                $this->accounts->postOpeningInventory($movement);
+            }
+
+            return $product->fresh();
+        });
 
         if ($request->input('return_to') === 'opening-inventory') {
             return redirect()->route('supply.opening-inventory.index')->with(
                 'success',
-                'Product added. Enter the opening quantity below.'
+                $openingQty > 0
+                    ? "Product added with {$openingQty} units in stock."
+                    : 'Product added. Enter the opening quantity below.'
             );
         }
 
-        return redirect()->route('products.index')->with(
-            'success',
-            'Product added. Set stock quantities in Stock & Supply → Opening Inventory.'
-        );
+        $message = $openingQty > 0
+            ? "Product added with {$openingQty} units in stock. It can appear in POS and the online store."
+            : 'Product added with 0 stock. Set quantity here next time, or use Opening Inventory / Stock Adjustment.';
+
+        return redirect()->route('products.index')->with('success', $message);
     }
 
     public function edit(Product $product)
@@ -105,6 +127,10 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'barcode' => 'required|string|unique:products,barcode,' . $product->id,
             'sku' => 'nullable|string|max:100',
+            'variant_group' => 'nullable|string|max:120',
+            'color' => 'nullable|string|max:80',
+            'color_hex' => 'nullable|string|max:7',
+            'storage' => 'nullable|string|max:40',
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
             'original_price' => 'nullable|numeric|min:0',
@@ -131,6 +157,7 @@ class ProductController extends Controller
         $data['is_new_arrival'] = $request->boolean('is_new_arrival');
         $data['is_featured'] = $request->boolean('is_featured');
         $data = $this->applyBrandData($data);
+        $data = $this->normalizeVariantFields($data);
         $data = array_merge($data, $this->storeProductImages($request, $product));
 
         $product->update($data);
@@ -280,6 +307,31 @@ class ProductController extends Controller
         } else {
             $data['brand_id'] = null;
             $data['brand_name'] = null;
+        }
+
+        return $data;
+    }
+
+    private function normalizeVariantFields(array $data): array
+    {
+        foreach (['variant_group', 'color', 'color_hex', 'storage', 'sku', 'short_description'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $val = is_string($data[$key]) ? trim($data[$key]) : $data[$key];
+                $data[$key] = ($val === '' || $val === null) ? null : $val;
+            }
+        }
+
+        if (!empty($data['variant_group'])) {
+            $data['variant_group'] = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $data['variant_group']));
+            $data['variant_group'] = trim($data['variant_group'], '-');
+        }
+
+        if (!empty($data['color_hex']) && !preg_match('/^#[0-9A-Fa-f]{6}$/', $data['color_hex'])) {
+            $data['color_hex'] = null;
+        }
+
+        if (array_key_exists('original_price', $data) && ($data['original_price'] === '' || $data['original_price'] === null)) {
+            $data['original_price'] = null;
         }
 
         return $data;

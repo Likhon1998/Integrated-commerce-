@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\CmsBlog;
+use App\Models\CmsBlogCategory;
 use App\Models\CmsFaq;
+use App\Models\CmsFaqCategory;
 use App\Models\CmsPage;
 use App\Models\CmsReview;
 use App\Models\HeroSlide;
@@ -52,6 +54,36 @@ class WebsiteService
             'contact_phone' => $site->contact_phone ?: $shop?->phone,
             'contact_address' => $site->contact_address ?: $shop?->address,
             'social_links' => $site->social_links ?? [],
+            'blog_hero_kicker' => $site->blog_hero_kicker,
+            'blog_hero_title' => $site->blog_hero_title,
+            'blog_hero_subtitle' => $site->blog_hero_subtitle,
+            'blog_hero_image' => $site->blog_hero_image,
+            'blog_newsletter_title' => $site->blog_newsletter_title,
+            'blog_newsletter_text' => $site->blog_newsletter_text,
+            'faq_hero_title' => $site->faq_hero_title,
+            'faq_hero_subtitle' => $site->faq_hero_subtitle,
+            'faq_help_title' => $site->faq_help_title,
+            'faq_help_text' => $site->faq_help_text,
+            'faq_help_button' => $site->faq_help_button,
+            'contact_hero_kicker' => $site->contact_hero_kicker,
+            'contact_hero_title' => $site->contact_hero_title,
+            'contact_hero_subtitle' => $site->contact_hero_subtitle,
+            'contact_chat_title' => $site->contact_chat_title,
+            'contact_chat_text' => $site->contact_chat_text,
+            'contact_chat_status' => $site->contact_chat_status,
+            'contact_email_card_title' => $site->contact_email_card_title,
+            'contact_email_card_text' => $site->contact_email_card_text,
+            'contact_phone_card_title' => $site->contact_phone_card_title,
+            'contact_phone_card_text' => $site->contact_phone_card_text,
+            'contact_hours_title' => $site->contact_hours_title,
+            'contact_hours_weekday' => $site->contact_hours_weekday,
+            'contact_hours_weekend' => $site->contact_hours_weekend,
+            'contact_form_title' => $site->contact_form_title,
+            'contact_form_subtitle' => $site->contact_form_subtitle,
+            'contact_map_embed' => $site->contact_map_embed,
+            'contact_website_url' => $site->contact_website_url,
+            'contact_newsletter_title' => $site->contact_newsletter_title,
+            'contact_newsletter_text' => $site->contact_newsletter_text,
         ];
     }
 
@@ -102,7 +134,7 @@ class WebsiteService
             'topBarNav' => NavigationLink::where('shop_id', $shopId)->where('location', 'top_bar')->where('is_active', true)->orderBy('sort_order')->get(),
             'featuredReviews' => CmsReview::where('shop_id', $shopId)->where('is_published', true)->where('is_featured', true)->orderBy('sort_order')->take(6)->get(),
             'footerPages' => CmsPage::where('shop_id', $shopId)->where('is_published', true)->where('show_in_footer', true)->orderBy('sort_order')->get(),
-            'latestBlogs' => CmsBlog::where('shop_id', $shopId)->published()->latest('published_at')->take(3)->get(),
+            'latestBlogs' => CmsBlog::where('shop_id', $shopId)->published()->with('category')->latest('published_at')->take(3)->get(),
         ];
     }
 
@@ -143,27 +175,208 @@ class WebsiteService
             return null;
         }
 
-        return CmsBlog::where('shop_id', $shopId)->where('slug', $slug)->published()->first();
+        return CmsBlog::where('shop_id', $shopId)->published()->with('category')->where('slug', $slug)->first();
     }
 
-    public function publishedFaqs()
+    public function publishedFaqs(?string $search = null, ?string $categorySlug = null)
     {
         $shopId = $this->shopId();
         if (!$shopId) {
             return collect();
         }
 
-        return CmsFaq::where('shop_id', $shopId)->where('is_published', true)->orderBy('sort_order')->orderBy('id')->get();
+        $this->ensureFaqDefaults($shopId);
+
+        $query = CmsFaq::where('shop_id', $shopId)
+            ->published()
+            ->with('faqCategory')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('question', 'like', "%{$search}%")
+                    ->orWhere('answer', 'like', "%{$search}%");
+            });
+        }
+
+        if ($categorySlug) {
+            $query->whereHas('faqCategory', fn ($q) => $q->where('slug', $categorySlug)->where('is_active', true));
+        }
+
+        return $query->get();
     }
 
-    public function publishedBlogs(int $perPage = 9)
+    public function faqCategories()
+    {
+        $shopId = $this->shopId();
+        if (!$shopId) {
+            return collect();
+        }
+
+        $this->ensureFaqDefaults($shopId);
+
+        return CmsFaqCategory::where('shop_id', $shopId)
+            ->where('is_active', true)
+            ->withCount(['faqs' => fn ($q) => $q->published()])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function ensureFaqDefaults(int $shopId): void
+    {
+        if (CmsFaqCategory::where('shop_id', $shopId)->exists()) {
+            return;
+        }
+
+        $created = [];
+        foreach ([
+            ['name' => 'Orders & Payments', 'slug' => 'orders-payments', 'icon' => 'cart', 'sort_order' => 1],
+            ['name' => 'Shipping & Delivery', 'slug' => 'shipping-delivery', 'icon' => 'truck', 'sort_order' => 2],
+            ['name' => 'Returns & Refunds', 'slug' => 'returns-refunds', 'icon' => 'refresh', 'sort_order' => 3],
+            ['name' => 'Products & Warranty', 'slug' => 'products-warranty', 'icon' => 'shield', 'sort_order' => 4],
+            ['name' => 'Account & Security', 'slug' => 'account-security', 'icon' => 'lock', 'sort_order' => 5],
+            ['name' => 'Promotions & Discounts', 'slug' => 'promotions-discounts', 'icon' => 'tag', 'sort_order' => 6],
+            ['name' => 'Others', 'slug' => 'others', 'icon' => 'help', 'sort_order' => 7],
+        ] as $row) {
+            $created[$row['slug']] = CmsFaqCategory::create(array_merge($row, [
+                'shop_id' => $shopId,
+                'is_active' => true,
+            ]));
+        }
+
+        if (CmsFaq::where('shop_id', $shopId)->exists()) {
+            return;
+        }
+
+        $samples = [
+            ['orders-payments', 'How do I place an order?', "Browse our store, add items to your cart, then proceed to checkout. Enter your shipping details, choose a payment method, and confirm. You'll receive an order confirmation by email."],
+            ['orders-payments', 'What payment methods do you accept?', 'We accept major credit/debit cards, mobile banking, and cash on delivery where available. Available options are shown at checkout.'],
+            ['orders-payments', 'Can I change or cancel my order after placing it?', 'Contact support as soon as possible with your order number. We can change or cancel orders that have not yet been prepared for shipping.'],
+            ['shipping-delivery', 'How can I track my order?', 'Use Track Order in the top bar or open the tracking link in your confirmation email. Sign in to your account to see status updates for recent orders.'],
+            ['shipping-delivery', 'Do you offer international shipping?', 'Shipping options depend on your location and product. Available destinations and rates are calculated at checkout.'],
+            ['returns-refunds', 'What is your return policy?', 'Most products can be returned within 30 days if unused and in original packaging. Some items may be excluded — see the product page or contact support.'],
+            ['returns-refunds', 'How do I request a return or refund?', 'Go to Help Center or contact support with your order number and reason. Once approved, follow the return shipping instructions we send you.'],
+            ['products-warranty', 'Are your products covered by warranty?', 'Yes. Eligible gadgets include manufacturer or store warranty as shown on each product page. Keep your invoice for warranty claims.'],
+        ];
+
+        foreach ($samples as $i => [$slug, $question, $answer]) {
+            $cat = $created[$slug] ?? null;
+            CmsFaq::create([
+                'shop_id' => $shopId,
+                'category_id' => $cat?->id,
+                'category' => $cat?->name,
+                'question' => $question,
+                'answer' => $answer,
+                'sort_order' => $i + 1,
+                'is_published' => true,
+            ]);
+        }
+    }
+
+    public function faqPageData(?string $search = null, ?string $categorySlug = null): array
+    {
+        return array_merge($this->homepageData(), [
+            'faqs' => $this->publishedFaqs($search, $categorySlug),
+            'faqCategories' => $this->faqCategories(),
+            'faqSearch' => $search,
+            'activeFaqCategory' => $categorySlug,
+        ]);
+    }
+
+    public function contactPageData(): array
+    {
+        return $this->homepageData();
+    }
+
+    public function publishedBlogs(int $perPage = 6, ?string $search = null, ?string $categorySlug = null)
     {
         $shopId = $this->shopId();
         if (!$shopId) {
             return new \Illuminate\Pagination\LengthAwarePaginator([], 0, $perPage);
         }
 
-        return CmsBlog::where('shop_id', $shopId)->published()->latest('published_at')->paginate($perPage);
+        $query = CmsBlog::where('shop_id', $shopId)
+            ->published()
+            ->with('category')
+            ->latest('published_at');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('excerpt', 'like', "%{$search}%")
+                    ->orWhere('body', 'like', "%{$search}%");
+            });
+        }
+
+        if ($categorySlug) {
+            $query->whereHas('category', fn ($q) => $q->where('slug', $categorySlug)->where('is_active', true));
+        }
+
+        return $query->paginate($perPage)->withQueryString();
+    }
+
+    public function featuredBlog(): ?CmsBlog
+    {
+        $shopId = $this->shopId();
+        if (!$shopId) {
+            return null;
+        }
+
+        return CmsBlog::where('shop_id', $shopId)
+            ->published()
+            ->with('category')
+            ->where('is_featured', true)
+            ->latest('published_at')
+            ->first()
+            ?? CmsBlog::where('shop_id', $shopId)->published()->with('category')->latest('published_at')->first();
+    }
+
+    public function popularBlogs(int $limit = 4)
+    {
+        $shopId = $this->shopId();
+        if (!$shopId) {
+            return collect();
+        }
+
+        return CmsBlog::where('shop_id', $shopId)
+            ->published()
+            ->with('category')
+            ->orderByDesc('views_count')
+            ->orderByDesc('published_at')
+            ->take($limit)
+            ->get();
+    }
+
+    public function blogCategories()
+    {
+        $shopId = $this->shopId();
+        if (!$shopId) {
+            return collect();
+        }
+
+        return CmsBlogCategory::where('shop_id', $shopId)
+            ->where('is_active', true)
+            ->withCount(['blogs' => fn ($q) => $q->published()])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function blogPageData(?string $search = null, ?string $categorySlug = null): array
+    {
+        $featured = $this->featuredBlog();
+        $blogs = $this->publishedBlogs(6, $search, $categorySlug);
+
+        return array_merge($this->homepageData(), [
+            'featuredPost' => $featured,
+            'blogs' => $blogs,
+            'blogCategories' => $this->blogCategories(),
+            'popularPosts' => $this->popularBlogs(4),
+            'blogSearch' => $search,
+            'activeBlogCategory' => $categorySlug,
+        ]);
     }
 
     public function formatPrice(?float $amount, ?object $settings = null): string
@@ -214,6 +427,70 @@ class WebsiteService
         }
 
         return $urls;
+    }
+
+    /**
+     * Color & storage pickers for a product detail page.
+     * Returns ['colors' => [...], 'storages' => [...]] with url, label, active, hex.
+     */
+    public function productVariantOptions(Product $product): array
+    {
+        if (!$product->variant_group) {
+            return ['colors' => [], 'storages' => []];
+        }
+
+        $siblings = Product::query()
+            ->where('shop_id', $product->shop_id)
+            ->where('variant_group', $product->variant_group)
+            ->where(function ($q) {
+                $q->where('is_published', true)->orWhereNull('is_published');
+            })
+            ->where('stock_quantity', '>', 0)
+            ->get();
+
+        $all = $siblings->push($product)->unique('id');
+
+        $colors = [];
+        foreach ($all->whereNotNull('color')->unique('color') as $p) {
+            $match = $all->first(function ($item) use ($p, $product) {
+                return strtolower($item->color) === strtolower($p->color)
+                    && $product->storage
+                    && $item->storage
+                    && strtolower($item->storage) === strtolower($product->storage);
+            }) ?? $all->first(fn ($item) => strtolower($item->color) === strtolower($p->color));
+
+            if (!$match) {
+                continue;
+            }
+
+            $colors[] = [
+                'label' => $p->color,
+                'hex' => $match->swatchHex(),
+                'url' => route('website.product', $match),
+                'active' => strtolower($match->color ?? '') === strtolower($product->color ?? ''),
+                'product_id' => $match->id,
+            ];
+        }
+
+        $storages = [];
+        $currentColor = $product->color;
+        $colorFiltered = $currentColor
+            ? $all->filter(fn ($p) => strtolower($p->color ?? '') === strtolower($currentColor))
+            : $all;
+
+        foreach ($colorFiltered->whereNotNull('storage')->unique('storage')->sortBy('storage') as $p) {
+            $storages[] = [
+                'label' => $p->storage,
+                'url' => route('website.product', $p),
+                'active' => $p->id === $product->id,
+                'product_id' => $p->id,
+            ];
+        }
+
+        return [
+            'colors' => collect($colors)->unique('label')->values()->all(),
+            'storages' => array_values($storages),
+        ];
     }
 
     public function categoryImageUrl($category): string

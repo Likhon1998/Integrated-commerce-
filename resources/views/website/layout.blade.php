@@ -71,13 +71,19 @@
 function storefrontCart() {
     return {
         cart: JSON.parse(localStorage.getItem('gaget_cart')||'[]'),
+        wishlist: JSON.parse(localStorage.getItem('gaget_wishlist')||'[]'),
+        compare: JSON.parse(localStorage.getItem('gaget_compare')||'[]'),
         cartOpen: false, checkoutOpen: false, ordering: false,
         orderMessage: '', orderSuccess: false,
         currency: @json($settings->currency_symbol ?? '$'),
         checkout: { name:'', phone:'', address:'' },
         get cartCount() { return this.cart.reduce((s,i)=>s+i.qty,0); },
         get cartTotal() { return this.cart.reduce((s,i)=>s+i.price*i.qty,0); },
-        save() { localStorage.setItem('gaget_cart', JSON.stringify(this.cart)); window.dispatchEvent(new Event('cart-updated')); },
+        get wishlistCount() { return this.wishlist.length; },
+        get compareCount() { return this.compare.length; },
+        save() { localStorage.setItem('gaget_cart', JSON.stringify(this.cart)); },
+        saveWishlist() { localStorage.setItem('gaget_wishlist', JSON.stringify(this.wishlist)); },
+        saveCompare() { localStorage.setItem('gaget_compare', JSON.stringify(this.compare)); },
         addToCart(product) {
             const ex = this.cart.find(i=>i.id===product.id);
             if(ex) ex.qty++; else this.cart.push({...product, qty:1});
@@ -85,6 +91,27 @@ function storefrontCart() {
         },
         updateQty(i,d) { this.cart[i].qty+=d; if(this.cart[i].qty<=0)this.cart.splice(i,1); this.save(); },
         removeItem(i) { this.cart.splice(i,1); this.save(); },
+        inWishlist(id) { return this.wishlist.some(i=>i.id===id); },
+        inCompare(id) { return this.compare.some(i=>i.id===id); },
+        toggleWishlist(product) {
+            const idx = this.wishlist.findIndex(i=>i.id===product.id);
+            if (idx >= 0) this.wishlist.splice(idx, 1);
+            else this.wishlist.push(product);
+            this.saveWishlist();
+        },
+        toggleCompare(product) {
+            const idx = this.compare.findIndex(i=>i.id===product.id);
+            if (idx >= 0) {
+                this.compare.splice(idx, 1);
+            } else {
+                if (this.compare.length >= 4) {
+                    alert('You can compare up to 4 products.');
+                    return;
+                }
+                this.compare.push(product);
+            }
+            this.saveCompare();
+        },
         async placeOrder() {
             if(!this.checkout.name||!this.checkout.phone){ this.orderMessage='Name and phone required.'; this.orderSuccess=false; return; }
             this.ordering=true; this.orderMessage='';

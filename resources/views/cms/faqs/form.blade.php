@@ -13,7 +13,13 @@
         <div class="grid gap-4 md:grid-cols-2">
             <div>
                 <label class="text-xs font-bold uppercase text-slate-500">Category</label>
-                <input name="category" value="{{ old('category', $faq->category) }}" class="mt-1 w-full rounded-xl border-slate-200" placeholder="Shipping, Returns…">
+                <select name="category_id" class="mt-1 w-full rounded-xl border-slate-200">
+                    <option value="">— Select —</option>
+                    @foreach($categories as $cat)
+                        <option value="{{ $cat->id }}" @selected((string) old('category_id', $faq->category_id) === (string) $cat->id)>{{ $cat->name }}</option>
+                    @endforeach
+                </select>
+                <p class="mt-1 text-[11px] text-slate-400"><a href="{{ route('cms.faq-categories.index') }}" class="text-indigo-600 font-semibold">Manage categories</a></p>
             </div>
             <div>
                 <label class="text-xs font-bold uppercase text-slate-500">Sort order</label>

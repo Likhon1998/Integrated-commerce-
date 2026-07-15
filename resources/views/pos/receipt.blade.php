@@ -17,7 +17,7 @@
         .address-box { margin: 4px 0; padding: 4px; border: 1px dashed #ccc; border-radius: 2px; }
     </style>
 </head>
-<body onload="window.print()">
+<body @if(request()->boolean('print')) onload="window.print()" @endif>
     <div class="ticket">
         
         <div class="text-center">

@@ -192,6 +192,11 @@
     box-shadow: 0 1px 2px rgba(15,23,42,.04);
     overflow: hidden;
 }
+.panel-right {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+}
 
 .panel-top {
     padding: 12px 14px 10px;
@@ -250,14 +255,27 @@
 .product-card.out-of-stock { opacity: .45; cursor: not-allowed; pointer-events: none; filter: grayscale(.3); }
 .product-card.in-cart {
     border-color: var(--blue);
-    box-shadow: inset 0 0 0 1px rgba(37,99,235,.25);
+    background: linear-gradient(180deg, #eff6ff 0%, #fff 55%);
+    box-shadow: 0 0 0 2px rgba(37,99,235,.28), 0 8px 20px rgba(37,99,235,.1);
 }
+.product-card.in-cart .p-img-wrap {
+    background: #dbeafe;
+    border-bottom-color: #bfdbfe;
+}
+.product-card.in-cart .p-name { color: #1e3a8a; }
 .p-selected-badge {
     position: absolute; top: 8px; right: 8px; z-index: 2;
-    min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px;
+    min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px;
     background: var(--blue); color: #fff;
-    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(37,99,235,.4);
+}
+.p-in-cart-tag {
+    position: absolute; top: 8px; left: 8px; z-index: 2;
+    font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+    color: #1d4ed8; background: #fff; border: 1px solid #93c5fd;
+    border-radius: 999px; padding: 3px 8px;
 }
 .p-img-wrap {
     width: 100%; height: 110px;
@@ -290,175 +308,207 @@
 
 /* Cart */
 .cart-head {
-    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    position: sticky; top: 0; z-index: 3; background: var(--surface);
 }
-.cart-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.cart-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
 .cart-badge-icon {
-    width: 30px; height: 30px; border-radius: 9px;
+    width: 26px; height: 26px; border-radius: 8px;
     background: var(--blue-soft); border: 1px solid var(--teal-border);
     display: flex; align-items: center; justify-content: center;
 }
-.cart-badge-icon svg { width: 14px; height: 14px; color: var(--blue); }
+.cart-badge-icon svg { width: 13px; height: 13px; color: var(--blue); }
 .cart-count {
-    min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+    min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
     background: var(--blue); color: #fff;
-    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
     display: inline-flex; align-items: center; justify-content: center;
 }
 .cart-head-actions { display: flex; align-items: center; gap: 6px; }
 .held-btn, .clear-btn {
-    padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 650;
+    padding: 5px 8px; border-radius: 8px; font-size: 11px; font-weight: 650;
     cursor: pointer; font-family: var(--font); border: 1px solid transparent;
 }
 .held-btn {
     display: flex; align-items: center; gap: 4px;
     background: var(--amber-bg); color: var(--amber); border-color: var(--amber-border);
 }
-.held-btn svg { width: 13px; height: 13px; }
+.held-btn svg { width: 12px; height: 12px; }
 .clear-btn { background: transparent; color: var(--red); }
 .clear-btn:hover { background: var(--red-bg); border-color: var(--red-border); }
 
 .exchange-banner {
-    padding: 8px 14px; flex-shrink: 0;
+    padding: 7px 12px; flex-shrink: 0;
     background: var(--amber-bg); border-bottom: 1px solid var(--amber-border);
     display: flex; justify-content: space-between; align-items: center;
-    font-size: 12px; font-weight: 650; color: var(--amber);
+    font-size: 11px; font-weight: 650; color: var(--amber);
 }
 
 .cart-items {
-    flex: 1 1 0; min-height: 0; overflow-y: auto;
-    padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
-    scrollbar-width: none;
+    flex: 0 0 auto; min-height: 110px;
+    padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+    background: #f8fafc;
 }
-.cart-items::-webkit-scrollbar { display: none; }
+.cart-items-label {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2px 2px;
+    font-size: 10px; font-weight: 800; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0;
+}
+.cart-items-label strong { color: var(--blue); font-family: var(--mono); font-weight: 700; }
 
 .cart-item {
     position: relative;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 12px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 8px;
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 8px 10px;
+    grid-template-columns: 40px 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 4px 8px;
     align-items: center;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.cart-item.just-added {
+    border-color: var(--blue);
+    background: #eff6ff;
+    animation: cartPulse .6s ease;
+}
+@keyframes cartPulse {
+    0% { box-shadow: 0 0 0 0 rgba(37,99,235,.45); }
+    100% { box-shadow: 0 0 0 8px rgba(37,99,235,0); }
 }
 .cart-item.at-limit { border-color: var(--amber-border); background: var(--amber-bg); }
+.ci-thumb {
+    grid-row: 1 / 3; width: 40px; height: 40px; border-radius: 8px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.ci-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+.ci-thumb span { font-size: 10px; font-weight: 800; color: var(--text-3); }
 .ci-index { display: none; }
-.ci-info { min-width: 0; grid-column: 1 / 2; }
-.ci-name { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ci-unit { font-size: 11.5px; color: var(--text-3); margin-top: 2px; font-family: var(--mono); }
-.ci-sub { font-family: var(--mono); font-size: 13px; font-weight: 700; text-align: right; }
+.ci-info { min-width: 0; grid-column: 2 / 3; }
+.ci-name { font-size: 12px; font-weight: 700; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-unit { font-size: 10.5px; color: var(--text-3); margin-top: 1px; font-family: var(--mono); }
+.ci-sub { font-family: var(--mono); font-size: 12px; font-weight: 700; text-align: right; color: var(--blue); grid-column: 3 / 4; grid-row: 1 / 2; }
 .qty-ctrl {
     display: flex; align-items: center;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; overflow: hidden; grid-column: 1 / 2;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; grid-column: 2 / 3; width: fit-content;
 }
 .qty-btn {
-    width: 30px; height: 30px; border: none; background: none;
-    color: var(--text-2); font-size: 16px; font-weight: 700; cursor: pointer;
+    width: 26px; height: 26px; border: none; background: none;
+    color: var(--text-2); font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .qty-btn:hover { background: #eef2f7; color: var(--text-1); }
 .qty-num {
-    width: 30px; text-align: center;
-    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    width: 26px; text-align: center;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text-1);
 }
 .ci-remove {
-    width: 28px; height: 28px; border: none; border-radius: 8px;
+    width: 24px; height: 24px; border: none; border-radius: 6px;
     background: transparent; color: var(--text-3); cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    grid-column: 2 / 3; grid-row: 1 / 3; align-self: start;
+    grid-column: 3 / 4; grid-row: 2 / 3; justify-self: end;
 }
 .ci-remove:hover { color: var(--red); background: var(--red-bg); }
 
 .cart-empty {
-    flex: 1; display: flex; flex-direction: column;
+    display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    text-align: center; padding: 20px; color: var(--text-3);
+    text-align: center; padding: 18px 12px; color: var(--text-3);
+    min-height: 100px;
 }
 .empty-ring {
-    width: 56px; height: 56px; border-radius: 50%;
-    border: 1.5px dashed #cbd5e1; background: var(--surface-2);
-    display: flex; align-items: center; justify-content: center; margin-bottom: 10px;
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 1.5px dashed #cbd5e1; background: var(--surface);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
 }
-.empty-ring svg { width: 22px; height: 22px; }
-.empty-title { font-size: 14px; font-weight: 650; color: var(--text-2); }
-.empty-sub { font-size: 12.5px; margin-top: 4px; }
+.empty-ring svg { width: 18px; height: 18px; }
+.empty-title { font-size: 12.5px; font-weight: 650; color: var(--text-2); }
+.empty-sub { font-size: 11px; margin-top: 3px; }
 
 .cart-extras {
     flex-shrink: 0; border-top: 1px solid var(--border); background: var(--surface-2);
 }
-.extras-body.always-open {
-    padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+.extras-body, .extras-body.always-open {
+    padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px;
 }
 .field-label {
-    display: block; margin-bottom: 4px;
-    font-size: 11px; font-weight: 700; color: var(--text-3);
+    display: block; margin-bottom: 3px;
+    font-size: 10px; font-weight: 700; color: var(--text-3);
     text-transform: uppercase; letter-spacing: .04em;
 }
-.extras-grid { display: flex; flex-direction: column; gap: 8px; }
+.extras-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
 .cust-phone-wrap { position: relative; }
 .cust-input, .discount-input, .coupon-input {
-    width: 100%; padding: 9px 10px;
-    border: 1px solid var(--border); border-radius: 10px;
+    width: 100%; padding: 7px 8px;
+    border: 1px solid var(--border); border-radius: 8px;
     background: var(--surface); color: var(--text-1);
-    font-family: var(--font); font-size: 13px; outline: none;
+    font-family: var(--font); font-size: 12px; outline: none;
 }
 .cust-input:focus, .discount-input:focus, .coupon-input:focus {
-    border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.12);
 }
-.discount-row, .coupon-row { display: flex; gap: 6px; align-items: center; }
+.discount-row, .coupon-row { display: flex; gap: 5px; align-items: center; }
 .type-toggle {
-    display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; flex-shrink: 0;
+    display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0;
 }
 .tt-btn {
-    padding: 8px 10px; border: none; cursor: pointer;
-    background: var(--surface-2); color: var(--text-3);
-    font-family: var(--mono); font-size: 12px; font-weight: 650;
+    padding: 6px 8px; border: none; cursor: pointer;
+    background: var(--surface); color: var(--text-3);
+    font-family: var(--mono); font-size: 11px; font-weight: 650;
 }
 .tt-btn.active { background: var(--blue); color: #fff; }
 .discount-input { flex: 1; font-family: var(--mono); font-weight: 600; min-width: 0; }
 .coupon-input { flex: 1; font-family: var(--mono); text-transform: uppercase; min-width: 0; }
 .coupon-apply-btn {
-    padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+    padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); color: var(--text-2);
-    font-size: 12.5px; font-weight: 650; cursor: pointer; font-family: var(--font);
+    font-size: 11px; font-weight: 650; cursor: pointer; font-family: var(--font);
 }
 .coupon-apply-btn:hover { color: var(--blue); border-color: var(--teal-border); background: var(--blue-soft); }
 .coupon-applied {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 8px 10px; border-radius: 10px;
+    padding: 6px 8px; border-radius: 8px;
     background: var(--green-bg); border: 1px solid var(--green-border);
-    font-size: 12px; font-weight: 650; color: var(--green);
+    font-size: 11px; font-weight: 650; color: var(--green);
 }
-.coupon-remove { border: none; background: none; color: var(--red); font-weight: 650; cursor: pointer; font-size: 12px; }
+.coupon-remove { border: none; background: none; color: var(--red); font-weight: 650; cursor: pointer; font-size: 11px; }
 .discount-badge {
-    flex-shrink: 0; font-family: var(--mono); font-size: 11.5px; font-weight: 650;
+    flex-shrink: 0; font-family: var(--mono); font-size: 10.5px; font-weight: 650;
     color: var(--green); background: var(--green-bg);
-    border: 1px solid var(--green-border); padding: 6px 8px; border-radius: 8px;
+    border: 1px solid var(--green-border); padding: 5px 6px; border-radius: 7px;
 }
 
 .cart-foot {
-    flex-shrink: 0; padding: 12px 14px 14px;
+    flex-shrink: 0; padding: 10px 12px 12px;
     border-top: 1px solid var(--border); background: var(--surface);
+    position: sticky; bottom: 0; z-index: 3;
+    box-shadow: 0 -6px 16px rgba(15,23,42,.04);
 }
-.summary-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.sum-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-2); }
+.summary-rows { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.sum-row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-2); }
 .sum-val { font-family: var(--mono); font-weight: 600; }
 .sum-row.discount .sum-val, .sum-row.exchange .sum-val { color: var(--green); }
 .total-row {
     display: flex; justify-content: space-between; align-items: baseline;
-    padding: 10px 0 12px; border-top: 1px dashed #dbe3ef;
+    padding: 8px 0 10px; border-top: 1px dashed #dbe3ef;
 }
-.total-label { font-size: 13px; font-weight: 700; }
-.total-val { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--blue); }
-.total-sym { font-size: 13px; color: var(--text-3); margin-right: 3px; }
+.total-label { font-size: 12px; font-weight: 700; }
+.total-val { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--blue); }
+.total-sym { font-size: 11px; color: var(--text-3); margin-right: 2px; }
 
-.pay-methods { display: grid; grid-template-columns: 1.2fr .9fr .9fr; gap: 6px; margin-bottom: 8px; }
+.pay-methods { display: grid; grid-template-columns: 1.2fr .9fr .9fr; gap: 5px; margin-bottom: 6px; }
 .pay-method {
-    padding: 10px 8px; border-radius: 10px; cursor: pointer; font-family: var(--font);
-    font-size: 13px; font-weight: 700; border: 1px solid var(--border);
+    padding: 8px 6px; border-radius: 9px; cursor: pointer; font-family: var(--font);
+    font-size: 12px; font-weight: 700; border: 1px solid var(--border);
     background: var(--surface-2); color: var(--text-2);
 }
 .pay-method.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
@@ -490,86 +540,151 @@
 }
 
 /* Modal / kb / toast — keep functional, blue-tint accents */
-.modal-overlay { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 80;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px;
+}
 .modal-bg { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(6px); }
 .modal {
-    position: relative; z-index: 1; width: 100%; max-width: 440px;
+    position: relative; z-index: 1; width: 100%; max-width: 400px;
+    max-height: min(92vh, 620px);
+    display: flex; flex-direction: column;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 18px; box-shadow: 0 20px 50px rgba(15,23,42,.2); overflow: hidden;
+    border-radius: 14px; box-shadow: 0 20px 50px rgba(15,23,42,.22);
+    overflow: hidden;
 }
 .modal-head {
-    padding: 16px 18px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    flex-shrink: 0; background: var(--surface);
 }
-.modal-title { font-size: 16px; font-weight: 700; }
-.modal-subtitle { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.modal-title { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.modal-subtitle { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 .modal-close {
-    width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border);
+    width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface-2); color: var(--text-2); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.modal-close svg { width: 14px; height: 14px; }
-.modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.modal-close svg { width: 13px; height: 13px; }
+.modal-body {
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+    overflow-y: auto; flex: 1 1 auto; min-height: 0;
+    scrollbar-width: thin;
+}
 .amount-display {
     background: var(--blue-soft); border: 1px solid var(--teal-border);
-    border-radius: 14px; padding: 16px; text-align: center;
+    border-radius: 10px; padding: 10px 12px; text-align: center;
 }
-.amount-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
-.amount-value { font-family: var(--mono); font-size: 34px; font-weight: 700; margin-top: 4px; color: var(--blue); }
-.amount-note { font-size: 12px; font-weight: 650; margin-top: 4px; }
+.amount-label { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
+.amount-value { font-family: var(--mono); font-size: 24px; font-weight: 700; margin-top: 2px; color: var(--blue); line-height: 1.2; }
+.amount-value .ccy { font-size: 13px; color: var(--text-3); margin-right: 2px; font-weight: 600; }
+.amount-note { font-size: 11px; font-weight: 650; margin-top: 3px; }
 .warning-box {
-    display: flex; gap: 8px; align-items: flex-start;
+    display: flex; gap: 7px; align-items: flex-start;
     background: var(--amber-bg); border: 1px solid var(--amber-border);
-    border-radius: 12px; padding: 10px 12px;
+    border-radius: 10px; padding: 8px 10px;
 }
-.warning-box svg { width: 16px; height: 16px; color: var(--amber); flex-shrink: 0; margin-top: 1px; }
-.warning-text { font-size: 12.5px; font-weight: 600; color: var(--amber); line-height: 1.45; }
-.field-label, .field-label-pay { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 7px; }
-.split-grid { display: flex; flex-direction: column; gap: 6px; }
+.warning-box svg { width: 14px; height: 14px; color: var(--amber); flex-shrink: 0; margin-top: 1px; }
+.warning-text { font-size: 11px; font-weight: 600; color: var(--amber); line-height: 1.4; }
+.field-label, .field-label-pay { font-size: 10px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 6px; }
+.split-grid { display: flex; flex-direction: column; gap: 5px; }
 .sp-row {
     display: flex; align-items: center; justify-content: space-between;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 10px 12px;
+    border-radius: 9px; padding: 7px 10px;
 }
-.sp-row:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-.sp-label { font-size: 13.5px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.sp-row:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
+.sp-label { font-size: 12px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
 .sp-input {
-    width: 110px; text-align: right; border: none; outline: none; background: transparent;
-    font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--text-1);
+    width: 100px; text-align: right; border: none; outline: none; background: transparent;
+    font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text-1);
 }
 .sp-input::-webkit-inner-spin-button, .sp-input::-webkit-outer-spin-button { display: none; }
-.qc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.qc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 6px; }
 .qc-btn {
-    padding: 9px 4px; border: 1px solid var(--border); border-radius: 10px;
+    padding: 7px 4px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--surface); color: var(--text-2);
-    font-family: var(--mono); font-size: 12px; font-weight: 650; cursor: pointer;
+    font-family: var(--mono); font-size: 11px; font-weight: 650; cursor: pointer;
 }
 .qc-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
 .qc-btn.exact { background: var(--navy); color: #fff; border-color: var(--navy); }
 .change-box {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 14px; border-radius: 12px; border: 1px solid;
+    padding: 9px 11px; border-radius: 9px; border: 1px solid;
 }
 .change-box.ok  { background: var(--green-bg); border-color: var(--green-border); }
 .change-box.err { background: var(--red-bg); border-color: var(--red-border); }
-.change-lbl { font-size: 13px; font-weight: 650; }
+.change-lbl { font-size: 11.5px; font-weight: 650; }
 .change-box.ok .change-lbl { color: #166534; }
 .change-box.err .change-lbl { color: var(--red); }
-.change-val { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+.change-val { font-family: var(--mono); font-size: 15px; font-weight: 700; }
 .change-box.ok .change-val { color: var(--green); }
 .change-box.err .change-val { color: var(--red); }
-.err-hint { font-size: 12px; color: var(--red); text-align: center; font-weight: 650; margin-top: -4px; }
-.modal-foot { padding: 0 20px 18px; display: flex; gap: 8px; }
+.err-hint { font-size: 11px; color: var(--red); text-align: center; font-weight: 650; margin-top: -2px; }
+.pay-summary {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: var(--surface);
+}
+.pay-summary-cell {
+    padding: 8px 8px; text-align: center;
+    border-right: 1px solid var(--border);
+}
+.pay-summary-cell:last-child { border-right: none; }
+.pay-summary-cell .ps-label {
+    font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3);
+}
+.pay-summary-cell .ps-val {
+    margin-top: 3px; font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--text-1);
+}
+.pay-summary-cell.due .ps-val { color: var(--blue); }
+.pay-summary-cell.paid .ps-val { color: #0f172a; }
+.pay-summary-cell.change.ok .ps-val { color: var(--green); }
+.pay-summary-cell.change.err .ps-val { color: var(--red); }
+
+.invoice-overlay { z-index: 90; }
+.invoice-modal {
+    max-width: 420px; max-height: min(94vh, 720px);
+    display: flex; flex-direction: column;
+}
+.invoice-frame-wrap {
+    background: #f1f5f9; border-bottom: 1px solid var(--border);
+    flex: 1 1 auto; min-height: 0; overflow: hidden;
+    display: flex; flex-direction: column;
+}
+.invoice-frame {
+    width: 100%; flex: 1 1 auto; min-height: 360px; border: 0; background: #fff;
+}
+.invoice-meta {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+    flex-shrink: 0;
+}
+.invoice-meta-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px;
+}
+.invoice-meta-item .im-label { font-size: 9px; font-weight: 800; color: var(--text-3); text-transform: uppercase; }
+.invoice-meta-item .im-val { margin-top: 2px; font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--text-1); }
+.invoice-meta-item.change .im-val { color: var(--green); }
+.modal-foot {
+    padding: 10px 14px 12px; display: flex; gap: 7px;
+    flex-shrink: 0; border-top: 1px solid var(--border); background: var(--surface);
+}
 .modal-cancel, .modal-confirm {
-    flex: 1; padding: 12px; border-radius: 12px; cursor: pointer;
-    font-family: var(--font); font-size: 13.5px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
+    flex: 1; padding: 9px 10px; border-radius: 10px; cursor: pointer;
+    font-family: var(--font); font-size: 12.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
 }
 .modal-cancel { background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); }
-.modal-confirm { background: var(--green); border: none; color: #fff; box-shadow: 0 6px 16px rgba(22,163,74,.25); }
+.modal-confirm { background: var(--green); border: none; color: #fff; box-shadow: 0 4px 12px rgba(22,163,74,.22); }
 .modal-confirm:hover { background: #15803d; }
 .modal-confirm:disabled { background: #cbd5e1; color: #64748b; box-shadow: none; cursor: not-allowed; }
-.modal-confirm svg { width: 16px; height: 16px; }
+.modal-confirm svg { width: 14px; height: 14px; }
+.modal-kbd {
+    font-size: 9px; font-family: var(--mono); font-weight: 700;
+    padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor; opacity: .75;
+}
 
 .kb-overlay {
     position: fixed; inset: 0; z-index: 100;
@@ -648,9 +763,11 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
             <input type="text" x-model="search" x-ref="searchInput" autofocus
-                   placeholder="Search products by name, SKU or barcode..."
-                   class="search-input">
-            <span class="kbd">Ctrl /</span>
+                   placeholder="Scan barcode or search name / SKU..."
+                   class="search-input"
+                   @input="onSearchInput()"
+                   @keydown.enter.prevent="onSearchEnter()">
+            <span class="kbd">Scan</span>
         </div>
 
         <div class="pos-chrome-right">
@@ -751,10 +868,11 @@
                         'in-cart': cartQty(product.id) > 0
                      }">
 
+                    <div class="p-in-cart-tag" x-show="cartQty(product.id) > 0" x-cloak>In cart</div>
                     <div class="p-selected-badge"
                          x-show="cartQty(product.id) > 0"
                          x-text="cartQty(product.id)"
-                         style="display:none"></div>
+                         x-cloak></div>
 
                     <div class="p-img-wrap">
                         <template x-if="product.image">
@@ -805,24 +923,24 @@
                     </svg>
                 </div>
                 Cart
-                <span class="cart-count" x-show="cart.length > 0" x-text="cart.length"></span>
+                <span class="cart-count" x-show="cartUnitCount() > 0" x-text="cartUnitCount()" x-cloak></span>
             </div>
             <div class="cart-head-actions">
                 <button @click="holdCartsModalOpen = true"
                     x-show="heldCarts.length > 0"
-                    style="display:none"
+                    x-cloak
                     class="held-btn">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     <span x-text="heldCarts.length"></span> Held
                 </button>
-                <button @click="cart = []" x-show="cart.length > 0" class="clear-btn">Clear Cart</button>
+                <button @click="cart = []; lastAddedId = null" x-show="cart.length > 0" class="clear-btn">Clear Cart</button>
             </div>
         </div>
 
         <!-- Exchange Mode Banner -->
-        <div x-show="isExchangeMode" style="display:none" class="exchange-banner">
+        <div x-show="isExchangeMode" x-cloak class="exchange-banner">
             <div style="display:flex;align-items:center;gap:7px">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -832,13 +950,24 @@
             <span>Credit: Tk<span x-text="formatNumber(exchangeCredit)"></span></span>
         </div>
 
-        <div class="cart-items">
+        <div class="cart-items" id="pos-cart-items">
+            <div class="cart-items-label" x-show="cart.length > 0" x-cloak>
+                <span>Selected items</span>
+                <strong x-text="cart.length + ' line · ' + cartUnitCount() + ' qty'"></strong>
+            </div>
             <template x-for="(item, index) in cart" :key="item.id">
-                <div class="cart-item" :class="item.qty >= item.max_stock ? 'at-limit' : ''">
-                    <div class="ci-index" x-text="index + 1"></div>
+                <div class="cart-item" :class="{ 'at-limit': item.qty >= item.max_stock, 'just-added': lastAddedId === item.id }">
+                    <div class="ci-thumb">
+                        <template x-if="item.image">
+                            <img :src="'/storage/' + item.image" :alt="item.name">
+                        </template>
+                        <template x-if="!item.image">
+                            <span x-text="productInitials(item.name)"></span>
+                        </template>
+                    </div>
                     <div class="ci-info">
-                        <div class="ci-name" x-text="item.name"></div>
-                        <div class="ci-unit">Tk<span x-text="formatNumber(item.price)"></span> × <span x-text="item.qty"></span></div>
+                        <div class="ci-name" x-text="item.name" :title="item.name"></div>
+                        <div class="ci-unit">Tk<span x-text="formatNumber(item.price)"></span> each</div>
                     </div>
                     <div class="ci-sub">Tk<span x-text="formatNumber(item.price * item.qty)"></span></div>
                     <div class="qty-ctrl">
@@ -862,19 +991,19 @@
                         </svg>
                     </div>
                     <div class="empty-title">Cart is empty</div>
-                    <div class="empty-sub">Tap a product or scan a barcode</div>
+                    <div class="empty-sub">Tap a product — it will appear here</div>
                 </div>
             </template>
         </div>
 
         <div class="cart-extras">
             <div class="extras-body always-open">
-                <div class="field-label">Add Customer (Optional)</div>
+                <div class="field-label">Customer (optional)</div>
                 <div class="extras-grid">
                     <div class="cust-phone-wrap">
                         <input type="text" x-model="customerPhone" @input.debounce.500ms="searchCustomer()" placeholder="Mobile number" class="cust-input">
-                        <div x-show="isSearchingCustomer" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);display:none">
-                            <svg class="animate-spin" style="width:15px;height:15px;color:var(--teal)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <div x-show="isSearchingCustomer" x-cloak style="position:absolute;right:8px;top:50%;transform:translateY(-50%)">
+                            <svg class="animate-spin" style="width:13px;height:13px;color:var(--teal)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                             </svg>
@@ -883,14 +1012,14 @@
                     <input type="text" x-model="customerName" placeholder="Customer name" class="cust-input">
                 </div>
 
-                <div class="field-label" style="margin-top:4px">Discount</div>
+                <div class="field-label" style="margin-top:2px">Discount</div>
                 <div class="discount-row">
                     <div class="type-toggle">
                         <button type="button" @click="discountType = 'percent'" class="tt-btn" :class="discountType === 'percent' ? 'active' : ''">%</button>
                         <button type="button" @click="discountType = 'flat'" class="tt-btn" :class="discountType === 'flat' ? 'active' : ''">Tk</button>
                     </div>
                     <input type="number" x-model.number="discountValue" class="discount-input" :placeholder="discountType === 'percent' ? '%' : 'Amount'" min="0" :max="discountType === 'percent' ? 100 : getTotal()">
-                    <span x-show="getDiscount() > 0" class="discount-badge" style="display:none">
+                    <span x-show="getDiscount() > 0" class="discount-badge" x-cloak>
                         -Tk<span x-text="formatNumber(getDiscount())"></span>
                     </span>
                 </div>
@@ -898,7 +1027,7 @@
                     <input type="text" x-model="couponCode" @keyup.enter="applyCoupon()" placeholder="Coupon code" class="coupon-input">
                     <button type="button" @click="applyCoupon()" class="coupon-apply-btn">Apply</button>
                 </div>
-                <div x-show="appliedCoupon" style="display:none" class="coupon-applied">
+                <div x-show="appliedCoupon" x-cloak class="coupon-applied">
                     <span>Coupon <strong x-text="appliedCoupon?.code"></strong> applied</span>
                     <button type="button" @click="removeCoupon()" class="coupon-remove">Remove</button>
                 </div>
@@ -972,9 +1101,9 @@
             <div class="modal-head">
                 <div>
                     <div class="modal-title">Complete Payment</div>
-                    <div class="modal-subtitle" x-text="cart.length + ' item(s)   ·   ' + (customerName || 'Walk-in Customer')"></div>
+                    <div class="modal-subtitle" x-text="cartUnitCount() + ' item(s) · ' + (customerName || 'Walk-in Customer')"></div>
                 </div>
-                <button @click="checkoutModalOpen = false" class="modal-close">
+                <button type="button" @click="checkoutModalOpen = false" class="modal-close" aria-label="Close">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -982,78 +1111,135 @@
             </div>
 
             <div class="modal-body">
-                <!-- Amount -->
                 <div class="amount-display">
-                    <div class="amount-label">Total Amount Due</div>
+                    <div class="amount-label">Total amount due</div>
                     <div class="amount-value">
-                        <span style="font-size:20px;color:var(--text-3);margin-right:3px;font-weight:600">Tk</span><span x-text="formatNumber(getPayableTotal())"></span>
+                        <span class="ccy">Tk</span><span x-text="formatNumber(getPayableTotal())"></span>
                     </div>
-                    <div x-show="getDiscount() > 0" class="amount-note" style="color:var(--green)">
+                    <div x-show="getDiscount() > 0" class="amount-note" style="color:var(--green)" x-cloak>
                          Saved Tk<span x-text="formatNumber(getDiscount())"></span>
                     </div>
-                    <div x-show="isExchangeMode" style="display:none" class="amount-note" style="color:var(--amber)">
+                    <div x-show="isExchangeMode" class="amount-note" style="color:var(--amber)" x-cloak>
                         Exchange credit: -Tk<span x-text="formatNumber(exchangeCredit)"></span>
                     </div>
                 </div>
 
-                <!-- Stock Warning -->
-                <div x-show="hasLowStockItems()" style="display:none" class="warning-box">
+                <div x-show="hasLowStockItems()" class="warning-box" x-cloak>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
-                    <div class="warning-text">One or more items are at their stock limit. Verify availability before confirming.</div>
+                    <div class="warning-text">One or more items are at stock limit. Verify before confirming.</div>
                 </div>
 
-                <!-- Split Payment -->
                 <div>
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                        <label class="field-label" style="margin-bottom:0">Payment Method</label>
-                        <span style="font-size:9.5px;font-weight:800;color:var(--teal);background:var(--teal-bg);padding:2px 8px;border-radius:100px;border:1px solid var(--teal-border)">Split Pay</span>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                        <label class="field-label" style="margin-bottom:0">Payment method</label>
+                        <span style="font-size:9px;font-weight:800;color:var(--teal);background:var(--teal-bg);padding:2px 7px;border-radius:100px;border:1px solid var(--teal-border)">Split pay</span>
                     </div>
                     <div class="split-grid">
                         <div class="sp-row">
                             <div class="sp-label">Cash</div>
-                            <input type="number" x-model.number="payCash" class="sp-input" placeholder="0">
+                            <input type="number" x-model.number="payCash" class="sp-input" placeholder="0"
+                                   @keydown.enter.prevent="if (getChange() >= 0 && !isProcessing) submitOrder()">
                         </div>
                         <div class="sp-row">
                             <div class="sp-label">Card</div>
-                            <input type="number" x-model.number="payCard" class="sp-input" placeholder="0">
+                            <input type="number" x-model.number="payCard" class="sp-input" placeholder="0"
+                                   @keydown.enter.prevent="if (getChange() >= 0 && !isProcessing) submitOrder()">
                         </div>
                         <div class="sp-row">
                             <div class="sp-label">bKash</div>
-                            <input type="number" x-model.number="payBkash" class="sp-input" placeholder="0">
+                            <input type="number" x-model.number="payBkash" class="sp-input" placeholder="0"
+                                   @keydown.enter.prevent="if (getChange() >= 0 && !isProcessing) submitOrder()">
                         </div>
                     </div>
                     <div class="qc-grid">
-                        <button @click="payCash = getPayableTotal(); payCard = 0; payBkash = 0;" class="qc-btn exact">Exact</button>
-                        <button @click="payCash = 500"  class="qc-btn">Tk500</button>
-                        <button @click="payCash = 1000" class="qc-btn">Tk1K</button>
-                        <button @click="payCash = 2000" class="qc-btn">Tk2K</button>
+                        <button type="button" @click="payCash = getPayableTotal(); payCard = 0; payBkash = 0;" class="qc-btn exact">Exact</button>
+                        <button type="button" @click="payCash = 500"  class="qc-btn">Tk500</button>
+                        <button type="button" @click="payCash = 1000" class="qc-btn">Tk1K</button>
+                        <button type="button" @click="payCash = 2000" class="qc-btn">Tk2K</button>
                     </div>
                 </div>
 
-                <!-- Change -->
-                <div class="change-box" :class="getChange() >= 0 ? 'ok' : 'err'">
-                    <span class="change-lbl" x-text="getChange() >= 0 ? 'Change to Return' : 'Amount Still Owed'"></span>
-                    <span class="change-val">Tk<span x-text="formatNumber(Math.abs(getChange()))"></span></span>
+                {{-- Paid / change summary --}}
+                <div class="pay-summary">
+                    <div class="pay-summary-cell due">
+                        <div class="ps-label">Amount due</div>
+                        <div class="ps-val">Tk<span x-text="formatNumber(getPayableTotal())"></span></div>
+                    </div>
+                    <div class="pay-summary-cell paid">
+                        <div class="ps-label">Customer paid</div>
+                        <div class="ps-val">Tk<span x-text="formatNumber(getPaidAmount())"></span></div>
+                    </div>
+                    <div class="pay-summary-cell change" :class="getChange() >= 0 ? 'ok' : 'err'">
+                        <div class="ps-label" x-text="getChange() >= 0 ? 'Change to return' : 'Still owed'"></div>
+                        <div class="ps-val">Tk<span x-text="formatNumber(Math.abs(getChange()))"></span></div>
+                    </div>
                 </div>
-                <p x-show="getChange() < 0" class="err-hint">Received amount is less than total due</p>
+                <p x-show="getChange() < 0" class="err-hint" x-cloak>Received amount is less than total due</p>
             </div>
 
             <div class="modal-foot">
-                <button @click="checkoutModalOpen = false" class="modal-cancel">
-                    Cancel <span class="key" style="font-size:9px">ESC</span>
+                <button type="button" @click="checkoutModalOpen = false" class="modal-cancel">
+                    Cancel <span class="modal-kbd">ESC</span>
                 </button>
-                <button @click="submitOrder()"
+                <button type="button" @click="submitOrder()"
                         :disabled="getChange() < 0 || isProcessing"
-                        class="modal-confirm">
-                    <svg x-show="!isProcessing" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        class="modal-confirm"
+                        x-ref="confirmSaleBtn">
+                    <svg x-show="!isProcessing" x-cloak fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                     </svg>
-                    <span x-show="!isProcessing" style="display:flex;align-items:center;gap:6px">
-                        Confirm Sale <span class="key" style="font-size:9px;background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3);color:#fff;box-shadow:none">ENTER</span>
+                    <span x-show="!isProcessing" x-cloak style="display:flex;align-items:center;gap:6px">
+                        Confirm sale <span class="modal-kbd">ENTER</span>
                     </span>
-                    <span x-show="isProcessing">Processing...</span>
+                    <span x-show="isProcessing" x-cloak>Processing...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INVOICE PREVIEW MODAL (after successful sale) -->
+    <div x-show="invoiceModalOpen" style="display:none" class="modal-overlay invoice-overlay"
+         x-transition:enter="ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+         x-transition:leave="ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+        <div class="modal-bg" @click="closeInvoiceModal()"></div>
+        <div class="modal invoice-modal"
+             x-show="invoiceModalOpen"
+             x-transition:enter="ease-out duration-250" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+            <div class="modal-head">
+                <div>
+                    <div class="modal-title">Sale complete · Invoice</div>
+                    <div class="modal-subtitle" x-text="(lastSale?.invoice_no || '') + (lastSale?.customer ? ' · ' + lastSale.customer : '')"></div>
+                </div>
+                <button type="button" @click="closeInvoiceModal()" class="modal-close" aria-label="Close">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="invoice-meta" x-show="lastSale" x-cloak>
+                <div class="invoice-meta-item">
+                    <div class="im-label">Customer paid</div>
+                    <div class="im-val">Tk<span x-text="formatNumber(lastSale?.paid_amount || 0)"></span></div>
+                </div>
+                <div class="invoice-meta-item change">
+                    <div class="im-label">Change to return</div>
+                    <div class="im-val">Tk<span x-text="formatNumber(lastSale?.change || 0)"></span></div>
+                </div>
+            </div>
+            <div class="invoice-frame-wrap">
+                <iframe x-ref="receiptFrame" class="invoice-frame" :src="lastSale?.receipt_url || 'about:blank'" title="POS Invoice"></iframe>
+            </div>
+            <div class="modal-foot">
+                <button type="button" @click="closeInvoiceModal()" class="modal-cancel">
+                    Close <span class="modal-kbd">ESC</span>
+                </button>
+                <button type="button" @click="printLastReceipt()" class="modal-confirm" style="background:var(--blue);box-shadow:0 4px 12px rgba(37,99,235,.25)">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                    </svg>
+                    Print invoice <span class="modal-kbd">ENTER</span>
                 </button>
             </div>
         </div>
@@ -1198,6 +1384,7 @@ function posSystem() {
         selectedCategory: 'all',
         products: @json($products),
         cart: [],
+        lastAddedId: null,
 
         /* â”€â”€ Customer â”€â”€ */
         customerName: '',
@@ -1212,6 +1399,8 @@ function posSystem() {
 
         /* â”€â”€ Checkout â”€â”€ */
         checkoutModalOpen: false,
+        invoiceModalOpen: false,
+        lastSale: null,
         isProcessing: false,
         payCash: 0,
         payCard: 0,
@@ -1286,10 +1475,30 @@ function posSystem() {
            KEYBOARD SHORTCUTS
         â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
         handleKeydown(e) {
-            // Inside checkout modal
+            // Invoice preview after sale — Enter prints, Esc closes
+            if (this.invoiceModalOpen) {
+                if (e.key === 'Enter' || e.key === 'NumpadEnter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.printLastReceipt();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.closeInvoiceModal();
+                }
+                return;
+            }
+            // Inside checkout modal — Enter confirms, Esc cancels
             if (this.checkoutModalOpen) {
-                if (e.key === 'Enter')  { e.preventDefault(); if (this.getChange() >= 0 && !this.isProcessing) this.submitOrder(); }
-                if (e.key === 'Escape') { e.preventDefault(); this.checkoutModalOpen = false; }
+                if (e.key === 'Enter' || e.key === 'NumpadEnter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (this.getChange() >= 0 && !this.isProcessing) this.submitOrder();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.checkoutModalOpen = false;
+                }
                 return;
             }
             // Shortcut overlay open
@@ -1302,22 +1511,75 @@ function posSystem() {
             if (e.key === 'Escape'){ this.search = ''; this.$refs.searchInput.focus(); }
             if (e.key === '?')     { e.preventDefault(); this.kbOpen = true; }
             if ((e.key === 'd' || e.key === 'D') && document.activeElement.tagName !== 'INPUT') this.toggleDark();
-            if (e.key === 'Enter' && document.activeElement === this.$refs.searchInput) {
-                e.preventDefault();
-                const filtered = this.filteredProducts();
-                if (filtered.length === 1) this.addToCart(filtered[0]);
-            }
+            // Enter on search is handled by @keydown.enter on the input
         },
 
         /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-           PRODUCT FILTER
+           PRODUCT FILTER + BARCODE AUTO-ADD
         â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
         filteredProducts() {
+            const q = (this.search || '').trim().toLowerCase();
+            if (!q) {
+                return this.products.filter(p =>
+                    this.selectedCategory === 'all' || p.category_id == this.selectedCategory
+                );
+            }
             return this.products.filter(p => {
-                const matchSearch = p.name.toLowerCase().includes(this.search.toLowerCase()) || p.barcode.includes(this.search);
-                const matchCat    = this.selectedCategory === 'all' || p.category_id == this.selectedCategory;
+                const name = (p.name || '').toLowerCase();
+                const barcode = String(p.barcode || '').toLowerCase();
+                const sku = String(p.sku || '').toLowerCase();
+                const matchSearch = name.includes(q) || barcode.includes(q) || sku.includes(q);
+                const matchCat = this.selectedCategory === 'all' || p.category_id == this.selectedCategory;
                 return matchSearch && matchCat;
             });
+        },
+
+        findExactScanMatch(code) {
+            const q = String(code || '').trim().toLowerCase();
+            if (!q) return null;
+            return this.products.find(p => {
+                const barcode = String(p.barcode || '').trim().toLowerCase();
+                const sku = String(p.sku || '').trim().toLowerCase();
+                return (barcode && barcode === q) || (sku && sku === q);
+            }) || null;
+        },
+
+        onSearchInput() {
+            if (this.checkoutModalOpen || this.invoiceModalOpen) return;
+            const q = (this.search || '').trim();
+            // Barcode scanners type fast; auto-add on exact barcode/SKU match (no click needed)
+            if (q.length < 3) return;
+            const match = this.findExactScanMatch(q);
+            if (match) {
+                this.addToCart(match);
+            }
+        },
+
+        onSearchEnter() {
+            if (this.checkoutModalOpen || this.invoiceModalOpen) return;
+            const q = (this.search || '').trim();
+            if (!q) return;
+
+            // Prefer exact barcode / SKU
+            const exact = this.findExactScanMatch(q);
+            if (exact) {
+                this.addToCart(exact);
+                return;
+            }
+
+            // Otherwise add if only one filtered result
+            const filtered = this.filteredProducts();
+            if (filtered.length === 1) {
+                this.addToCart(filtered[0]);
+                return;
+            }
+
+            if (filtered.length === 0) {
+                this.playBeep(false);
+                this.showToast('No product found for “' + q + '”', 'error');
+                this.search = '';
+                this.$nextTick(() => this.$refs.searchInput?.focus());
+            }
         },
 
         /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1358,6 +1620,7 @@ function posSystem() {
             if (existing) {
                 if (existing.qty < product.stock_quantity) {
                     existing.qty++;
+                    this.lastAddedId = product.id;
                     this.playBeep(true);
                 } else {
                     this.playBeep(false);
@@ -1369,17 +1632,27 @@ function posSystem() {
                     name: product.name,
                     price: product.selling_price,
                     qty: 1,
-                    max_stock: product.stock_quantity
+                    max_stock: product.stock_quantity,
+                    image: product.image || null,
                 });
+                this.lastAddedId = product.id;
                 this.playBeep(true);
             }
             this.search = '';
             this.$refs.searchInput.focus();
+            this.$nextTick(() => {
+                const box = document.getElementById('pos-cart-items');
+                if (box) box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            });
         },
 
         cartQty(productId) {
             const item = this.cart.find(i => i.id === productId);
             return item ? item.qty : 0;
+        },
+
+        cartUnitCount() {
+            return this.cart.reduce((s, i) => s + i.qty, 0);
         },
 
         productInitials(name) {
@@ -1393,16 +1666,22 @@ function posSystem() {
             const item   = this.cart[index];
             const newQty = item.qty + amount;
             if (newQty <= 0) {
+                if (this.lastAddedId === item.id) this.lastAddedId = null;
                 this.cart.splice(index, 1);
             } else if (newQty <= item.max_stock) {
                 item.qty = newQty;
+                this.lastAddedId = item.id;
             } else {
                 this.playBeep(false);
                 this.showToast('Cannot exceed available stock for ' + item.name, 'warning');
             }
         },
 
-        removeItem(index) { this.cart.splice(index, 1); },
+        removeItem(index) {
+            const removed = this.cart[index];
+            this.cart.splice(index, 1);
+            if (removed && this.lastAddedId === removed.id) this.lastAddedId = null;
+        },
 
         /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
            DISCOUNT & COUPONS
@@ -1534,10 +1813,15 @@ openCheckout() {
             this.payCard  = 0;
             this.payBkash = 0;
             this.checkoutModalOpen = true;
+            this.$nextTick(() => {
+                // Prefer focusing Cash so cashier can adjust; Enter still confirms from inputs
+                const cash = document.querySelector('.modal .sp-input');
+                if (cash) { cash.focus(); cash.select(); }
+            });
         },
 
         async submitOrder() {
-            if (this.getChange() < 0) return;
+            if (this.isProcessing || this.getChange() < 0) return;
             this.isProcessing = true;
 
             const payload = {
@@ -1569,18 +1853,26 @@ openCheckout() {
 
                     if (res.ok && data.success) {
                         this.playBeep(true);
-                        
-                        // 1. Instantly pop open the receipt window
-                        window.open(`/pos/receipt/${data.order_id}`, 'ReceiptWindow', 'width=400,height=620');
-                        
-                        // 2. Clear the cart and reset the UI instantly
+                        const paidSnap = this.getPaidAmount();
+                        const changeSnap = data.change ?? Math.max(0, paidSnap - this.getPayableTotal());
+                        const customerSnap = this.customerName || 'Walk-in Customer';
+
                         this.cart = []; this.customerName = ''; this.customerPhone = '';
                         this.discountValue = 0; this.appliedCoupon = null; this.couponCode = '';
+                        this.lastAddedId = null;
                         this.checkoutModalOpen = false;
-                        
-                        // 3. Show a nice success message without reloading the page!
-                        this.showToast('Payment successful! Change: Tk' + this.formatNumber(data.change), 'success');
-                        
+
+                        this.lastSale = {
+                            order_id: data.order_id,
+                            invoice_no: data.invoice_no || ('#' + data.order_id),
+                            paid_amount: data.paid_amount ?? paidSnap,
+                            change: changeSnap,
+                            total_amount: data.total_amount ?? 0,
+                            customer: customerSnap,
+                            receipt_url: data.receipt_url || ('/pos/receipt/' + data.order_id),
+                        };
+                        this.invoiceModalOpen = true;
+                        this.showToast('Sale complete! Change to return: Tk' + this.formatNumber(changeSnap), 'success');
                     } else {
                         this.playBeep(false);
                         this.showToast('Error: ' + (data.message || 'Something went wrong'), 'error');
@@ -1604,6 +1896,27 @@ openCheckout() {
             }
 
             this.isProcessing = false;
+        },
+
+        printLastReceipt() {
+            if (!this.lastSale?.receipt_url) return;
+            try {
+                const frame = this.$refs.receiptFrame;
+                if (frame && frame.contentWindow) {
+                    frame.contentWindow.focus();
+                    frame.contentWindow.print();
+                    return;
+                }
+            } catch (e) {}
+            // Fallback: open print-ready receipt in a new tab
+            window.open(this.lastSale.receipt_url + (this.lastSale.receipt_url.includes('?') ? '&' : '?') + 'print=1', '_blank');
+        },
+
+        closeInvoiceModal() {
+            this.invoiceModalOpen = false;
+            this.$nextTick(() => {
+                if (this.$refs.searchInput) this.$refs.searchInput.focus();
+            });
         },
 
         /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
