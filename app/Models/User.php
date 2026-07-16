@@ -22,6 +22,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'avatar_path',
         'password',
         'shop_id', // Added for Nexa POS: Links the user to a shop
         'role',
@@ -61,6 +62,32 @@ class User extends Authenticatable
     public function counter()
     {
         return $this->belongsTo(Counter::class);
+    }
+
+    public function customerProfile()
+    {
+        return $this->hasOne(Customer::class, 'user_id');
+    }
+
+    public function isStorefrontCustomer(): bool
+    {
+        if (in_array($this->role, ['customer', 'Customer'], true)) {
+            return true;
+        }
+
+        return $this->hasRole('Customer');
+    }
+
+    public function avatarUrl(): ?string
+    {
+        return public_storage_url($this->avatar_path);
+    }
+
+    public function avatarInitials(): string
+    {
+        $name = trim($this->name ?: 'CU');
+
+        return strtoupper(substr($name, 0, 2));
     }
 
     public function isShopOwner(): bool

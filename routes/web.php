@@ -26,6 +26,7 @@ use App\Http\Controllers\ReorderLevelController;
 use App\Http\Controllers\SalesReturnController;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockLocationController;
+use App\Http\Controllers\StorefrontAuthController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WebsiteController;
 use App\Http\Controllers\Cms\LandingPageController;
@@ -53,7 +54,16 @@ Route::get('/brand/{slug}', [WebsiteController::class, 'brand'])->name('website.
 Route::get('/product/{product}', [WebsiteController::class, 'product'])->name('website.product');
 Route::get('/track-order', [WebsiteController::class, 'trackOrderForm'])->name('website.track');
 Route::post('/track-order', [WebsiteController::class, 'trackOrder'])->name('website.track.submit');
-Route::post('/checkout', [WebsiteController::class, 'checkout'])->name('website.checkout');
+Route::post('/account/login', [StorefrontAuthController::class, 'login'])->name('website.account.login');
+Route::post('/account/register', [StorefrontAuthController::class, 'register'])->name('website.account.register');
+Route::middleware('auth')->group(function () {
+    Route::get('/account', [StorefrontAuthController::class, 'account'])->name('website.account');
+    Route::get('/account/profile', [StorefrontAuthController::class, 'editProfile'])->name('website.account.profile.edit');
+    Route::put('/account/profile', [StorefrontAuthController::class, 'updateProfile'])->name('website.account.profile.update');
+    Route::delete('/account/profile', [StorefrontAuthController::class, 'destroyAccount'])->name('website.account.profile.destroy');
+    Route::post('/account/logout', [StorefrontAuthController::class, 'logout'])->name('website.account.logout');
+    Route::post('/checkout', [WebsiteController::class, 'checkout'])->name('website.checkout');
+});
 Route::get('/page/{slug}', [WebsiteController::class, 'page'])->name('website.page');
 Route::get('/blog', [WebsiteController::class, 'blogs'])->name('website.blogs');
 Route::get('/blog/{slug}', [WebsiteController::class, 'blog'])->name('website.blog');
@@ -62,7 +72,6 @@ Route::get('/faq', [WebsiteController::class, 'faqs'])->name('website.faqs');
 Route::get('/contact', [WebsiteController::class, 'contact'])->name('website.contact');
 Route::post('/contact', [WebsiteController::class, 'submitContact'])->name('website.contact.submit');
 Route::get('/wishlist', [WebsiteController::class, 'wishlist'])->name('website.wishlist');
-Route::get('/compare', [WebsiteController::class, 'compare'])->name('website.compare');
 
 Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::class, \App\Http\Middleware\EnsureStaffOpeningBalance::class])->group(function () {
 
@@ -140,7 +149,10 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::post('/sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
     });
 
-    Route::get('/sales-ledger', [SalesLedgerController::class, 'index'])->name('sales.index');
+    Route::middleware('can:view sales ledger')->group(function () {
+        Route::get('/sales-ledger', [SalesLedgerController::class, 'index'])->name('sales.index');
+        Route::post('/sales/{order}/refund', [SalesLedgerController::class, 'refund'])->name('sales.refund');
+    });
 
     Route::prefix('accounts')->name('accounts.')->group(function () {
         Route::get('/opening-balance', [AccountController::class, 'openingBalance'])->name('opening-balance');
@@ -171,7 +183,6 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::get('/reports/staff-performance', [ReportController::class, 'staffPerformance'])->name('reports.staff_performance');
     Route::get('/reports/staff-daily-details', [ReportController::class, 'staffDailyDetails'])->name('reports.staff_daily_details');
     Route::post('/orders/{order}/exchange', [ExchangeController::class, 'processExchange'])->name('orders.exchange');
-    Route::post('/sales/{order}/refund', [SalesLedgerController::class, 'refund'])->name('sales.refund');
 
     Route::post('/ai-chat', [AiChatController::class, 'ask'])
         ->name('ai.chat')
@@ -202,6 +213,9 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::post('/counter-sessions/{session}/close', [CounterSessionController::class, 'close'])->name('counters.sessions.close');
 
     Route::get('/online-orders', [OnlineOrderController::class, 'index'])->name('online-orders.index');
+    Route::get('/online-orders/notifications', [OnlineOrderController::class, 'notifications'])->name('online-orders.notifications');
+    Route::post('/online-orders/notifications/seen', [OnlineOrderController::class, 'markNotificationsSeen'])->name('online-orders.notifications.seen');
+    Route::get('/online-orders/{order}', [OnlineOrderController::class, 'show'])->name('online-orders.show');
     Route::post('/online-orders/{order}/status', [OnlineOrderController::class, 'updateStatus'])->name('online-orders.update-status');
 });
 

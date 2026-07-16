@@ -25,40 +25,57 @@
                     </div>
                     <div class="flex gap-2 w-full sm:w-auto">
                         <button type="submit" class="flex-1 sm:flex-none px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors">Search</button>
-                        @if(request('date') || request('search'))
+                        @if(request('date') || request('search') || request('status'))
                             <a href="{{ route('online-orders.index') }}" class="flex-1 sm:flex-none px-4 py-1.5 bg-gray-100 hover:bg-red-100 text-gray-600 hover:text-red-600 text-xs font-bold rounded-lg transition-colors text-center inline-block">Clear All</a>
                         @endif
                     </div>
                 </form>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="flex flex-wrap gap-2 mb-4">
+                @foreach(['all' => 'All', 'pending' => 'Pending', 'processing' => 'Packing', 'shipped' => 'Shipped', 'completed' => 'Delivered'] as $key => $label)
+                    <a href="{{ route('online-orders.index', array_merge(request()->only(['search','date']), ['status' => $key])) }}"
+                       class="px-3 py-1.5 rounded-lg text-xs font-bold border {{ ($statusFilter ?? 'all') === $key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50' }}">
+                        {{ $label }}
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 flex items-center justify-between">
                     <div>
-                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Needs Packing</p>
-                        <h3 class="text-2xl font-black text-gray-900">{{ $pendingCount ?? 0 }} <span class="text-sm font-medium text-gray-500">orders</span></h3>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Needs packing</p>
+                        <h3 class="text-2xl font-black text-gray-900">{{ $pendingCount ?? 0 }}</h3>
                     </div>
                     <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                     </div>
                 </div>
-
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Packing now</p>
+                        <h3 class="text-2xl font-black text-gray-900">{{ $processingCount ?? 0 }}</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center">📦</div>
+                </div>
                 <div class="bg-blue-50 p-5 rounded-2xl shadow-sm border border-blue-200 flex items-center justify-between">
                     <div>
-                        <p class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Money with Courier</p>
-                        <h3 class="text-2xl font-black text-blue-900">৳{{ number_format($courierReceivables ?? 0, 2) }}</h3>
-                        <p class="text-[10px] text-blue-700 font-bold mt-1">(Product Revenue Only)</p>
+                        <p class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Out for delivery</p>
+                        <h3 class="text-2xl font-black text-blue-900">{{ $shippedCount ?? 0 }}</h3>
                     </div>
-                    <div class="w-12 h-12 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-                    </div>
+                    <div class="w-12 h-12 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center">🚚</div>
                 </div>
-
+                <div class="bg-sky-50 p-5 rounded-2xl shadow-sm border border-sky-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-bold text-sky-600 uppercase tracking-widest mb-1">Money with courier</p>
+                        <h3 class="text-2xl font-black text-sky-900">৳{{ number_format($courierReceivables ?? 0, 2) }}</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-sky-100 text-sky-500 rounded-full flex items-center justify-center">💸</div>
+                </div>
                 <div class="bg-green-50 p-5 rounded-2xl shadow-sm border border-green-200 flex items-center justify-between">
                     <div>
-                        <p class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">Settled Revenue</p>
+                        <p class="text-xs font-bold text-green-600 uppercase tracking-widest mb-1">Settled revenue</p>
                         <h3 class="text-2xl font-black text-green-900">৳{{ number_format($settledRevenue ?? 0, 2) }}</h3>
-                        <p class="text-[10px] text-green-700 font-bold mt-1">(Product Revenue Only)</p>
                     </div>
                     <div class="w-12 h-12 bg-green-100 text-green-500 rounded-full flex items-center justify-center">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -91,7 +108,7 @@
                                 <tr class="bg-white border-b hover:bg-gray-50 transition-colors {{ $isVoided ? 'bg-red-50/10' : '' }}">
                                     
                                     <td class="px-6 py-4">
-                                        <div class="font-bold text-indigo-600 mb-1">{{ $order->invoice_no }}</div>
+                                        <a href="{{ route('online-orders.show', $order) }}" class="font-bold text-indigo-600 hover:underline mb-1 block">{{ $order->invoice_no }}</a>
                                         <div class="text-xs text-gray-500 mb-2">{{ $order->created_at->format('d M Y, h:i A') }}</div>
                                         <div class="text-xs text-gray-600">
                                             @foreach($order->items as $item)
@@ -135,6 +152,10 @@
                                             <span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full border border-blue-200">Processing</span>
                                         @elseif($order->status === 'shipped')
                                             <span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full border border-purple-200">Shipped</span>
+                                            @if($order->shipping_courier)
+                                                <p class="text-[10px] text-purple-700 font-bold mt-1">{{ $order->shipping_courier }}</p>
+                                                @if($order->shipping_tracking_no)<p class="text-[10px] text-gray-500 font-mono">{{ $order->shipping_tracking_no }}</p>@endif
+                                            @endif
                                         @elseif($order->status === 'completed')
                                             <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">Completed</span>
                                         @elseif($order->status === 'cancelled')
@@ -150,24 +171,12 @@
 
                                     <td class="px-6 py-4 text-right">
                                         <div class="flex flex-col gap-2 justify-end w-full min-w-[130px]">
-                                            <form action="{{ route('online-orders.update-status', $order->id) }}" method="POST" class="w-full">
-                                                @csrf
-                                                <select name="status" onchange="this.form.submit()" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 cursor-pointer shadow-sm transition-colors hover:bg-gray-100">
-                                                    <option value="pending" {{ $order->status == 'pending' ? 'selected' : '' }}>Pending</option>
-                                                    <option value="processing" {{ $order->status == 'processing' ? 'selected' : '' }}>Processing</option>
-                                                    <option value="shipped" {{ $order->status == 'shipped' ? 'selected' : '' }}>Shipped</option>
-                                                    <option value="completed" {{ $order->status == 'completed' ? 'selected' : '' }}>Completed</option>
-                                                    <option disabled>──────────</option>
-                                                    <option value="cancelled" {{ $order->status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-                                                    <option value="returned" {{ $order->status == 'returned' ? 'selected' : '' }}>Returned</option>
-                                                    <option value="refunded" {{ $order->status == 'refunded' ? 'selected' : '' }}>Refunded</option>
-                                                </select>
-                                            </form>
-
+                                            <a href="{{ route('online-orders.show', $order) }}" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                                                Manage & track
+                                            </a>
                                             <button onclick="window.open('{{ route('pos.receipt', $order->id) }}', 'ReceiptWindow', 'width=400,height=620')" 
                                                     class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-                                                Print Receipt
+                                                Print receipt
                                             </button>
                                         </div>
                                     </td>

@@ -7,10 +7,244 @@
     <title>@yield('title', $settings->store_name ?? 'GAGET STORE')</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800&display=swap" rel="stylesheet" />
+    @php
+        $storefrontUser = auth()->check() && auth()->user()->isStorefrontCustomer()
+            ? [
+                'name' => auth()->user()->name,
+                'email' => auth()->user()->email,
+                'phone' => auth()->user()->customerProfile?->phone ?? '',
+                'address' => auth()->user()->customerProfile?->address ?? '',
+            ]
+            : null;
+    @endphp
+    <script>
+        function readStorefrontList(key) {
+            try {
+                const raw = localStorage.getItem(key);
+                const parsed = raw ? JSON.parse(raw) : [];
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function storefrontCart() {
+            return {
+                cart: readStorefrontList('gaget_cart'),
+                wishlist: readStorefrontList('gaget_wishlist'),
+                cartOpen: false,
+                checkoutOpen: false,
+                checkoutStep: 'auth',
+                authTab: 'login',
+                authLoading: false,
+                authMessage: '',
+                ordering: false,
+                orderMessage: '',
+                orderSuccess: false,
+                trackUrl: '',
+                toastMessage: '',
+                toastVisible: false,
+                isLoggedIn: @json((bool) $storefrontUser),
+                currency: @json($settings->currency_symbol ?? '$'),
+                checkout: {
+                    name: @json(data_get($storefrontUser, 'name', '')),
+                    phone: @json(data_get($storefrontUser, 'phone', '')),
+                    address: @json(data_get($storefrontUser, 'address', '')),
+                },
+                authLogin: { email: '', password: '' },
+                authRegister: { name: '', phone: '', email: '', password: '', address: '' },
+                get cartCount() { return this.cart.reduce((s, i) => s + (Number(i.qty) || 0), 0); },
+                get cartTotal() { return this.cart.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0); },
+                get wishlistCount() { return this.wishlist.length; },
+                save() { localStorage.setItem('gaget_cart', JSON.stringify(this.cart)); },
+                saveWishlist() { localStorage.setItem('gaget_wishlist', JSON.stringify(this.wishlist)); },
+                addToCart(product, qty = 1, openDrawer = true) {
+                    if (!product || product.id === undefined || product.id === null) return;
+
+                    const id = Number(product.id);
+                    const amount = Math.max(1, Number(qty) || 1);
+                    const next = this.cart.map((item) => ({ ...item }));
+                    const existing = next.find((item) => Number(item.id) === id);
+
+                    if (existing) {
+                        existing.qty = (Number(existing.qty) || 0) + amount;
+                    } else {
+                        next.push({
+                            id,
+                            name: product.name || 'Product',
+                            price: Number(product.price) || 0,
+                            image: product.image || '',
+                            qty: amount,
+                        });
+                    }
+
+                    this.cart = next;
+                    this.save();
+                    if (openDrawer) this.cartOpen = true;
+                },
+                updateQty(i, d) {
+                    const next = this.cart.map((item) => ({ ...item }));
+                    next[i].qty = (Number(next[i].qty) || 0) + d;
+                    this.cart = next[i].qty <= 0 ? next.filter((_, idx) => idx !== i) : next;
+                    this.save();
+                },
+                removeItem(i) {
+                    this.cart = this.cart.filter((_, idx) => idx !== i);
+                    this.save();
+                },
+                inWishlist(id) { return this.wishlist.some((i) => Number(i.id) === Number(id)); },
+                toggleWishlist(product) {
+                    const idx = this.wishlist.findIndex((i) => Number(i.id) === Number(product.id));
+                    if (idx >= 0) this.wishlist.splice(idx, 1);
+                    else this.wishlist.push(product);
+                    this.saveWishlist();
+                },
+                flashToast(message) {
+                    this.toastMessage = message;
+                    this.toastVisible = true;
+                    clearTimeout(this._toastTimer);
+                    this._toastTimer = setTimeout(() => { this.toastVisible = false; }, 2200);
+                },
+                prefillCheckout(profile) {
+                    this.checkout.name = profile?.name || '';
+                    this.checkout.phone = profile?.phone || '';
+                    this.checkout.address = profile?.address || '';
+                },
+                startCheckout() {
+                    if (this.cart.length === 0) return;
+                    this.cartOpen = false;
+                    this.checkoutOpen = true;
+                    this.orderMessage = '';
+                    this.orderSuccess = false;
+                    this.authMessage = '';
+                    if (this.isLoggedIn) {
+                        this.checkoutStep = 'order';
+                    } else {
+                        this.checkoutStep = 'auth';
+                        this.authTab = 'login';
+                    }
+                },
+                openSignIn() {
+                    this.checkoutOpen = true;
+                    this.checkoutStep = 'auth';
+                    this.authTab = 'login';
+                    this.authMessage = '';
+                },
+                async submitLogin() {
+                    this.authLoading = true;
+                    this.authMessage = '';
+                    try {
+                        const res = await fetch(@json(route('website.account.login')), {
+                            method: 'POST',
+                            headers: this.jsonHeaders(),
+                            body: JSON.stringify(this.authLogin),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            this.authMessage = data.message || data.errors?.email?.[0] || 'Sign in failed.';
+                            return;
+                        }
+                        this.isLoggedIn = true;
+                        this.prefillCheckout(data.user);
+                        this.checkoutStep = 'order';
+                    } catch (e) {
+                        this.authMessage = 'Network error. Please try again.';
+                    } finally {
+                        this.authLoading = false;
+                    }
+                },
+                async submitRegister() {
+                    if (!this.authRegister.name || !this.authRegister.phone || !this.authRegister.email || !this.authRegister.password) {
+                        this.authMessage = 'Please fill name, phone, email, and password.';
+                        return;
+                    }
+                    this.authLoading = true;
+                    this.authMessage = '';
+                    try {
+                        const res = await fetch(@json(route('website.account.register')), {
+                            method: 'POST',
+                            headers: this.jsonHeaders(),
+                            body: JSON.stringify(this.authRegister),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            const err = data.errors || {};
+                            this.authMessage = err.email?.[0] || err.phone?.[0] || err.password?.[0] || data.message || 'Registration failed.';
+                            return;
+                        }
+                        this.isLoggedIn = true;
+                        this.prefillCheckout(data.user);
+                        this.checkoutStep = 'order';
+                    } catch (e) {
+                        this.authMessage = 'Network error. Please try again.';
+                    } finally {
+                        this.authLoading = false;
+                    }
+                },
+                async placeOrder() {
+                    if (!this.checkout.name || !this.checkout.phone || !this.checkout.address) {
+                        this.orderMessage = 'Name, phone, and delivery address are required.';
+                        this.orderSuccess = false;
+                        return;
+                    }
+                    if (!this.isLoggedIn) {
+                        this.checkoutStep = 'auth';
+                        this.authTab = 'login';
+                        return;
+                    }
+                    this.ordering = true;
+                    this.orderMessage = '';
+                    try {
+                        const res = await fetch(@json(route('website.checkout')), {
+                            method: 'POST',
+                            headers: this.jsonHeaders(),
+                            body: JSON.stringify({
+                                cart: this.cart,
+                                customer_name: this.checkout.name,
+                                customer_phone: this.checkout.phone,
+                                customer_address: this.checkout.address,
+                            }),
+                        });
+                        const data = await res.json();
+                        if (res.status === 401 || data.auth_required) {
+                            this.isLoggedIn = false;
+                            this.checkoutStep = 'auth';
+                            this.authTab = 'login';
+                            this.authMessage = 'Please sign in to place your order.';
+                            return;
+                        }
+                        if (data.success) {
+                            this.cart = [];
+                            this.save();
+                            this.orderSuccess = true;
+                            this.orderMessage = 'Invoice: ' + data.invoice;
+                            this.trackUrl = data.track_url || '';
+                            this.checkoutStep = 'success';
+                        } else {
+                            this.orderSuccess = false;
+                            this.orderMessage = data.message || 'Order failed.';
+                        }
+                    } catch (e) {
+                        this.orderSuccess = false;
+                        this.orderMessage = 'Network error.';
+                    }
+                    this.ordering = false;
+                },
+                jsonHeaders() {
+                    return {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                        'Accept': 'application/json',
+                    };
+                },
+            };
+        }
+        window.storefrontCart = storefrontCart;
+    </script>
     @vite(['resources/css/app.css', 'resources/css/website.css', 'resources/js/app.js'])
     <style>[x-cloak]{display:none!important}</style>
 </head>
-<body class="gaget-store bg-white antialiased" x-data="storefrontCart()" @keydown.escape.window="cartOpen=false; checkoutOpen=false">
+<body class="gaget-store bg-white antialiased" id="storefront-root" x-data="storefrontCart()" @keydown.escape.window="cartOpen=false; checkoutOpen=false">
 
 @include('website.partials.header')
 
@@ -21,7 +255,7 @@
 @include('website.partials.footer')
 
 {{-- Cart drawer --}}
-<div x-show="cartOpen" x-cloak class="fixed inset-0 z-50">
+<div x-show="cartOpen" x-cloak class="fixed inset-0 z-[70]">
     <div class="absolute inset-0 bg-black/50" @click="cartOpen=false"></div>
     <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
         <div class="flex items-center justify-between p-5 border-b">
@@ -48,87 +282,151 @@
         </div>
         <div class="border-t p-5" x-show="cart.length>0">
             <div class="flex justify-between font-bold text-lg mb-3"><span>Total</span><span x-text="currency+cartTotal.toFixed(2)"></span></div>
-            <button @click="checkoutOpen=true; cartOpen=false" class="w-full gaget-btn-primary text-center">Checkout</button>
+            <button @click="startCheckout()" class="w-full gaget-btn-primary text-center">Checkout</button>
         </div>
     </div>
 </div>
 
-<div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+{{-- Checkout: sign in / register / place order (one modal) --}}
+<div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/50" @click="checkoutOpen=false"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-        <h3 class="text-xl font-bold">Place Order</h3>
-        <input x-model="checkout.name" type="text" placeholder="Full Name" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm">
-        <input x-model="checkout.phone" type="text" placeholder="Phone Number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm">
-        <textarea x-model="checkout.address" placeholder="Delivery Address" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" rows="2"></textarea>
-        <button @click="placeOrder()" :disabled="ordering" class="w-full gaget-btn-primary text-center disabled:opacity-50">
-            <span x-text="ordering?'Placing...':'Confirm Order (Cash on Delivery)'"></span>
-        </button>
-        <p x-show="orderMessage" x-text="orderMessage" class="text-sm text-center" :class="orderSuccess?'text-green-600':'text-red-600'"></p>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+        <button type="button" @click="checkoutOpen=false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+
+        {{-- Auth step --}}
+        <div x-show="checkoutStep==='auth'" x-cloak>
+            <h3 class="text-xl font-bold text-slate-900 pr-8">Sign in to checkout</h3>
+            <p class="text-sm text-slate-500 mt-1 mb-5">One quick step before we deliver your order.</p>
+
+            <div class="flex rounded-xl bg-slate-100 p-1 mb-5">
+                <button type="button" @click="authTab='login'; authMessage=''" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Sign in</button>
+                <button type="button" @click="authTab='register'; authMessage=''" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Create account</button>
+            </div>
+
+            <div x-show="authTab==='login'" class="space-y-3">
+                <input x-model="authLogin.email" type="email" placeholder="Email" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="email">
+                <input x-model="authLogin.password" type="password" placeholder="Password" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="current-password" @keydown.enter.prevent="submitLogin()">
+                <button type="button" @click="submitLogin()" :disabled="authLoading" class="w-full gaget-btn-primary text-center disabled:opacity-50">
+                    <span x-text="authLoading ? 'Signing in...' : 'Sign in & continue'"></span>
+                </button>
+            </div>
+
+            <div x-show="authTab==='register'" class="space-y-3">
+                <input x-model="authRegister.name" type="text" placeholder="Full name" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="name">
+                <input x-model="authRegister.phone" type="text" placeholder="Phone number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="tel">
+                <input x-model="authRegister.email" type="email" placeholder="Email" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="email">
+                <input x-model="authRegister.password" type="password" placeholder="Password (min. 8 characters)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="new-password">
+                <textarea x-model="authRegister.address" placeholder="Delivery address (optional now)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" rows="2"></textarea>
+                <button type="button" @click="submitRegister()" :disabled="authLoading" class="w-full gaget-btn-primary text-center disabled:opacity-50">
+                    <span x-text="authLoading ? 'Creating account...' : 'Create account & continue'"></span>
+                </button>
+            </div>
+
+            <p x-show="authMessage" x-text="authMessage" class="mt-3 text-sm text-center text-rose-600"></p>
+        </div>
+
+        {{-- Order step --}}
+        <div x-show="checkoutStep==='order'" x-cloak>
+            <h3 class="text-xl font-bold text-slate-900 pr-8">Place order</h3>
+            <p class="text-sm text-slate-500 mt-1 mb-5">Cash on delivery · <span x-text="cartCount"></span> item(s) · <span class="font-semibold text-slate-800" x-text="currency+cartTotal.toFixed(2)"></span></p>
+
+            <div class="space-y-3">
+                <input x-model="checkout.name" type="text" placeholder="Full name" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm">
+                <input x-model="checkout.phone" type="text" placeholder="Phone number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm">
+                <textarea x-model="checkout.address" placeholder="Delivery address" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" rows="2"></textarea>
+                <button type="button" @click="placeOrder()" :disabled="ordering" class="w-full gaget-btn-primary text-center disabled:opacity-50">
+                    <span x-text="ordering ? 'Placing order...' : 'Confirm order (Cash on delivery)'"></span>
+                </button>
+            </div>
+
+            <p x-show="orderMessage" x-text="orderMessage" class="mt-3 text-sm text-center" :class="orderSuccess ? 'text-green-600' : 'text-red-600'"></p>
+        </div>
+
+        {{-- Success step --}}
+        <div x-show="checkoutStep==='success'" x-cloak class="text-center py-4">
+            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-2xl">✓</div>
+            <h3 class="text-xl font-bold text-slate-900">Order placed!</h3>
+            <p class="text-sm text-slate-500 mt-2" x-text="orderMessage"></p>
+            <div class="mt-6 flex flex-col gap-2">
+                <a :href="trackUrl || @json(route('website.track'))" class="gaget-btn-primary text-center text-sm py-3">Track my order</a>
+                <a href="{{ route('website.account') }}" class="gaget-btn-primary text-center text-sm py-3">View my orders</a>
+                <button type="button" @click="checkoutOpen=false" class="text-sm font-semibold text-slate-600 hover:text-slate-800">Continue shopping</button>
+            </div>
+        </div>
     </div>
 </div>
 
+{{-- Toast --}}
+<div x-show="toastVisible" x-cloak x-transition.opacity.duration.200ms
+     class="fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg">
+    <span x-text="toastMessage"></span>
+</div>
+
 <script>
-function storefrontCart() {
-    return {
-        cart: JSON.parse(localStorage.getItem('gaget_cart')||'[]'),
-        wishlist: JSON.parse(localStorage.getItem('gaget_wishlist')||'[]'),
-        compare: JSON.parse(localStorage.getItem('gaget_compare')||'[]'),
-        cartOpen: false, checkoutOpen: false, ordering: false,
-        orderMessage: '', orderSuccess: false,
-        currency: @json($settings->currency_symbol ?? '$'),
-        checkout: { name:'', phone:'', address:'' },
-        get cartCount() { return this.cart.reduce((s,i)=>s+i.qty,0); },
-        get cartTotal() { return this.cart.reduce((s,i)=>s+i.price*i.qty,0); },
-        get wishlistCount() { return this.wishlist.length; },
-        get compareCount() { return this.compare.length; },
-        save() { localStorage.setItem('gaget_cart', JSON.stringify(this.cart)); },
-        saveWishlist() { localStorage.setItem('gaget_wishlist', JSON.stringify(this.wishlist)); },
-        saveCompare() { localStorage.setItem('gaget_compare', JSON.stringify(this.compare)); },
-        addToCart(product) {
-            const ex = this.cart.find(i=>i.id===product.id);
-            if(ex) ex.qty++; else this.cart.push({...product, qty:1});
-            this.save();
-        },
-        updateQty(i,d) { this.cart[i].qty+=d; if(this.cart[i].qty<=0)this.cart.splice(i,1); this.save(); },
-        removeItem(i) { this.cart.splice(i,1); this.save(); },
-        inWishlist(id) { return this.wishlist.some(i=>i.id===id); },
-        inCompare(id) { return this.compare.some(i=>i.id===id); },
-        toggleWishlist(product) {
-            const idx = this.wishlist.findIndex(i=>i.id===product.id);
-            if (idx >= 0) this.wishlist.splice(idx, 1);
-            else this.wishlist.push(product);
-            this.saveWishlist();
-        },
-        toggleCompare(product) {
-            const idx = this.compare.findIndex(i=>i.id===product.id);
-            if (idx >= 0) {
-                this.compare.splice(idx, 1);
-            } else {
-                if (this.compare.length >= 4) {
-                    alert('You can compare up to 4 products.');
-                    return;
-                }
-                this.compare.push(product);
-            }
-            this.saveCompare();
-        },
-        async placeOrder() {
-            if(!this.checkout.name||!this.checkout.phone){ this.orderMessage='Name and phone required.'; this.orderSuccess=false; return; }
-            this.ordering=true; this.orderMessage='';
-            try {
-                const res = await fetch(@json(route('website.checkout')), {
-                    method:'POST',
-                    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content,'Accept':'application/json'},
-                    body: JSON.stringify({cart:this.cart, customer_name:this.checkout.name, customer_phone:this.checkout.phone, customer_address:this.checkout.address})
-                });
-                const data = await res.json();
-                if(data.success){ this.cart=[]; this.save(); this.orderSuccess=true; this.orderMessage='Order placed! Invoice: '+data.invoice; this.checkout={name:'',phone:'',address:''}; }
-                else { this.orderSuccess=false; this.orderMessage=data.message||'Order failed.'; }
-            } catch(e){ this.orderSuccess=false; this.orderMessage='Network error.'; }
-            this.ordering=false;
-        }
+window.getStorefrontRoot = function () {
+    const root = document.getElementById('storefront-root') || document.body;
+    if (!window.Alpine || typeof Alpine.$data !== 'function') return null;
+    try {
+        return Alpine.$data(root);
+    } catch (e) {
+        return null;
     }
-}
+};
+
+window.addProductToCart = function (product, qty = 1, openDrawer = true) {
+    const root = window.getStorefrontRoot();
+    if (root && typeof root.addToCart === 'function') {
+        root.addToCart(product, qty, openDrawer);
+        return true;
+    }
+    return false;
+};
+
+document.addEventListener('click', function (event) {
+    const btn = event.target.closest('[data-add-to-cart]');
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    let product;
+    try {
+        product = JSON.parse(btn.getAttribute('data-add-to-cart'));
+    } catch (e) {
+        return;
+    }
+
+    const qtyAttr = btn.getAttribute('data-qty');
+    const qty = Math.max(1, Number(qtyAttr || 1) || 1);
+    const openDrawer = btn.getAttribute('data-open-cart') !== '0';
+    const goCheckout = btn.getAttribute('data-checkout') === '1';
+
+    const finish = function () {
+        if (goCheckout) {
+            const root = window.getStorefrontRoot();
+            if (root && typeof root.startCheckout === 'function') {
+                root.startCheckout();
+            }
+        }
+    };
+
+    if (window.addProductToCart(product, qty, goCheckout ? false : openDrawer)) {
+        finish();
+        return;
+    }
+
+    // Alpine not ready yet — wait and add once so the badge shows "1" immediately after boot.
+    let tries = 0;
+    const timer = setInterval(function () {
+        tries += 1;
+        if (window.addProductToCart(product, qty, goCheckout ? false : openDrawer)) {
+            clearInterval(timer);
+            finish();
+        } else if (tries > 50) {
+            clearInterval(timer);
+        }
+    }, 40);
+});
 </script>
 @stack('scripts')
 </body>

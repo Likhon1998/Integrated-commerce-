@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\AccountService;
+use App\Services\OnlineOrderTrackingService;
 use App\Services\StockService;
 use App\Services\WebsiteService;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class WebsiteController extends Controller
         private WebsiteService $website,
         private AccountService $accounts,
         private StockService $stock,
+        private OnlineOrderTrackingService $tracking,
     ) {}
 
     public function home()
@@ -156,9 +158,11 @@ class WebsiteController extends Controller
         return view('website.product', array_merge($this->website->homepageData(), compact('product', 'related', 'reviews', 'variantOptions')));
     }
 
-    public function trackOrderForm()
+    public function trackOrderForm(Request $request)
     {
-        return view('website.track-order', $this->website->homepageData());
+        return view('website.track-order', array_merge($this->website->homepageData(), [
+            'prefillInvoice' => $request->query('invoice'),
+        ]));
     }
 
     public function page(string $slug)
@@ -261,35 +265,54 @@ class WebsiteController extends Controller
         return view('website.wishlist', $this->website->homepageData());
     }
 
-    public function compare()
-    {
-        return view('website.compare', $this->website->homepageData());
-    }
-
     public function checkout(Request $request)
     {
+        $user = $request->user();
+        if (! $user?->isStorefrontCustomer()) {
+            return response()->json(['success' => false, 'message' => 'Please sign in to place an order.', 'auth_required' => true], 401);
+        }
+
         $shopId = $this->website->shopId();
-        if (!$shopId || empty($request->cart)) {
+        if (! $shopId || empty($request->cart)) {
             return response()->json(['success' => false, 'message' => 'Cart is empty or store unavailable.']);
         }
 
         $request->validate([
             'customer_name' => 'required|string|max:255',
             'customer_phone' => 'required|string|max:20',
-            'customer_address' => 'nullable|string',
+            'customer_address' => 'required|string|max:1000',
         ]);
 
-        $customer = Customer::firstOrCreate(
-            ['phone' => $request->customer_phone, 'shop_id' => $shopId],
-            ['name' => $request->customer_name, 'address' => $request->customer_address]
-        );
+        $customer = Customer::where('shop_id', $shopId)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (! $customer) {
+            $customer = Customer::create([
+                'shop_id' => $shopId,
+                'user_id' => $user->id,
+                'name' => $request->customer_name,
+                'email' => $user->email,
+                'phone' => $request->customer_phone,
+                'address' => $request->customer_address,
+            ]);
+        } else {
+            $customer->update([
+                'name' => $request->customer_name,
+                'phone' => $request->customer_phone,
+                'address' => $request->customer_address,
+                'email' => $user->email,
+            ]);
+        }
+
+        $user->update(['name' => $request->customer_name]);
 
         $deliveryFee = $request->delivery_fee ?? 0;
         $subtotal = collect($request->cart)->sum(fn ($item) => $item['price'] * $item['qty']);
         $finalTotal = $subtotal + $deliveryFee;
 
-        $shopAdmin = \App\Models\User::where('shop_id', $shopId)->first();
-        $fallbackUserId = $shopAdmin?->id ?? 1;
+        $shopAdmin = \App\Models\User::where('shop_id', $shopId)->whereIn('role', ['admin', 'shop_owner', 'Shop Owner'])->first();
+        $fallbackUserId = $shopAdmin?->id ?? $user->id;
 
         foreach ($request->cart as $item) {
             $product = Product::where('shop_id', $shopId)->find($item['id']);
@@ -343,10 +366,15 @@ class WebsiteController extends Controller
 
             $order->load('items.product');
             $this->accounts->postWebSale($order);
+            $this->tracking->logInitialPlacement($order);
 
             DB::commit();
 
-            return response()->json(['success' => true, 'invoice' => $order->invoice_no]);
+            return response()->json([
+                'success' => true,
+                'invoice' => $order->invoice_no,
+                'track_url' => route('website.track', ['invoice' => $order->invoice_no]),
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Order failed: ' . $e->getMessage()]);
@@ -360,37 +388,30 @@ class WebsiteController extends Controller
 
         $request->validate([
             'invoice_no' => 'required|string',
-            'phone' => 'required|string',
+            'phone' => 'nullable|string',
         ]);
 
-        $order = Order::where('shop_id', $shopId)
-            ->where('invoice_no', $request->invoice_no)
-            ->whereHas('customer', fn ($q) => $q->where('phone', $request->phone))
-            ->first();
+        $query = Order::where('shop_id', $shopId)
+            ->whereNull('counter_id')
+            ->where('invoice_no', $request->invoice_no);
 
-        if (!$order) {
+        $user = $request->user();
+        if ($user?->isStorefrontCustomer()) {
+            $query->whereHas('customer', fn ($q) => $q->where('user_id', $user->id));
+        } else {
+            $request->validate(['phone' => 'required|string']);
+            $query->whereHas('customer', fn ($q) => $q->where('phone', $request->phone));
+        }
+
+        $order = $query->first();
+
+        if (! $order) {
             return response()->json([
                 'success' => false,
-                'message' => 'Order not found. Please check your Invoice Number and Phone.',
+                'message' => 'Order not found. Check the invoice number'.($user?->isStorefrontCustomer() ? '.' : ' and phone number.'),
             ]);
         }
 
-        $statusMapping = [
-            'pending' => 'Order Received & Pending',
-            'processing' => 'Processing / Packing',
-            'shipped' => 'Out for Delivery',
-            'completed' => 'Delivered / Completed',
-            'cancelled' => 'Cancelled',
-            'returned' => 'Returned',
-            'refunded' => 'Refunded',
-        ];
-
-        return response()->json([
-            'success' => true,
-            'status' => $statusMapping[$order->status] ?? ucfirst($order->status),
-            'raw_status' => $order->status,
-            'date' => $order->created_at->format('d M Y, h:i A'),
-            'total' => number_format($order->total_amount, 2),
-        ]);
+        return response()->json($this->tracking->trackingPayload($order));
     }
 }

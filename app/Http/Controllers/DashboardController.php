@@ -7,33 +7,60 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\DashboardSummaryService;
 use App\Services\StockService;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request, DashboardSummaryService $summaryService)
     {
         $user = Auth::user();
         $shop = $user->shop;
         $shopId = $user->shop_id;
         $isAdmin = $user->isAdminUser();
-        $counterId = $user->counter_id;
-        $counter = $counterId ? Counter::find($counterId) : null;
+        $counters = $summaryService->countersForShop($shopId);
+
+        // Staff: always their counter. Admin: ?counter=all|id
+        $filterCounterId = null;
+        $filterLabel = 'All counters';
+
+        if ($isAdmin) {
+            $raw = $request->query('counter', 'all');
+            if ($raw !== 'all' && $raw !== '' && $raw !== null) {
+                $cid = (int) $raw;
+                $match = $counters->firstWhere('id', $cid);
+                if ($match) {
+                    $filterCounterId = $cid;
+                    $filterLabel = $match->name;
+                }
+            }
+        } else {
+            $filterCounterId = $user->counter_id;
+            $filterLabel = $filterCounterId
+                ? (Counter::find($filterCounterId)?->name ?? 'Your counter')
+                : 'No counter';
+        }
+
+        $counter = $filterCounterId ? Counter::find($filterCounterId) : null;
+
+        // Staff without a counter must never see shop-wide totals
+        if (! $isAdmin && $filterCounterId === null) {
+            $businessSummary = $summaryService->emptySummary();
+        } else {
+            $businessSummary = $summaryService->todaySummary($shopId, $filterCounterId);
+        }
 
         app(StockService::class)->ensureDefaultLocations($shopId);
 
-        $queryOrders = Order::where('shop_id', $shopId)
-            ->whereIn('status', ['completed', 'pending', 'shipped']);
-
-        if (! $isAdmin) {
-            if ($counterId) {
-                $queryOrders->where('counter_id', $counterId);
-            } else {
-                $queryOrders->whereRaw('1 = 0');
-            }
+        // Keep charts / week KPIs on the same revenue definition as Business Summary
+        if (! $isAdmin && $filterCounterId === null) {
+            $queryOrders = $summaryService->revenueOrdersQuery($shopId)->whereRaw('1 = 0');
+        } else {
+            $queryOrders = $summaryService->revenueOrdersQuery($shopId, $filterCounterId);
         }
 
         $today = Carbon::today();
@@ -53,12 +80,12 @@ class DashboardController extends Controller
             ->whereBetween('created_at', [$prevWeekStart, $prevWeekEnd])
             ->count();
 
-        if ($isAdmin) {
+        if ($isAdmin && $filterCounterId === null) {
             $totalCustomers = Customer::where('shop_id', $shopId)->count();
             $registeredCustomers = $totalCustomers;
         } else {
             $totalCustomers = (int) Order::where('shop_id', $shopId)
-                ->when($counterId, fn ($q) => $q->where('counter_id', $counterId), fn ($q) => $q->whereRaw('1 = 0'))
+                ->when($filterCounterId, fn ($q) => $q->where('counter_id', $filterCounterId), fn ($q) => $q->whereRaw('1 = 0'))
                 ->whereNotNull('customer_id')
                 ->selectRaw('COUNT(DISTINCT customer_id) as aggregate')
                 ->value('aggregate');
@@ -96,15 +123,17 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
-        $scopedOrderFilter = function ($q) use ($shopId, $isAdmin, $counterId) {
+        $scopedOrderFilter = function ($q) use ($shopId, $filterCounterId, $isAdmin) {
             $q->where('shop_id', $shopId)
-                ->whereIn('status', ['completed', 'pending', 'shipped']);
-            if (! $isAdmin) {
-                if ($counterId) {
-                    $q->where('counter_id', $counterId);
-                } else {
-                    $q->whereRaw('1 = 0');
-                }
+                ->where('status', 'completed')
+                ->where(function ($inner) {
+                    $inner->where('is_exchange_receipt', false)
+                        ->orWhereNull('is_exchange_receipt');
+                });
+            if ($filterCounterId !== null) {
+                $q->where('counter_id', $filterCounterId);
+            } elseif (! $isAdmin) {
+                $q->whereRaw('1 = 0');
             }
         };
 
@@ -144,14 +173,13 @@ class DashboardController extends Controller
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->where('orders.shop_id', $shopId)
-            ->whereIn('orders.status', ['completed', 'pending', 'shipped'])
-            ->when(! $isAdmin, function ($q) use ($counterId) {
-                if ($counterId) {
-                    $q->where('orders.counter_id', $counterId);
-                } else {
-                    $q->whereRaw('1 = 0');
-                }
+            ->where('orders.status', 'completed')
+            ->where(function ($q) {
+                $q->where('orders.is_exchange_receipt', false)
+                    ->orWhereNull('orders.is_exchange_receipt');
             })
+            ->when($filterCounterId !== null, fn ($q) => $q->where('orders.counter_id', $filterCounterId))
+            ->when(! $isAdmin && $filterCounterId === null, fn ($q) => $q->whereRaw('1 = 0'))
             ->where('orders.created_at', '>=', $weekStart)
             ->select(
                 DB::raw("COALESCE(categories.name, 'Uncategorized') as category_name"),
@@ -165,7 +193,7 @@ class DashboardController extends Controller
         $categorySalesTotal = (float) $categorySales->sum('revenue');
 
         $pendingOnlineOrders = 0;
-        if ($isAdmin) {
+        if ($isAdmin && $filterCounterId === null) {
             $pendingOnlineOrders = (int) Order::where('shop_id', $shopId)
                 ->whereNull('counter_id')
                 ->where('status', 'pending')
@@ -178,7 +206,11 @@ class DashboardController extends Controller
         if ($isAdmin) {
             $rows = Order::where('shop_id', $shopId)
                 ->whereDate('created_at', $today)
-                ->whereIn('status', ['completed', 'pending', 'shipped'])
+                ->where('status', 'completed')
+                ->where(function ($q) {
+                    $q->where('is_exchange_receipt', false)
+                        ->orWhereNull('is_exchange_receipt');
+                })
                 ->select(
                     'counter_id',
                     DB::raw('COUNT(*) as orders_count'),
@@ -207,7 +239,11 @@ class DashboardController extends Controller
             $onlineRow = Order::where('shop_id', $shopId)
                 ->whereNull('counter_id')
                 ->whereDate('created_at', $today)
-                ->whereIn('status', ['completed', 'pending', 'shipped'])
+                ->where('status', 'completed')
+                ->where(function ($q) {
+                    $q->where('is_exchange_receipt', false)
+                        ->orWhereNull('is_exchange_receipt');
+                })
                 ->selectRaw('COUNT(*) as orders_count, COALESCE(SUM(total_amount), 0) as sales_total, COUNT(DISTINCT customer_id) as customers_count')
                 ->first();
 
@@ -220,6 +256,7 @@ class DashboardController extends Controller
         }
 
         $dateRangeLabel = $weekStart->format('M j').' – '.$today->format('M j, Y');
+        $selectedCounter = $filterCounterId === null ? 'all' : (string) $filterCounterId;
 
         return view('dashboard', compact(
             'shop',
@@ -235,6 +272,11 @@ class DashboardController extends Controller
             'totalProducts',
             'isAdmin',
             'counter',
+            'counters',
+            'selectedCounter',
+            'filterLabel',
+            'filterCounterId',
+            'businessSummary',
             'counterBreakdown',
             'onlineToday',
             'registeredCustomers',

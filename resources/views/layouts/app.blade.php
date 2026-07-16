@@ -35,6 +35,73 @@
     </div>
 
     <script>
+        function onlineOrderBell(listUrl, seenUrl) {
+            return {
+                open: false,
+                loading: false,
+                loaded: false,
+                unread: 0,
+                items: [],
+                closeTimer: null,
+                init() {
+                    this.fetchBadge();
+                },
+                openPanel() {
+                    clearTimeout(this.closeTimer);
+                    this.open = true;
+                    this.fetchList(true);
+                },
+                closePanel() {
+                    this.closeTimer = setTimeout(() => {
+                        this.open = false;
+                        this.markSeen();
+                    }, 180);
+                },
+                async fetchBadge() {
+                    try {
+                        const res = await fetch(listUrl, {
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        this.unread = Number(data.unread || 0);
+                    } catch (e) {}
+                },
+                async fetchList(force = false) {
+                    if (this.loading || (this.loaded && !force)) return;
+                    this.loading = true;
+                    try {
+                        const res = await fetch(listUrl, {
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        this.items = data.items || [];
+                        this.unread = Number(data.unread || 0);
+                        this.loaded = true;
+                    } catch (e) {
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async markSeen() {
+                    if (!this.items.some((item) => item.is_new)) return;
+                    try {
+                        await fetch(seenUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            },
+                        });
+                        this.items = this.items.map((item) => ({ ...item, is_new: false }));
+                        this.unread = 0;
+                    } catch (e) {}
+                },
+            };
+        }
+
         setInterval(function() {
             fetch('/refresh-session', {
                 method: 'GET',

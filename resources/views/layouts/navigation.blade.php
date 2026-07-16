@@ -338,15 +338,55 @@
         @endif
 
         @can('view sales ledger')
-            @php
-                $pendingWeb = \App\Models\Order::where('shop_id', Auth::user()->shop_id)->whereNull('counter_id')->where('status', 'pending')->count();
-            @endphp
-            <a href="{{ route('online-orders.index') }}" class="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800" title="Online orders">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                @if($pendingWeb > 0)
-                    <span class="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{{ $pendingWeb > 99 ? '99+' : $pendingWeb }}</span>
-                @endif
-            </a>
+            <div class="relative"
+                 x-data="onlineOrderBell(@js(route('online-orders.notifications')), @js(route('online-orders.notifications.seen')))"
+                 @mouseenter="openPanel()"
+                 @mouseleave="closePanel()">
+                <a href="{{ route('online-orders.index') }}"
+                   class="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800"
+                   title="Online order notifications">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    <span x-show="unread > 0" x-cloak x-text="unread > 99 ? '99+' : unread"
+                          class="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white"></span>
+                </a>
+
+                <div x-show="open" x-cloak x-transition.opacity.duration.150ms
+                     class="absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+                    <div class="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5">
+                        <p class="text-[13px] font-bold text-slate-900">Online orders</p>
+                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500" x-text="loading ? 'Loading…' : (items.length + ' recent')"></span>
+                    </div>
+
+                    <div class="max-h-[360px] overflow-y-auto">
+                        <template x-if="!loading && items.length === 0">
+                            <p class="px-4 py-8 text-center text-[12px] text-slate-400">No online orders yet.</p>
+                        </template>
+
+                        <template x-for="item in items" :key="item.id">
+                            <a :href="item.url"
+                               class="block border-b border-slate-50 px-3.5 py-2.5 transition last:border-0"
+                               :class="item.is_new ? 'bg-indigo-50/80 hover:bg-indigo-50' : 'bg-white hover:bg-slate-50'">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <p class="truncate text-[12px] font-bold" :class="item.is_new ? 'text-indigo-900' : 'text-slate-700'" x-text="item.invoice"></p>
+                                            <span x-show="item.is_new" class="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">New</span>
+                                        </div>
+                                        <p class="mt-0.5 truncate text-[11px]" :class="item.is_new ? 'text-indigo-700' : 'text-slate-500'" x-text="item.customer + (item.phone ? ' · ' + item.phone : '')"></p>
+                                        <p class="mt-0.5 text-[10px]" :class="item.is_new ? 'text-indigo-500' : 'text-slate-400'" x-text="item.status_label + ' · ' + item.at"></p>
+                                    </div>
+                                    <p class="shrink-0 text-[11px] font-bold" :class="item.is_new ? 'text-indigo-800' : 'text-slate-500'" x-text="'Tk ' + item.total"></p>
+                                </div>
+                            </a>
+                        </template>
+                    </div>
+
+                    <a href="{{ route('online-orders.index') }}"
+                       class="block border-t border-slate-100 bg-slate-50 px-3.5 py-2.5 text-center text-[12px] font-bold text-indigo-600 hover:bg-slate-100">
+                        View all online orders
+                    </a>
+                </div>
+            </div>
         @endcan
 
         <div class="hidden sm:flex sm:items-center pl-1">

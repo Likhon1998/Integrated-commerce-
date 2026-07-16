@@ -11,12 +11,23 @@ class Customer extends Model
 
     protected $fillable = [
         'shop_id',
+        'user_id',
         'name',
         'email',
         'phone',
+        'phone_country_code',
         'address',
+        'date_of_birth',
+        'gender',
         'reward_points',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'date_of_birth' => 'date',
+        ];
+    }
 
     // Relationship to the Shop
     public function shop()
@@ -27,5 +38,10 @@ class Customer extends Model
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

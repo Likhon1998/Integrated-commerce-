@@ -33,7 +33,7 @@
     </nav>
 
     <div class="grid lg:grid-cols-12 gap-6 lg:gap-8"
-         x-data="{ active: 0, images: @js($images), tab: 'description' }">
+         x-data="{ active: 0, images: @js($images), tab: 'description', qty: 1 }">
 
         {{-- Gallery column --}}
         <div class="lg:col-span-5 flex gap-3">
@@ -131,12 +131,12 @@
                 <p class="text-xs text-slate-600 mb-4">Color: <span class="font-medium">{{ $product->color }}</span></p>
             @endif
 
-            <div class="mb-4" x-data="{ qty: 1 }">
+            <div class="mb-4">
                 <div class="flex flex-wrap items-center gap-3 mb-3">
                     <div class="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white h-9">
                         <button type="button" @click="qty = Math.max(1, qty - 1)" class="w-8 h-full text-sm text-slate-500 hover:bg-slate-50">−</button>
                         <span class="w-8 text-center text-sm font-medium text-slate-800" x-text="qty"></span>
-                        <button type="button" @click="qty = Math.min({{ (int) $product->stock_quantity }}, qty + 1)" class="w-8 h-full text-sm text-slate-500 hover:bg-slate-50">+</button>
+                        <button type="button" @click="qty = Math.min({{ max(1, (int) $product->stock_quantity) }}, qty + 1)" class="w-8 h-full text-sm text-slate-500 hover:bg-slate-50">+</button>
                     </div>
 
                     @if($product->stock_quantity > 0)
@@ -150,15 +150,28 @@
                 </div>
 
                 @if($product->stock_quantity > 0)
+                    @php
+                        $cartItem = [
+                            'id' => $product->id,
+                            'name' => $product->name,
+                            'price' => (float) $product->selling_price,
+                            'image' => $img,
+                        ];
+                    @endphp
                     <div class="flex flex-col sm:flex-row gap-2">
                         <button type="button"
-                                @click="for (let i = 0; i < qty; i++) addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}}); cartOpen=true"
+                                data-add-to-cart='@json($cartItem)'
+                                :data-qty="qty"
+                                data-open-cart="1"
                                 class="flex-1 h-10 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition inline-flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             Add to Cart
                         </button>
                         <button type="button"
-                                @click="for (let i = 0; i < qty; i++) addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}}); cartOpen=true; checkoutOpen=true"
+                                data-add-to-cart='@json($cartItem)'
+                                :data-qty="qty"
+                                data-open-cart="0"
+                                data-checkout="1"
                                 class="flex-1 h-10 border border-slate-300 text-slate-800 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
                             Buy Now
                         </button>
@@ -182,13 +195,6 @@
                             @click="toggleWishlist(@js($listItem))">
                         <svg class="w-4 h-4" :fill="inWishlist({{ $product->id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
                         <span x-text="inWishlist({{ $product->id }}) ? 'Wishlisted' : 'Wishlist'"></span>
-                    </button>
-                    <button type="button"
-                            class="flex-1 h-9 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:border-blue-200 hover:text-blue-600 inline-flex items-center justify-center gap-1.5"
-                            :class="inCompare({{ $product->id }}) && '!border-blue-200 !text-blue-600'"
-                            @click="toggleCompare(@js($listItem))">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-                        <span x-text="inCompare({{ $product->id }}) ? 'In compare' : 'Compare'"></span>
                     </button>
                 </div>
             </div>

@@ -19,6 +19,8 @@ class Order extends Model
         'payment_method',
         'status',
         'delivery_charge',
+        'shipping_courier',
+        'shipping_tracking_no',
         
         // 🚀 NEW: Exchange & Return tracking fields
         'is_exchange_receipt',
@@ -32,6 +34,16 @@ class Order extends Model
     public function items()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function statusLogs()
+    {
+        return $this->hasMany(OrderStatusLog::class)->orderBy('created_at');
+    }
+
+    public function isOnlineOrder(): bool
+    {
+        return $this->counter_id === null && str_starts_with((string) $this->invoice_no, 'WEB-');
     }
 
     // Link the order to the Cashier (User)

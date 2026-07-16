@@ -31,7 +31,9 @@
                     <p class="mt-2 text-blue-600 font-bold text-sm" x-text="currency+Number(item.price).toFixed(2)"></p>
                     <div class="mt-auto pt-4 flex gap-2">
                         <button type="button" class="flex-1 rounded-lg bg-slate-900 text-white text-xs font-bold py-2.5 hover:bg-blue-600"
-                                @click="addToCart({id:item.id,name:item.name,price:item.price,image:item.image}); cartOpen=true">Add to cart</button>
+                                :data-add-to-cart="JSON.stringify({id:item.id,name:item.name,price:item.price,image:item.image})"
+                                data-qty="1"
+                                data-open-cart="1">Add to cart</button>
                         <button type="button" class="rounded-lg border border-slate-200 px-3 text-rose-500 hover:bg-rose-50" @click="toggleWishlist(item)" title="Remove">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
                         </button>

@@ -13,6 +13,12 @@
         'category' => $catLabel,
         'rating' => (float) ($product->rating ?? 0),
     ];
+    $cartItem = [
+        'id' => $product->id,
+        'name' => $product->name,
+        'price' => (float) $product->selling_price,
+        'image' => $img,
+    ];
 @endphp
 <div class="gaget-product-card relative">
     @if($discount > 0)
@@ -23,11 +29,6 @@
                 :class="inWishlist({{ $product->id }}) && '!text-rose-500'"
                 @click.prevent="toggleWishlist(@js($listItem))" title="Wishlist">
             <svg class="w-4 h-4" :fill="inWishlist({{ $product->id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-        </button>
-        <button type="button" class="w-8 h-8 rounded-full bg-white/95 border border-slate-100 shadow-sm text-slate-400 hover:text-blue-600 inline-flex items-center justify-center"
-                :class="inCompare({{ $product->id }}) && '!text-blue-600'"
-                @click.prevent="toggleCompare(@js($listItem))" title="Compare">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
         </button>
     </div>
     <a href="{{ route('website.product', $product) }}" class="gaget-product-img">
@@ -49,8 +50,10 @@
             @endif
         </div>
         <button type="button"
-                class="mt-3 w-full rounded-xl bg-slate-900 text-white text-sm font-bold py-2.5 hover:bg-indigo-600 transition"
-                @click.prevent="addToCart({id:{{ $product->id }},name:@json($product->name),price:{{ (float) $product->selling_price }},image:@json($img)}})">
+                class="mt-3 w-full rounded-xl bg-slate-900 text-white text-sm font-bold py-2.5 hover:bg-indigo-600 transition relative z-10"
+                data-add-to-cart='@json($cartItem)'
+                data-qty="1"
+                data-open-cart="1">
             Add to cart
         </button>
     </div>

@@ -34,6 +34,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view dashboard',
             'process pos sales',
             'process sales returns',
+            'view sales ledger',
         ]);
 
         $managerRole = Role::firstOrCreate(['name' => 'Manager', 'guard_name' => 'web']);
@@ -51,5 +52,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
         $adminRole = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
         $adminRole->syncPermissions(Permission::all());
+
+        Role::firstOrCreate(['name' => 'Customer', 'guard_name' => 'web']);
     }
 }
