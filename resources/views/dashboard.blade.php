@@ -414,8 +414,6 @@
         @endcan
         @can('manage inventory')
             <a href="{{ route('products.index') }}" class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition">Manage Products</a>
-        @elsecan('process sales returns')
-            <a href="{{ route('supply.sales-returns.index') }}" class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition">Sales Return</a>
         @endcan
     </div>
 </div>

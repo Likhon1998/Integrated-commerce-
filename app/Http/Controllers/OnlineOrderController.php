@@ -23,37 +23,8 @@ class OnlineOrderController extends Controller
         $shopId = Auth::user()->shop_id;
 
         $filterDate = $request->input('date');
-        $search = $request->input('search');
-        $statusFilter = $request->input('status');
-
-        $ordersQuery = Order::where('shop_id', $shopId)
-            ->whereNull('counter_id')
-            ->with([
-                'customer:id,name,phone,address',
-                'items:id,order_id,product_id,quantity,subtotal',
-                'items.product:id,name',
-            ]);
-
-        if ($filterDate) {
-            $ordersQuery->whereDate('created_at', $filterDate);
-        }
-
-        if ($search) {
-            $ordersQuery->where(function ($q) use ($search) {
-                $q->where('invoice_no', 'like', "%{$search}%")
-                    ->orWhere('shipping_tracking_no', 'like', "%{$search}%")
-                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                        $customerQuery->where('phone', 'like', "%{$search}%")
-                            ->orWhere('name', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        if ($statusFilter && $statusFilter !== 'all') {
-            $ordersQuery->where('status', $statusFilter);
-        }
-
-        $orders = $ordersQuery->latest('created_at')->paginate(15)->appends($request->query());
+        $search = $request->input('search', '');
+        $statusFilter = $request->input('status', 'all') ?: 'all';
 
         session(['online_orders_seen_at' => now()->toDateTimeString()]);
 
@@ -76,8 +47,27 @@ class OnlineOrderController extends Controller
         $courierReceivables = (float) ($stats->courier_receivables ?? 0);
         $settledRevenue = (float) ($stats->settled_revenue ?? 0);
 
+        // Preload recent orders for instant client-side filtering (no page reload).
+        $liveQuery = Order::where('shop_id', $shopId)
+            ->whereNull('counter_id')
+            ->with([
+                'customer:id,name,phone,address',
+                'items:id,order_id,product_id,quantity,subtotal',
+                'items.product:id,name',
+            ]);
+
+        if ($filterDate) {
+            $liveQuery->whereDate('created_at', $filterDate);
+        }
+
+        $ordersPayload = $liveQuery->latest('created_at')
+            ->limit(250)
+            ->get()
+            ->map(fn (Order $order) => $this->orderListPayload($order))
+            ->values();
+
         return view('online-orders.index', compact(
-            'orders',
+            'ordersPayload',
             'pendingCount',
             'processingCount',
             'shippedCount',
@@ -87,6 +77,41 @@ class OnlineOrderController extends Controller
             'search',
             'statusFilter',
         ));
+    }
+
+    private function orderListPayload(Order $order): array
+    {
+        $productRevenue = (float) $order->total_amount - (float) ($order->delivery_charge ?? 0);
+        $isVoided = in_array($order->status, ['refunded', 'cancelled', 'returned'], true);
+
+        return [
+            'id' => $order->id,
+            'invoice' => $order->invoice_no,
+            'status' => $order->status,
+            'created_at' => $order->created_at->format('d M Y, h:i A'),
+            'payment_method' => str_replace('_', ' ', (string) $order->payment_method),
+            'product_revenue' => number_format($productRevenue, 2),
+            'delivery_charge' => (float) ($order->delivery_charge ?? 0),
+            'delivery_charge_fmt' => number_format((float) ($order->delivery_charge ?? 0), 2),
+            'shipping_courier' => $order->shipping_courier,
+            'shipping_tracking_no' => $order->shipping_tracking_no,
+            'is_voided' => $isVoided,
+            'show_url' => route('online-orders.show', $order),
+            'receipt_url' => route('pos.receipt', $order->id),
+            'customer_name' => $order->customer->name ?? 'Guest',
+            'customer_phone' => $order->customer->phone ?? 'N/A',
+            'customer_address' => $order->customer->address ?? 'No address provided',
+            'items' => $order->items->map(fn ($item) => [
+                'qty' => (int) $item->quantity,
+                'name' => $item->product->name ?? 'Unknown Product',
+            ])->values()->all(),
+            'search_blob' => mb_strtolower(implode(' ', array_filter([
+                $order->invoice_no,
+                $order->shipping_tracking_no,
+                $order->customer?->name,
+                $order->customer?->phone,
+            ]))),
+        ];
     }
 
     public function show(Order $order)
@@ -180,6 +205,19 @@ class OnlineOrderController extends Controller
             return back()->with('error', 'Please enter a courier / delivery partner name when marking as shipped.');
         }
 
+        $isCod = in_array(strtolower((string) $order->payment_method), ['cash_on_delivery', 'cod', 'cash on delivery'], true);
+        $moneyCollected = $isCod
+            ? ($oldStatus === 'completed' || (float) $order->paid_amount > 0)
+            : ((float) $order->paid_amount > 0 || $oldStatus === 'completed');
+
+        if ($newStatus === 'refunded' && $oldStatus !== 'completed') {
+            return back()->with('error', 'Refund is only available after delivery. Use Returned if the order is not delivered yet.');
+        }
+
+        if ($newStatus === 'returned' && $oldStatus === 'completed') {
+            return back()->with('error', 'This order is already delivered. Use Refund instead of Returned.');
+        }
+
         try {
             DB::beginTransaction();
 
@@ -212,7 +250,9 @@ class OnlineOrderController extends Controller
                 'shipped' => 'Your package is on the way to your delivery address.',
                 'completed' => 'Order delivered successfully.',
                 'cancelled' => 'This order was cancelled.',
-                'returned' => 'This order was returned to our store.',
+                'returned' => $isCod && ! $moneyCollected
+                    ? 'Order returned. COD was not collected — no customer refund.'
+                    : 'This order was returned to our store.',
                 'refunded' => 'This order was refunded.',
             ];
 

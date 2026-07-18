@@ -40,20 +40,29 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
+        $shopId = Auth::user()->shop_id;
+
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'barcode' => 'required|string|unique:products,barcode',
+            'barcode' => ['required', 'string', 'max:100', Rule::unique('products', 'barcode')],
             'sku' => 'nullable|string|max:100',
             'variant_group' => 'nullable|string|max:120',
             'color' => 'nullable|string|max:80',
             'color_hex' => 'nullable|string|max:7',
             'storage' => 'nullable|string|max:40',
-            'cost_price' => 'required|numeric',
-            'selling_price' => 'required|numeric',
+            'availability' => 'nullable|in:in_stock,pre_order,up_coming,out_of_stock',
+            'cost_price' => 'required|numeric|min:0',
+            'selling_price' => 'required|numeric|min:0',
             'original_price' => 'nullable|numeric|min:0',
             'short_description' => 'nullable|string|max:2000',
-            'category_id' => 'nullable|exists:categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
+            'category_id' => [
+                'nullable',
+                Rule::exists('categories', 'id')->where(fn ($q) => $q->where('shop_id', $shopId)),
+            ],
+            'brand_id' => [
+                'nullable',
+                Rule::exists('brands', 'id')->where(fn ($q) => $q->where('shop_id', $shopId)),
+            ],
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'image_2' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'image_3' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
@@ -65,29 +74,64 @@ class ProductController extends Controller
             'return_to' => 'nullable|in:opening-inventory',
         ]);
 
-        $openingQty = (int) $request->input('stock_quantity', 0);
+        $openingQty = (int) ($validated['stock_quantity'] ?? 0);
+        $uploadedPaths = [];
 
-        $data = $request->except(['image', 'image_2', 'image_3', 'stock_quantity', 'return_to', 'is_published', 'is_new_arrival', 'is_featured']);
-        $data['shop_id'] = Auth::user()->shop_id;
-        $data['stock_quantity'] = 0;
-        $data['is_published'] = $request->boolean('is_published', true);
-        $data['is_new_arrival'] = $request->boolean('is_new_arrival');
-        $data['is_featured'] = $request->boolean('is_featured');
-        $data = $this->applyBrandData($data);
-        $data = $this->normalizeVariantFields($data);
-        $data = array_merge($data, $this->storeProductImages($request));
+        try {
+            $product = DB::transaction(function () use ($request, $validated, $shopId, $openingQty, &$uploadedPaths) {
+                $imageData = $this->storeProductImages($request);
+                $uploadedPaths = array_values(array_filter($imageData));
 
-        $product = DB::transaction(function () use ($data, $openingQty) {
-            $product = Product::create($data);
+                $data = [
+                    'shop_id' => $shopId,
+                    'name' => $validated['name'],
+                    'barcode' => trim($validated['barcode']),
+                    'sku' => $validated['sku'] ?? null,
+                    'variant_group' => $validated['variant_group'] ?? null,
+                    'color' => $validated['color'] ?? null,
+                    'color_hex' => $validated['color_hex'] ?? null,
+                    'storage' => $validated['storage'] ?? null,
+                    'availability' => $validated['availability'] ?? 'in_stock',
+                    'cost_price' => $validated['cost_price'],
+                    'selling_price' => $validated['selling_price'],
+                    'original_price' => $validated['original_price'] ?? null,
+                    'short_description' => $validated['short_description'] ?? null,
+                    'category_id' => $validated['category_id'] ?? null,
+                    'brand_id' => $validated['brand_id'] ?? null,
+                    'stock_quantity' => 0,
+                    'alert_quantity' => $validated['alert_quantity'] ?? 5,
+                    'is_published' => $request->boolean('is_published', true),
+                    'is_new_arrival' => $request->boolean('is_new_arrival'),
+                    'is_featured' => $request->boolean('is_featured'),
+                ];
 
-            if ($openingQty > 0) {
-                $this->stock->ensureDefaultLocations($product->shop_id);
-                $movement = $this->stock->setOpeningStock($product, $openingQty);
-                $this->accounts->postOpeningInventory($movement);
+                $data = array_merge($data, $imageData);
+                $data = $this->applyBrandData($data);
+                $data = $this->normalizeVariantFields($data);
+
+                $product = Product::create($data);
+
+                if ($openingQty > 0) {
+                    $this->stock->ensureDefaultLocations($product->shop_id);
+                    $movement = $this->stock->setOpeningStock($product, $openingQty);
+                    $this->accounts->postOpeningInventory($movement);
+                }
+
+                return $product->fresh();
+            });
+        } catch (\Throwable $e) {
+            foreach ($uploadedPaths as $path) {
+                Storage::disk('public')->delete($path);
             }
 
-            return $product->fresh();
-        });
+            report($e);
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'form' => $e->getMessage() ?: 'Product could not be saved. Please check the form and try again.',
+                ]);
+        }
 
         if ($request->input('return_to') === 'opening-inventory') {
             return redirect()->route('supply.opening-inventory.index')->with(
@@ -131,6 +175,7 @@ class ProductController extends Controller
             'color' => 'nullable|string|max:80',
             'color_hex' => 'nullable|string|max:7',
             'storage' => 'nullable|string|max:40',
+            'availability' => 'nullable|in:in_stock,pre_order,up_coming,out_of_stock',
             'cost_price' => 'required|numeric',
             'selling_price' => 'required|numeric',
             'original_price' => 'nullable|numeric|min:0',
@@ -156,6 +201,7 @@ class ProductController extends Controller
         $data['is_published'] = $request->boolean('is_published');
         $data['is_new_arrival'] = $request->boolean('is_new_arrival');
         $data['is_featured'] = $request->boolean('is_featured');
+        $data['availability'] = $request->input('availability', $product->availability ?? 'in_stock');
         $data = $this->applyBrandData($data);
         $data = $this->normalizeVariantFields($data);
         $data = array_merge($data, $this->storeProductImages($request, $product));
@@ -287,16 +333,54 @@ class ProductController extends Controller
 
     public function barcodes(Request $request)
     {
-        $query = Product::where('shop_id', Auth::user()->shop_id)->orderBy('name');
+        $shopId = Auth::user()->shop_id;
 
-        if ($request->filled('product_ids')) {
-            $ids = array_filter(explode(',', $request->product_ids));
-            $query->whereIn('id', $ids);
+        $query = Product::where('shop_id', $shopId)
+            ->with(['category', 'brand'])
+            ->orderBy('name');
+
+        if ($request->filled('q')) {
+            $q = trim($request->q);
+            $query->where(function ($builder) use ($q) {
+                $builder->where('name', 'like', "%{$q}%")
+                    ->orWhere('barcode', 'like', "%{$q}%")
+                    ->orWhere('sku', 'like', "%{$q}%")
+                    ->orWhere('brand_name', 'like', "%{$q}%");
+            });
         }
 
-        $products = $query->get();
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
 
-        return view('products.barcodes', compact('products'));
+        $products = $query->paginate(20)->withQueryString();
+        $categories = Category::where('shop_id', $shopId)->orderBy('name')->get();
+
+        return view('products.barcodes', compact('products', 'categories'));
+    }
+
+    public function barcodesPrint(Request $request)
+    {
+        $shopId = Auth::user()->shop_id;
+
+        $ids = collect(explode(',', (string) $request->get('product_ids', '')))
+            ->map(fn ($id) => (int) trim($id))
+            ->filter()
+            ->unique()
+            ->values();
+
+        abort_if($ids->isEmpty(), 404, 'Select at least one product to print.');
+
+        $copies = max(1, min(20, (int) $request->get('copies', 1)));
+
+        $products = Product::where('shop_id', $shopId)
+            ->whereIn('id', $ids)
+            ->orderBy('name')
+            ->get();
+
+        abort_if($products->isEmpty(), 404, 'No products found.');
+
+        return view('products.barcodes-print', compact('products', 'copies'));
     }
 
     private function applyBrandData(array $data): array

@@ -15,7 +15,6 @@ class RolesAndPermissionsSeeder extends Seeder
         $permissions = [
             'view dashboard',
             'process pos sales',
-            'process sales returns',
             'manage inventory',
             'view sales ledger',
             'manage staff',
@@ -33,7 +32,6 @@ class RolesAndPermissionsSeeder extends Seeder
         $cashierRole->syncPermissions([
             'view dashboard',
             'process pos sales',
-            'process sales returns',
             'view sales ledger',
         ]);
 
@@ -41,7 +39,6 @@ class RolesAndPermissionsSeeder extends Seeder
         $managerRole->syncPermissions([
             'view dashboard',
             'process pos sales',
-            'process sales returns',
             'manage inventory',
             'view sales ledger',
             'manage website',

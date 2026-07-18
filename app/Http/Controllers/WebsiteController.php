@@ -14,6 +14,7 @@ use App\Services\StockService;
 use App\Services\WebsiteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class WebsiteController extends Controller
 {
@@ -71,7 +72,55 @@ class WebsiteController extends Controller
         return view('website.shop', array_merge($this->website->homepageData(), compact('products', 'categories')));
     }
 
-    public function category(string $slug)
+    public function searchSuggest(Request $request)
+    {
+        $shopId = $this->website->shopId();
+        if (! $shopId) {
+            return response()->json(['products' => []]);
+        }
+
+        $q = trim((string) $request->query('q', ''));
+        $category = trim((string) $request->query('category', ''));
+        $limit = min(10, max(1, (int) $request->query('limit', 8)));
+        $like = Schema::getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        $query = $this->website->catalogQuery($shopId)->with(['category', 'brand']);
+
+        if ($category !== '') {
+            $query->whereHas('category', function ($builder) use ($category) {
+                $builder->where('slug', $category)->orWhere('id', $category);
+            });
+        }
+
+        if ($q !== '') {
+            $query->where(function ($builder) use ($q, $like) {
+                $builder->where('name', $like, "%{$q}%")
+                    ->orWhere('brand_name', $like, "%{$q}%")
+                    ->orWhere('barcode', $like, "%{$q}%");
+            })->orderBy('name');
+        } else {
+            $query->orderByDesc('is_best_seller')
+                ->orderByDesc('review_count')
+                ->latest();
+        }
+
+        $products = $query->limit($limit)->get()->map(fn (Product $product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'brand' => $product->brand?->name ?? $product->brand_name,
+            'price' => (float) $product->selling_price,
+            'image' => $this->website->productImageUrl($product),
+            'url' => route('website.product', $product),
+            'in_stock' => $product->stock_quantity > 0,
+        ]);
+
+        return response()->json([
+            'products' => $products,
+            'mode' => $q === '' ? 'best' : 'search',
+        ]);
+    }
+
+    public function category(string $slug, Request $request)
     {
         $shopId = $this->website->shopId();
         abort_unless($shopId, 404);
@@ -83,22 +132,193 @@ class WebsiteController extends Controller
             ->firstOrFail();
 
         if (blank($category->slug)) {
-            $category->save(); // triggers slug generation
+            $category->save();
         }
 
-        $products = $this->website->catalogQuery($shopId)
+        $filterConfig = \App\Support\CategoryFilterConfig::for($category);
+        $showSidebar = (bool) ($filterConfig['enabled'] ?? false);
+
+        // Category pages can show out-of-stock when filters are on (availability facet)
+        $query = Product::query()
+            ->where('shop_id', $shopId)
             ->where('category_id', $category->id)
-            ->with(['category', 'brand'])
-            ->latest()
-            ->paginate(12);
+            ->where(function ($q) {
+                $q->where('is_published', true)->orWhereNull('is_published');
+            })
+            ->with(['category', 'brand']);
+
+        if (! $showSidebar) {
+            $query->where('stock_quantity', '>', 0);
+        }
+
+        $this->applyCategoryFilters($query, $request, $filterConfig, $category);
+
+        $sort = $request->query('sort', 'latest');
+        match ($sort) {
+            'price_asc' => $query->orderBy('selling_price'),
+            'price_desc' => $query->orderByDesc('selling_price'),
+            'name' => $query->orderBy('name'),
+            default => $query->latest(),
+        };
+
+        $products = $query->paginate(12)->withQueryString();
+
+        $sidebarFacets = $showSidebar
+            ? $this->buildSidebarFacets($category, $filterConfig)
+            : [];
+
+        $priceBounds = [
+            'min' => (float) (Product::query()
+                ->where('shop_id', $shopId)
+                ->where('category_id', $category->id)
+                ->min('selling_price') ?? 0),
+            'max' => (float) (Product::query()
+                ->where('shop_id', $shopId)
+                ->where('category_id', $category->id)
+                ->max('selling_price') ?? 0),
+        ];
 
         return view('website.shop', array_merge($this->website->homepageData(), [
             'products' => $products,
             'categories' => Category::where('shop_id', $shopId)->orderBy('name')->get(),
             'activeCategory' => $category,
             'pageTitle' => $category->name,
-            'pageSubtitle' => 'Browse all products in this category.',
+            'pageSubtitle' => $category->description ?: 'Browse all products in this category.',
+            'showSidebar' => $showSidebar,
+            'filterConfig' => $filterConfig,
+            'sidebarFacets' => $sidebarFacets,
+            'priceBounds' => $priceBounds,
         ]));
+    }
+
+    protected function applyCategoryFilters($query, Request $request, array $filterConfig, Category $category): void
+    {
+        if (! empty($filterConfig['price_enabled'])) {
+            if ($request->filled('min_price')) {
+                $query->where('selling_price', '>=', (float) $request->min_price);
+            }
+            if ($request->filled('max_price')) {
+                $query->where('selling_price', '<=', (float) $request->max_price);
+            }
+        }
+
+        foreach ($filterConfig['groups'] ?? [] as $group) {
+            if (empty($group['enabled'])) {
+                continue;
+            }
+
+            $key = $group['key'] ?? '';
+            $selected = array_filter((array) $request->query($key, []));
+            if ($selected === [] || $key === '') {
+                continue;
+            }
+
+            $type = $group['type'] ?? 'custom';
+
+            if ($type === 'availability') {
+                $query->where(function ($q) use ($selected) {
+                    foreach ($selected as $value) {
+                        $q->orWhere(function ($inner) use ($value) {
+                            if ($value === 'in_stock') {
+                                $inner->where('stock_quantity', '>', 0)
+                                    ->where(function ($a) {
+                                        $a->whereNull('availability')
+                                            ->orWhere('availability', 'in_stock');
+                                    });
+                            } elseif ($value === 'out_of_stock') {
+                                $inner->where('stock_quantity', '<=', 0)
+                                    ->where(function ($a) {
+                                        $a->whereNull('availability')
+                                            ->orWhere('availability', 'out_of_stock')
+                                            ->orWhere('availability', 'in_stock');
+                                    });
+                            } else {
+                                $inner->where('availability', $value);
+                            }
+                        });
+                    }
+                });
+                continue;
+            }
+
+            if ($type === 'brand') {
+                $query->where(function ($q) use ($selected, $category) {
+                    $brands = Brand::where('shop_id', $category->shop_id)->get();
+                    foreach ($selected as $value) {
+                        $match = $brands->first(fn ($b) => \Illuminate\Support\Str::slug($b->name, '_') === $value
+                            || strtolower($b->name) === str_replace('_', ' ', strtolower($value)));
+                        if ($match) {
+                            $q->orWhere('brand_id', $match->id)->orWhere('brand_name', $match->name);
+                        } else {
+                            $label = str_replace('_', ' ', $value);
+                            $q->orWhereRaw('LOWER(COALESCE(brand_name, \'\')) = ?', [strtolower($label)]);
+                        }
+                    }
+                });
+                continue;
+            }
+
+            if ($type === 'storage') {
+                $query->where(function ($q) use ($selected) {
+                    foreach ($selected as $value) {
+                        $label = str_replace('_', ' ', $value);
+                        $q->orWhereRaw('LOWER(REPLACE(COALESCE(storage, \'\'), \' \', \'_\')) = ?', [strtolower($value)])
+                            ->orWhereRaw('LOWER(storage) = ?', [strtolower($label)]);
+                    }
+                });
+                continue;
+            }
+
+            if ($type === 'color') {
+                $query->where(function ($q) use ($selected) {
+                    foreach ($selected as $value) {
+                        $label = str_replace('_', ' ', $value);
+                        $q->orWhereRaw('LOWER(REPLACE(COALESCE(color, \'\'), \' \', \'_\')) = ?', [strtolower($value)])
+                            ->orWhereRaw('LOWER(color) = ?', [strtolower($label)]);
+                    }
+                });
+                continue;
+            }
+
+            // Custom attributes JSON
+            $query->where(function ($q) use ($selected, $key) {
+                foreach ($selected as $value) {
+                    $q->orWhere("filter_attributes->{$key}", $value)
+                        ->orWhereJsonContains("filter_attributes->{$key}", $value);
+                }
+            });
+        }
+    }
+
+    protected function buildSidebarFacets(Category $category, array $filterConfig): array
+    {
+        $facets = [];
+        foreach ($filterConfig['groups'] ?? [] as $group) {
+            if (empty($group['enabled'])) {
+                continue;
+            }
+
+            $type = $group['type'] ?? 'custom';
+            $options = $group['options'] ?? [];
+
+            if (in_array($type, ['brand', 'storage', 'color', 'custom'], true) && $options === []) {
+                $options = \App\Support\CategoryFilterConfig::facetValues($category, $type, $group['key'] ?? '')
+                    ->all();
+            }
+
+            if ($options === [] && $type !== 'availability') {
+                continue;
+            }
+
+            $facets[] = [
+                'key' => $group['key'],
+                'label' => $group['label'],
+                'type' => $type,
+                'options' => $options,
+            ];
+        }
+
+        return $facets;
     }
 
     public function brand(string $slug)
@@ -156,13 +376,6 @@ class WebsiteController extends Controller
             ->get();
 
         return view('website.product', array_merge($this->website->homepageData(), compact('product', 'related', 'reviews', 'variantOptions')));
-    }
-
-    public function trackOrderForm(Request $request)
-    {
-        return view('website.track-order', array_merge($this->website->homepageData(), [
-            'prefillInvoice' => $request->query('invoice'),
-        ]));
     }
 
     public function page(string $slug)
@@ -373,45 +586,10 @@ class WebsiteController extends Controller
             return response()->json([
                 'success' => true,
                 'invoice' => $order->invoice_no,
-                'track_url' => route('website.track', ['invoice' => $order->invoice_no]),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Order failed: ' . $e->getMessage()]);
         }
-    }
-
-    public function trackOrder(Request $request)
-    {
-        $shopId = $this->website->shopId();
-        abort_unless($shopId, 404);
-
-        $request->validate([
-            'invoice_no' => 'required|string',
-            'phone' => 'nullable|string',
-        ]);
-
-        $query = Order::where('shop_id', $shopId)
-            ->whereNull('counter_id')
-            ->where('invoice_no', $request->invoice_no);
-
-        $user = $request->user();
-        if ($user?->isStorefrontCustomer()) {
-            $query->whereHas('customer', fn ($q) => $q->where('user_id', $user->id));
-        } else {
-            $request->validate(['phone' => 'required|string']);
-            $query->whereHas('customer', fn ($q) => $q->where('phone', $request->phone));
-        }
-
-        $order = $query->first();
-
-        if (! $order) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Order not found. Check the invoice number'.($user?->isStorefrontCustomer() ? '.' : ' and phone number.'),
-            ]);
-        }
-
-        return response()->json($this->tracking->trackingPayload($order));
     }
 }

@@ -92,6 +92,104 @@
 }
 .gaget-search-btn:hover { background: var(--g-navy-2); }
 
+.gaget-search-wrap { position: relative; }
+.gaget-search-suggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 70;
+    background: #fff;
+    border: 1px solid var(--g-border);
+    border-radius: 14px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    overflow: hidden;
+}
+.gaget-search-suggest__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    background: #f8fafc;
+    border-bottom: 1px solid #eef2f7;
+}
+.gaget-search-suggest__hint {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #94a3b8;
+}
+.gaget-search-suggest__empty {
+    margin: 0;
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+}
+.gaget-search-suggest__list {
+    max-height: 360px;
+    overflow-y: auto;
+}
+.gaget-search-suggest__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.12s ease;
+}
+.gaget-search-suggest__item:last-child { border-bottom: none; }
+.gaget-search-suggest__item:hover,
+.gaget-search-suggest__item.is-active { background: #f8fafc; }
+.gaget-search-suggest__item img {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #f1f5f9;
+    flex-shrink: 0;
+}
+.gaget-search-suggest__name {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gaget-search-suggest__meta {
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: #94a3b8;
+}
+.gaget-search-suggest__price {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--g-navy, #1e3a5f);
+    flex-shrink: 0;
+}
+.gaget-search-suggest__all {
+    display: block;
+    padding: 12px 14px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--g-blue, #2563eb);
+    text-decoration: none;
+    border-top: 1px solid #eef2f7;
+    background: #f8fafc;
+}
+.gaget-search-suggest__all:hover { background: #f1f5f9; }
+
 .gaget-action-btn {
     display: flex;
     flex-direction: column;
@@ -801,12 +899,147 @@
 }
 .gaget-pill:hover { background: #e2e8f0; color: var(--g-text); }
 .gaget-pill.active { background: var(--g-blue); color: #fff; }
+.gaget-shop-layout {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 48px;
+}
+.gaget-shop-layout--with-sidebar {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+}
+.gaget-filter-sidebar { position: sticky; top: 100px; }
+.gaget-filter-sidebar__card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 18px 16px;
+}
+.gaget-filter-block + .gaget-filter-block {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #f1f5f9;
+}
+.gaget-filter-block__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #0f172a;
+    margin-bottom: 12px;
+}
+.gaget-filter-block__toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+.gaget-filter-price-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.gaget-filter-price-inputs label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+}
+.gaget-filter-price-inputs input {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #0f172a;
+}
+.gaget-filter-options { display: flex; flex-direction: column; gap: 8px; }
+.gaget-filter-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #334155;
+    cursor: pointer;
+}
+.gaget-filter-check input { border-radius: 4px; border-color: #cbd5e1; color: #2563eb; }
+.gaget-filter-actions {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #f1f5f9;
+}
+.gaget-filter-apply {
+    background: var(--g-navy, #1e3a5f);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.gaget-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    text-decoration: none;
+}
 .gaget-shop-grid-wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px 48px; }
+.gaget-shop-grid-wrap--sidebar { max-width: none; margin: 0; padding: 0; }
+.gaget-shop-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.gaget-shop-count { font-size: 13px; color: #64748b; margin: 0; }
+.gaget-shop-count strong { color: #0f172a; }
+.gaget-shop-sort label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+.gaget-shop-sort select {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #0f172a;
+    background: #fff;
+}
 .gaget-shop-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.gaget-shop-grid--sidebar { grid-template-columns: repeat(4, 1fr); }
 
 /* ── STICKY HEADER ── */
 .gaget-sticky-header { position: sticky; top: 0; z-index: 50; background: #fff; }
 
+@media (max-width: 1100px) {
+    .gaget-shop-layout--with-sidebar { grid-template-columns: 220px minmax(0, 1fr); }
+    .gaget-shop-grid--sidebar { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px) {
+    .gaget-shop-layout--with-sidebar { grid-template-columns: 1fr; }
+    .gaget-filter-sidebar { position: static; }
+}
 @media (max-width: 1024px) {
     .gaget-hero-grid { grid-template-columns: 1fr; }
     .gaget-hero-title { font-size: 32px; }

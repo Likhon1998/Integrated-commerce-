@@ -11,12 +11,23 @@ class Category extends Model
 
     protected $fillable = [
         'shop_id', 'name', 'slug', 'image_path', 'description',
-        'is_featured', 'product_count_label',
+        'is_featured', 'product_count_label', 'filter_options',
     ];
 
     protected $casts = [
         'is_featured' => 'boolean',
+        'filter_options' => 'array',
     ];
+
+    public function filterConfig(): array
+    {
+        return \App\Support\CategoryFilterConfig::for($this);
+    }
+
+    public function sidebarFiltersEnabled(): bool
+    {
+        return (bool) ($this->filterConfig()['enabled'] ?? false);
+    }
 
     protected static function booted(): void
     {

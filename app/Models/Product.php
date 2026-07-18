@@ -12,7 +12,7 @@ class Product extends Model
     protected $fillable = [
         'shop_id', 'category_id', 'brand_id', 'name', 'barcode', 'sku',
         'variant_group', 'color', 'color_hex', 'storage',
-        'cost_price', 'selling_price', 'original_price', 'stock_quantity', 'alert_quantity', 'reorder_quantity',
+        'cost_price', 'selling_price', 'original_price', 'stock_quantity', 'availability', 'filter_attributes', 'alert_quantity', 'reorder_quantity',
         'image', 'image_2', 'image_3',
         'short_description', 'brand_name', 'rating', 'review_count',
         'is_best_seller', 'is_featured', 'is_new_arrival', 'is_published',
@@ -27,6 +27,7 @@ class Product extends Model
         'is_featured' => 'boolean',
         'is_new_arrival' => 'boolean',
         'is_published' => 'boolean',
+        'filter_attributes' => 'array',
     ];
 
     /** Stored image paths (slot 1–3), skipping empty slots. */

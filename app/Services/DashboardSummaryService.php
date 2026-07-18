@@ -7,7 +7,6 @@ use App\Models\AccountEntry;
 use App\Models\Counter;
 use App\Models\CounterSession;
 use App\Models\Order;
-use App\Models\SalesReturn;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -106,29 +105,11 @@ class DashboardSummaryService
 
     protected function todayReturns(int $shopId, ?int $counterId, Carbon $today): float
     {
-        $fromSalesReturns = (float) SalesReturn::where('shop_id', $shopId)
-            ->where('status', 'completed')
-            ->whereDate('created_at', $today)
-            ->when($counterId !== null, function ($q) use ($counterId) {
-                $q->whereHas('order', fn ($oq) => $oq->where('counter_id', $counterId));
-            })
-            ->sum('total_refund');
-
-        $returnedOrderIds = SalesReturn::where('shop_id', $shopId)
-            ->where('status', 'completed')
-            ->whereDate('created_at', $today)
-            ->pluck('order_id')
-            ->filter()
-            ->all();
-
-        $fromOrdersWithoutReturnRow = (float) Order::where('shop_id', $shopId)
+        return (float) Order::where('shop_id', $shopId)
             ->whereDate('updated_at', $today)
             ->whereIn('status', ['refunded', 'returned'])
             ->when($counterId !== null, fn ($q) => $q->where('counter_id', $counterId))
-            ->when(! empty($returnedOrderIds), fn ($q) => $q->whereNotIn('id', $returnedOrderIds))
             ->sum('total_amount');
-
-        return $fromSalesReturns + $fromOrdersWithoutReturnRow;
     }
 
     protected function todayExpenses(int $shopId, Carbon $dayStart, Carbon $dayEnd): float

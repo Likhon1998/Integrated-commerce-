@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -51,9 +51,30 @@ class StorefrontAuthController extends Controller
         $inTransitOrders = $orders->where('status', 'shipped')->count();
         $deliveredOrders = $orders->where('status', 'completed')->count();
         $refundOrders = $orders->whereIn('status', ['returned', 'refunded'])->count();
-        $activeOrder = $orders->first(fn ($order) => in_array($order->status, ['pending', 'processing', 'shipped'], true))
-            ?? $orders->first();
+        $activeOrders = $orders
+            ->filter(fn ($order) => in_array($order->status, ['pending', 'processing', 'shipped'], true))
+            ->values();
+        $activeOrder = $activeOrders->first() ?? $orders->first();
         $activeTracking = $activeOrder ? ($orderTracking[$activeOrder->id] ?? null) : null;
+        $activeOrderSlides = $activeOrders->map(function ($order) use ($orderTracking, $customer) {
+            $track = $orderTracking[$order->id] ?? null;
+
+            return [
+                'id' => $order->id,
+                'invoice' => $order->invoice_no,
+                'date' => $order->created_at->format('M j, Y'),
+                'status' => $order->status,
+                'status_label' => $track['status_label'] ?? ucfirst($order->status),
+                'where' => $track['where_is_product'] ?? '',
+                'courier' => $order->shipping_courier ?: 'Our store / packing desk',
+                'tracking_no' => $order->shipping_tracking_no,
+                'address' => $customer?->address ?: 'No address saved yet.',
+                'timeline' => $track['timeline'] ?? [],
+                'item_name' => $order->items->first()?->product?->name ?? 'Order Item',
+                'extra_items' => max(0, $order->items->count() - 1),
+                'qty' => (int) $order->items->sum('quantity'),
+            ];
+        })->values()->all();
         $recentOrders = $orders->take(5);
         $memberSince = ($customer?->created_at ?? $user->created_at)?->format('M j, Y');
 
@@ -67,6 +88,7 @@ class StorefrontAuthController extends Controller
             'refundOrders' => $refundOrders,
             'activeOrder' => $activeOrder,
             'activeTracking' => $activeTracking,
+            'activeOrderSlides' => $activeOrderSlides,
             'recentOrders' => $recentOrders,
             'memberSince' => $memberSince,
         ]));
@@ -261,7 +283,11 @@ class StorefrontAuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $shopId = $this->website->shopId();
-        abort_unless($shopId, 404);
+        if (! $shopId) {
+            return response()->json([
+                'message' => 'Store is not set up yet. Please ask the admin to run database seed.',
+            ], 503);
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -284,31 +310,43 @@ class StorefrontAuthController extends Controller
             throw ValidationException::withMessages(['phone' => 'This phone number is already registered. Please sign in.']);
         }
 
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'shop_id' => $shopId,
-            'role' => 'customer',
-        ]);
+        try {
+            $user = DB::transaction(function () use ($data, $shopId) {
+                $user = User::create([
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'password' => $data['password'],
+                    'shop_id' => $shopId,
+                    'role' => 'customer',
+                ]);
 
-        if (\Spatie\Permission\Models\Role::where('name', 'Customer')->exists()) {
-            $user->assignRole('Customer');
+                if (\Spatie\Permission\Models\Role::where('name', 'Customer')->exists()) {
+                    $user->assignRole('Customer');
+                }
+
+                Customer::updateOrCreate(
+                    ['shop_id' => $shopId, 'phone' => $data['phone']],
+                    [
+                        'user_id' => $user->id,
+                        'name' => $data['name'],
+                        'email' => $data['email'],
+                        'address' => $data['address'] ?? null,
+                    ]
+                );
+
+                return $user;
+            });
+
+            event(new Registered($user));
+            Auth::login($user);
+            $request->session()->regenerate();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Registration failed. Please try again or contact the store.',
+            ], 500);
         }
-
-        Customer::updateOrCreate(
-            ['shop_id' => $shopId, 'phone' => $data['phone']],
-            [
-                'user_id' => $user->id,
-                'name' => $data['name'],
-                'email' => $data['email'],
-                'address' => $data['address'] ?? null,
-            ]
-        );
-
-        event(new Registered($user));
-        Auth::login($user);
-        $request->session()->regenerate();
 
         return response()->json([
             'success' => true,

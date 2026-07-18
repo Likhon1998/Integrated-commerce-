@@ -24,11 +24,17 @@
             </div>
         @endif
 
-        <form action="{{ route('products.store') }}" method="POST" enctype="multipart/form-data" class="space-y-0">
+        <form action="{{ route('products.store') }}" method="POST" enctype="multipart/form-data" class="space-y-0"
+              x-data="{ submitting: false }"
+              @submit="if (submitting) { $event.preventDefault(); return; } submitting = true">
             @csrf
             @if($returnTo['key'])
                 <input type="hidden" name="return_to" value="{{ $returnTo['key'] }}">
             @endif
+
+            @error('form')
+                <div class="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{{ $message }}</div>
+            @enderror
 
             @include('products.partials.form-fields')
 
@@ -36,9 +42,10 @@
                 <a href="{{ $returnTo['url'] }}" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
                     Cancel
                 </a>
-                <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 inline-flex items-center gap-1.5">
+                <button type="submit" :disabled="submitting"
+                        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 inline-flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-                    Save product
+                    <span x-text="submitting ? 'Saving…' : 'Save product'"></span>
                 </button>
             </div>
         </form>

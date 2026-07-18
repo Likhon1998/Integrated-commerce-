@@ -11,7 +11,6 @@
                 <li><a href="{{ route('website.contact') }}" class="hover:text-white">Contact</a></li>
                 <li><a href="{{ route('website.wishlist') }}" class="hover:text-white">Wishlist</a></li>
                 <li><a href="{{ route('website.faqs') }}" class="hover:text-white">FAQ</a></li>
-                <li><a href="{{ route('website.track') }}" class="hover:text-white">Track Order</a></li>
             </ul>
         </div>
         <div>

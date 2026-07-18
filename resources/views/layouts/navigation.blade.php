@@ -48,7 +48,7 @@
                 <a href="{{ route('products.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.index', 'products.edit') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Product List</a>
                 <a href="{{ route('products.create') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.create') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Add Product</a>
                 <a href="{{ route('products.import') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.import*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Add CSV Product</a>
-                <a href="{{ route('products.barcodes') }}" target="_blank" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.barcodes') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Print Bar Code</a>
+                <a href="{{ route('products.barcodes') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('products.barcodes*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Print Bar Code</a>
             </div>
         </div>
 
@@ -109,14 +109,6 @@
                 <a href="{{ route('cms.reviews.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('cms.reviews.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Reviews</a>
             </div>
         </div>
-        @endcan
-
-        @can('process sales returns')
-        <a href="{{ route('supply.sales-returns.index') }}"
-           class="{{ request()->routeIs('supply.sales-returns.*') ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'hover:bg-white/5 hover:text-white' }} flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm">
-            <svg class="w-5 h-5 mr-3 {{ request()->routeIs('supply.sales-returns.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z"></path></svg>
-            Sales Return
-        </a>
         @endcan
 
        @can('view sales ledger')
@@ -294,9 +286,13 @@
 
     <div class="shrink-0 border-t border-white/5 p-3">
         <div class="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-white/5">
-            <div class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600/20 text-sm font-bold text-blue-300">
-                {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
-            </div>
+            @if(Auth::user()->avatarUrl())
+                <img src="{{ Auth::user()->avatarUrl() }}" alt="" class="h-9 w-9 rounded-full object-cover border border-white/10">
+            @else
+                <div class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600/20 text-sm font-bold text-blue-300">
+                    {{ Auth::user()->avatarInitials() }}
+                </div>
+            @endif
             <div class="min-w-0 flex-1">
                 <p class="truncate text-[13px] font-semibold text-white">{{ Auth::user()->name }}</p>
                 <p class="truncate text-[11px] text-slate-500">{{ Auth::user()->getRoleNames()->first() ?? 'Staff' }}</p>
@@ -340,18 +336,25 @@
         @can('view sales ledger')
             <div class="relative"
                  x-data="onlineOrderBell(@js(route('online-orders.notifications')), @js(route('online-orders.notifications.seen')))"
-                 @mouseenter="openPanel()"
-                 @mouseleave="closePanel()">
-                <a href="{{ route('online-orders.index') }}"
-                   class="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800"
-                   title="Online order notifications">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                 @keydown.escape.window="if (panelOpen) closePanel()"
+                 @click.outside="if (panelOpen) closePanel()">
+                <button type="button"
+                        @click="togglePanel($event)"
+                        class="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800"
+                        :class="panelOpen ? 'border-blue-300 bg-blue-50 text-blue-700' : ''"
+                        title="Online order notifications"
+                        aria-haspopup="true"
+                        :aria-expanded="panelOpen">
+                    <svg class="h-4 w-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                     <span x-show="unread > 0" x-cloak x-text="unread > 99 ? '99+' : unread"
-                          class="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white"></span>
-                </a>
+                          class="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white"></span>
+                </button>
 
-                <div x-show="open" x-cloak x-transition.opacity.duration.150ms
-                     class="absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+                <div x-show="panelOpen"
+                     x-cloak
+                     x-transition.opacity.duration.150ms
+                     class="absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
+                     style="display: none;">
                     <div class="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5">
                         <p class="text-[13px] font-bold text-slate-900">Online orders</p>
                         <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500" x-text="loading ? 'Loading…' : (items.length + ' recent')"></span>

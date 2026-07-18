@@ -18,10 +18,12 @@
                             <x-input-error class="mt-2" :messages="$errors->get('name')" />
                         </div>
 
+                        @include('categories.partials.filter-options', ['filterDefaults' => $filterDefaults])
+
                         <div class="mt-4 p-4 bg-blue-50 rounded-lg flex gap-3">
                             <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             <p class="text-xs text-blue-700">
-                                Categories help organize your inventory. You will set specific **selling prices** and **cost prices** when adding individual products inside these categories.
+                                Categories help organize your inventory. Sidebar filters appear on the website when customers open this category.
                             </p>
                         </div>
 

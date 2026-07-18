@@ -24,10 +24,6 @@
             <p class="mt-0.5 text-[12px] text-slate-500">Placed {{ $order->created_at->format('d M Y, h:i A') }} · {{ str_replace('_', ' ', ucfirst($order->payment_method)) }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <a href="{{ route('website.track', ['invoice' => $order->invoice_no]) }}" target="_blank"
-               class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
-                Customer track page
-            </a>
             <button type="button" onclick="window.open('{{ route('pos.receipt', $order->id) }}', 'ReceiptWindow', 'width=400,height=620')"
                     class="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[12px] font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white">
                 Print receipt
@@ -46,7 +42,7 @@
     <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div class="mb-3 flex items-center justify-between gap-2">
             <h2 class="text-[14px] font-bold text-slate-900">Order tracking</h2>
-            <p class="text-[11px] text-slate-500">Customer sees the same progress on track order</p>
+            <p class="text-[11px] text-slate-500">Customer sees the same progress in My Account</p>
         </div>
 
         @if(in_array($order->status, ['cancelled', 'returned', 'refunded'], true))
@@ -157,7 +153,7 @@
 
             <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 class="text-[13px] font-bold text-slate-900">Status history</h3>
-                <p class="mt-0.5 text-[11px] text-slate-500">Updates shown on the customer tracking page</p>
+                <p class="mt-0.5 text-[11px] text-slate-500">Updates shown in the customer account</p>
                 <div class="relative mt-4 space-y-0">
                     @forelse($order->statusLogs as $log)
                         <div class="relative flex gap-3 pb-4 last:pb-0">
@@ -192,7 +188,7 @@
         <div class="space-y-4 xl:sticky xl:top-24 xl:self-start">
             <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 class="text-[13px] font-bold text-slate-900">Update order status</h3>
-                <p class="mt-0.5 text-[11px] text-slate-500">Saves instantly to customer tracking</p>
+                <p class="mt-0.5 text-[11px] text-slate-500">Saves instantly to the customer account</p>
 
                 <form method="POST" action="{{ route('online-orders.update-status', $order) }}" class="mt-3 space-y-3" x-data="{ status: @js($order->status) }">
                     @csrf
@@ -225,7 +221,7 @@
 
                     <div>
                         <label class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Note to customer</label>
-                        <textarea name="customer_note" rows="2" placeholder="Optional message on tracking page"
+                        <textarea name="customer_note" rows="2" placeholder="Optional message for the customer"
                                   class="mt-1 w-full rounded-xl border-slate-200 text-[13px] focus:border-indigo-400 focus:ring-indigo-400"></textarea>
                     </div>
 

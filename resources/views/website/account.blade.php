@@ -28,7 +28,6 @@
                     'qty' => (int) $item->quantity,
                     'subtotal' => number_format((float) $item->subtotal, 2),
                 ])->values()->all(),
-                'track_url' => route('website.track', ['invoice' => $order->invoice_no]),
             ],
         ];
     });
@@ -97,7 +96,7 @@
                     <div class="mt-2 flex items-center justify-between">
                         <div>
                             <p class="text-[28px] font-black leading-none text-slate-900">{{ $inTransitOrders }}</p>
-                            <p class="mt-1 text-[11px] text-slate-500">Track your orders</p>
+                            <p class="mt-1 text-[11px] text-slate-500">Orders in transit</p>
                         </div>
                         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17h6m-8 0H5a2 2 0 01-2-2V7a2 2 0 012-2h9a2 2 0 012 2v2m0 8h1a2 2 0 002-2v-3m-3 5a2 2 0 11-4 0m4 0a2 2 0 104 0m-4 0H9m10-8l-2-3h-3"/></svg>
@@ -132,85 +131,129 @@
 
             <div class="grid gap-4 xl:grid-cols-[minmax(0,1.52fr)_340px]">
                 <div class="space-y-4">
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                         x-data="{
+                            slides: @js($activeOrderSlides ?? []),
+                            index: 0,
+                            touchStartX: null,
+                            get current() { return this.slides[this.index] || null; },
+                            get count() { return this.slides.length; },
+                            prev() { if (this.count < 2) return; this.index = (this.index - 1 + this.count) % this.count; },
+                            next() { if (this.count < 2) return; this.index = (this.index + 1) % this.count; },
+                            go(i) { this.index = i; },
+                            onTouchStart(e) { this.touchStartX = e.changedTouches?.[0]?.clientX ?? null; },
+                            onTouchEnd(e) {
+                                if (this.touchStartX === null || this.count < 2) return;
+                                const dx = (e.changedTouches?.[0]?.clientX ?? this.touchStartX) - this.touchStartX;
+                                if (Math.abs(dx) < 40) return;
+                                dx < 0 ? this.next() : this.prev();
+                                this.touchStartX = null;
+                            },
+                            statusClass(status) {
+                                if (status === 'completed') return 'bg-emerald-100 text-emerald-700';
+                                if (status === 'shipped') return 'bg-blue-100 text-blue-700';
+                                if (status === 'processing') return 'bg-indigo-100 text-indigo-700';
+                                return 'bg-amber-100 text-amber-700';
+                            }
+                         }">
                     <div class="mb-4 flex items-start justify-between gap-4">
                         <div>
-                            <h2 class="text-[15px] font-bold text-slate-900">Track Your Order</h2>
+                            <h2 class="text-[15px] font-bold text-slate-900">
+                                Active Order<span x-show="count > 1" x-cloak x-text="'s (' + count + ')'"></span>
+                            </h2>
                             <p class="text-[11px] text-slate-500">See the latest update from our store to your doorstep.</p>
                         </div>
-                        <a href="{{ route('website.track', ['invoice' => $activeOrder?->invoice_no]) }}" class="text-[11px] font-bold text-blue-600 hover:text-blue-700">View All Orders →</a>
+                        <a href="{{ route('website.account') }}#recent-orders" class="text-[11px] font-bold text-blue-600 hover:text-blue-700">View All Orders →</a>
                     </div>
 
-                    @if($activeOrder && $activeTracking)
-                        <div class="rounded-2xl border border-slate-100 bg-white">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-[13px] font-bold text-slate-900">{{ $activeOrder->invoice_no }}</p>
-                                    <p class="text-[11px] text-slate-500">Placed on {{ $activeOrder->created_at->format('M j, Y') }}</p>
+                    <template x-if="current">
+                        <div class="relative"
+                             @touchstart.passive="onTouchStart($event)"
+                             @touchend.passive="onTouchEnd($event)">
+                            <div class="rounded-2xl border border-slate-100 bg-white">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-[13px] font-bold text-slate-900" x-text="current.invoice"></p>
+                                        <p class="text-[11px] text-slate-500" x-text="'Placed on ' + current.date"></p>
+                                    </div>
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold"
+                                          :class="statusClass(current.status)"
+                                          x-text="current.status_label"></span>
                                 </div>
-                                <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold
-                                    @if($activeOrder->status === 'completed') bg-emerald-100 text-emerald-700
-                                    @elseif($activeOrder->status === 'shipped') bg-blue-100 text-blue-700
-                                    @elseif($activeOrder->status === 'processing') bg-indigo-100 text-indigo-700
-                                    @else bg-amber-100 text-amber-700 @endif">
-                                    {{ $activeTracking['status_label'] }}
-                                </span>
-                            </div>
 
-                            <div class="mt-5 grid gap-2 md:grid-cols-{{ count($activeTracking['timeline']) > 1 ? count($activeTracking['timeline']) : 1 }}">
-                                @foreach($activeTracking['timeline'] as $step)
-                                    <div class="relative">
-                                        <div class="flex flex-col items-center text-center">
-                                            <div class="flex h-8 w-8 items-center justify-center rounded-full border-2 text-[11px] font-bold {{ !empty($step['done']) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-400' }}">
-                                                {{ !empty($step['done']) ? '✓' : '•' }}
+                                <div class="mt-5 grid gap-2"
+                                     :style="'grid-template-columns: repeat(' + Math.max(1, (current.timeline || []).length) + ', minmax(0, 1fr))'">
+                                    <template x-for="(step, sIdx) in (current.timeline || [])" :key="current.id + '-' + (step.key || sIdx)">
+                                        <div class="relative">
+                                            <div class="flex flex-col items-center text-center">
+                                                <div class="flex h-8 w-8 items-center justify-center rounded-full border-2 text-[11px] font-bold"
+                                                     :class="step.done ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-400'"
+                                                     x-text="step.done ? '✓' : '•'"></div>
+                                                <p class="mt-2 text-[11px] font-bold text-slate-800" x-text="step.label"></p>
+                                                <p class="mt-1 text-[11px] text-slate-500" x-text="step.at || 'Waiting'"></p>
                                             </div>
-                                            <p class="mt-2 text-[11px] font-bold text-slate-800">{{ $step['label'] }}</p>
-                                            <p class="mt-1 text-[11px] text-slate-500">{{ $step['at'] ?? 'Waiting' }}</p>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div class="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                                    <div class="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                        <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-white text-xl">📦</div>
+                                        <div class="min-w-0">
+                                            <p class="truncate text-[13px] font-bold text-slate-900">
+                                                <span x-text="current.item_name"></span>
+                                                <span x-show="current.extra_items > 0" x-text="' +' + current.extra_items + ' more'"></span>
+                                            </p>
+                                            <p class="mt-0.5 text-[11px] text-slate-500" x-text="'Qty: ' + current.qty"></p>
+                                            <p class="mt-1 text-[11px] font-medium text-blue-700" x-text="current.where"></p>
                                         </div>
                                     </div>
-                                @endforeach
-                            </div>
+                                    <a href="{{ route('website.account') }}#recent-orders" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-blue-700 hover:bg-blue-50">View Orders</a>
+                                </div>
 
-                            <div class="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                                <div class="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                                    <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-white text-xl">📦</div>
-                                    <div class="min-w-0">
-                                        <p class="truncate text-[13px] font-bold text-slate-900">
-                                            {{ $activeOrder->items->first()?->product?->name ?? 'Order Item' }}
-                                            @if($activeOrder->items->count() > 1)
-                                                +{{ $activeOrder->items->count() - 1 }} more
-                                            @endif
-                                        </p>
-                                        <p class="mt-0.5 text-[11px] text-slate-500">
-                                            Qty:
-                                            {{ $activeOrder->items->sum('quantity') }}
-                                        </p>
-                                        <p class="mt-1 text-[11px] font-medium text-blue-700">{{ $activeTracking['where_is_product'] }}</p>
+                                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                        <p class="text-[10px] uppercase tracking-wide text-slate-400">Current Location</p>
+                                        <p class="mt-1 text-[13px] font-semibold text-slate-800" x-text="current.courier"></p>
+                                    </div>
+                                    <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                        <p class="text-[10px] uppercase tracking-wide text-slate-400">Delivery Address</p>
+                                        <p class="mt-1 line-clamp-2 text-[13px] font-semibold text-slate-800" x-text="current.address"></p>
                                     </div>
                                 </div>
-                                <a href="{{ route('website.track', ['invoice' => $activeOrder->invoice_no]) }}" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-blue-700 hover:bg-blue-50">Track Live</a>
                             </div>
 
-                            <div class="mt-3 grid gap-3 md:grid-cols-2">
-                                <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                                    <p class="text-[10px] uppercase tracking-wide text-slate-400">Current Location</p>
-                                    <p class="mt-1 text-[13px] font-semibold text-slate-800">
-                                        {{ $activeOrder->shipping_courier ? $activeOrder->shipping_courier : 'Our store / packing desk' }}
-                                    </p>
+                            <template x-if="count > 1">
+                                <div class="mt-4 flex items-center justify-between gap-3">
+                                    <button type="button" @click="prev()"
+                                            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                            aria-label="Previous order">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <template x-for="(slide, i) in slides" :key="'dot-' + slide.id">
+                                            <button type="button" @click="go(i)"
+                                                    class="h-2 rounded-full transition-all"
+                                                    :class="i === index ? 'w-5 bg-blue-600' : 'w-2 bg-slate-300 hover:bg-slate-400'"
+                                                    :aria-label="'Show order ' + (i + 1)"></button>
+                                        </template>
+                                        <span class="ml-1 text-[11px] font-semibold text-slate-500" x-text="(index + 1) + ' / ' + count"></span>
+                                    </div>
+                                    <button type="button" @click="next()"
+                                            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                            aria-label="Next order">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    </button>
                                 </div>
-                                <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                                    <p class="text-[10px] uppercase tracking-wide text-slate-400">Delivery Address</p>
-                                    <p class="mt-1 line-clamp-2 text-[13px] font-semibold text-slate-800">{{ $customer?->address ?? 'No address saved yet.' }}</p>
-                                </div>
-                            </div>
+                            </template>
                         </div>
-                    @else
-                        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
-                            <p class="text-[13px] font-semibold text-slate-700">No active order yet.</p>
-                            <p class="mt-1 text-xs text-slate-500">Place your first order and live tracking will appear here.</p>
-                            <a href="{{ route('website.shop') }}" class="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-blue-700">Start Shopping</a>
-                        </div>
-                    @endif
+                    </template>
+
+                    <div x-show="!current" class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
+                        <p class="text-[13px] font-semibold text-slate-700">No active order yet.</p>
+                        <p class="mt-1 text-xs text-slate-500">Place your first order and status updates will appear here.</p>
+                        <a href="{{ route('website.shop') }}" class="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-blue-700">Start Shopping</a>
+                    </div>
                     </div>
 
                     <div id="recent-orders" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -218,7 +261,7 @@
                     <div>
                         <h2 class="text-[15px] font-bold text-slate-900">Recent Orders</h2>
                     </div>
-                    <a href="{{ route('website.track') }}" class="text-[11px] font-bold text-blue-600 hover:text-blue-700">View All Orders →</a>
+                    <a href="#recent-orders" class="text-[11px] font-bold text-blue-600 hover:text-blue-700">View All Orders →</a>
                 </div>
 
                 @if($recentOrders->isEmpty())
@@ -269,7 +312,7 @@
                                             <button type="button"
                                                     @click="openDetail({{ $order->id }})"
                                                     class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">
-                                                {{ $order->status === 'shipped' ? 'Track Order' : 'View Details' }}
+                                                View Details
                                             </button>
                                         </td>
                                     </tr>
@@ -428,8 +471,7 @@
                     </div>
 
                     <div class="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-100 bg-white px-5 py-3">
-                        <a :href="detail.track_url" class="gaget-btn-primary flex-1 text-center text-[13px] py-2.5">Open live tracking</a>
-                        <button type="button" @click="closeDetail()" class="gaget-btn-outline flex-1 text-[13px] py-2.5">Close</button>
+                        <button type="button" @click="closeDetail()" class="gaget-btn-primary flex-1 text-[13px] py-2.5">Close</button>
                     </div>
                 </div>
             </template>

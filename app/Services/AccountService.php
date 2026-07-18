@@ -257,63 +257,6 @@ class AccountService
         );
     }
 
-    /**
-     * Partial/full sales return: reverse revenue for refund amount + restore inventory asset for returned cost.
-     */
-    public function postSalesReturn(\App\Models\SalesReturn $return): void
-    {
-        if ($this->transactionExists($return->shop_id, 'sales_return', \App\Models\SalesReturn::class, $return->id)) {
-            return;
-        }
-
-        $return->loadMissing(['items.product', 'order']);
-        $order = $return->order;
-
-        if (! $order) {
-            return;
-        }
-
-        $this->ensureShopAccounts($return->shop_id);
-
-        $refund = (float) $return->total_refund;
-        $cogs = $return->items->sum(function ($item) {
-            return (float) ($item->product?->cost_price ?? 0) * $item->quantity;
-        });
-
-        $paymentAccount = $order->counter_id
-            ? $this->resolvePaymentAccount($order)
-            : ($this->transactionExists($order->shop_id, 'web_settlement', Order::class, $order->id)
-                ? $this->getAccount($order->shop_id, 'WEB-CASH')
-                : $this->getAccount($order->shop_id, 'WEB-COD'));
-
-        $lines = [];
-
-        if ($refund > 0) {
-            $lines[] = ['account' => $this->getAccount($return->shop_id, 'REVENUE'), 'debit' => $refund, 'credit' => 0, 'counter_id' => $order->counter_id];
-            $lines[] = ['account' => $paymentAccount, 'debit' => 0, 'credit' => $refund, 'counter_id' => $order->counter_id];
-        }
-
-        if ($cogs > 0) {
-            $lines[] = ['account' => $this->getAccount($return->shop_id, 'INVENTORY'), 'debit' => $cogs, 'credit' => 0, 'counter_id' => $order->counter_id];
-            $lines[] = ['account' => $this->getAccount($return->shop_id, 'COGS'), 'debit' => 0, 'credit' => $cogs, 'counter_id' => $order->counter_id];
-        }
-
-        if ($lines === []) {
-            return;
-        }
-
-        $this->createTransaction(
-            shopId: $return->shop_id,
-            type: 'sales_return',
-            referenceType: \App\Models\SalesReturn::class,
-            referenceId: $return->id,
-            description: 'Sales return ' . $return->return_number . ' for ' . $order->invoice_no,
-            date: now(),
-            lines: $lines,
-            userId: $return->user_id ?? Auth::id(),
-        );
-    }
-
     public function postTransfer(int $shopId, Account $from, Account $to, float $amount, string $description, ?int $counterId = null): void
     {
         $this->createTransaction(

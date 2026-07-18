@@ -23,7 +23,6 @@ use App\Http\Controllers\OpeningInventoryController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\ReorderLevelController;
-use App\Http\Controllers\SalesReturnController;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockLocationController;
 use App\Http\Controllers\StorefrontAuthController;
@@ -49,11 +48,11 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [WebsiteController::class, 'home'])->name('home');
 Route::redirect('/login', '/admin/login');
 Route::get('/shop', [WebsiteController::class, 'shop'])->name('website.shop');
+Route::get('/search/suggest', [WebsiteController::class, 'searchSuggest'])->name('website.search.suggest');
 Route::get('/category/{slug}', [WebsiteController::class, 'category'])->name('website.category');
 Route::get('/brand/{slug}', [WebsiteController::class, 'brand'])->name('website.brand');
 Route::get('/product/{product}', [WebsiteController::class, 'product'])->name('website.product');
-Route::get('/track-order', [WebsiteController::class, 'trackOrderForm'])->name('website.track');
-Route::post('/track-order', [WebsiteController::class, 'trackOrder'])->name('website.track.submit');
+Route::redirect('/track-order', '/account')->name('website.track');
 Route::post('/account/login', [StorefrontAuthController::class, 'login'])->name('website.account.login');
 Route::post('/account/register', [StorefrontAuthController::class, 'register'])->name('website.account.register');
 Route::middleware('auth')->group(function () {
@@ -114,7 +113,8 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::resource('products', ProductController::class);
     Route::get('/products-import/csv', [ProductController::class, 'importForm'])->name('products.import');
     Route::post('/products-import/csv', [ProductController::class, 'importStore'])->name('products.import.store');
-    Route::get('/products-barcodes/print', [ProductController::class, 'barcodes'])->name('products.barcodes');
+    Route::get('/products-barcodes', [ProductController::class, 'barcodes'])->name('products.barcodes');
+    Route::get('/products-barcodes/print', [ProductController::class, 'barcodesPrint'])->name('products.barcodes.print');
     Route::get('/stock-ledger', fn () => redirect()->route('supply.adjustments.index'))->name('stock.index');
     Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])->name('stock.store');
 
@@ -142,16 +142,10 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::post('/purchase-returns', [PurchaseReturnController::class, 'store'])->name('purchase-returns.store');
     });
 
-    // Sales returns — cashiers need this without full inventory access
-    Route::prefix('supply')->name('supply.')->middleware('can:process sales returns')->group(function () {
-        Route::get('/sales-returns', [SalesReturnController::class, 'index'])->name('sales-returns.index');
-        Route::get('/sales-returns/create', [SalesReturnController::class, 'create'])->name('sales-returns.create');
-        Route::post('/sales-returns', [SalesReturnController::class, 'store'])->name('sales-returns.store');
-    });
-
     Route::middleware('can:view sales ledger')->group(function () {
         Route::get('/sales-ledger', [SalesLedgerController::class, 'index'])->name('sales.index');
         Route::post('/sales/{order}/refund', [SalesLedgerController::class, 'refund'])->name('sales.refund');
+        Route::post('/sales/{order}/return', [SalesLedgerController::class, 'markReturned'])->name('sales.return');
     });
 
     Route::prefix('accounts')->name('accounts.')->group(function () {

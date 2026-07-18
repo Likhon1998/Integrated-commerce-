@@ -1,64 +1,58 @@
-<section>
-    <header>
-        <h2 class="text-lg font-medium text-gray-900">
-            {{ __('Profile Information') }}
-        </h2>
-
-        <p class="mt-1 text-sm text-gray-600">
-            {{ __("Update your account's profile information and email address.") }}
-        </p>
-    </header>
+<section class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+        <h2 class="text-[15px] font-bold text-slate-900">Profile information</h2>
+        <p class="mt-0.5 text-[12px] text-slate-500">Your name and email are used across the admin panel and store.</p>
+    </div>
 
     <form id="send-verification" method="post" action="{{ route('verification.send') }}">
         @csrf
     </form>
 
-    <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
+    <form method="post" action="{{ route('profile.update') }}" enctype="multipart/form-data" class="p-5 space-y-5">
         @csrf
         @method('patch')
 
-        <div>
-            <x-input-label for="name" :value="__('Name')" />
-            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
-            <x-input-error class="mt-2" :messages="$errors->get('name')" />
-        </div>
+        <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/jpg,image/webp" class="hidden"
+               @change="const file = $event.target.files[0]; if (file) { preview = URL.createObjectURL(file); removeAvatar = false; document.getElementById('remove_avatar').value = '0'; }">
+        <input type="hidden" id="remove_avatar" name="remove_avatar" value="0" x-bind:value="removeAvatar ? '1' : '0'">
 
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" required autocomplete="username" />
-            <x-input-error class="mt-2" :messages="$errors->get('email')" />
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div class="sm:col-span-2">
+                <label for="name" class="mb-1.5 block text-[12px] font-semibold text-slate-700">Full name</label>
+                <input id="name" name="name" type="text" value="{{ old('name', $user->name) }}" required autofocus autocomplete="name"
+                       class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] text-slate-800 focus:border-blue-400 focus:ring-blue-100"
+                       @input="previewName = $event.target.value">
+                <x-input-error class="mt-1.5" :messages="$errors->get('name')" />
+            </div>
 
-            @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
-                <div>
-                    <p class="text-sm mt-2 text-gray-800">
-                        {{ __('Your email address is unverified.') }}
+            <div class="sm:col-span-2">
+                <label for="email" class="mb-1.5 block text-[12px] font-semibold text-slate-700">Email address</label>
+                <input id="email" name="email" type="email" value="{{ old('email', $user->email) }}" required autocomplete="username"
+                       class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] text-slate-800 focus:border-blue-400 focus:ring-blue-100"
+                       @input="previewEmail = $event.target.value">
+                <x-input-error class="mt-1.5" :messages="$errors->get('email')" />
 
-                        <button form="send-verification" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            {{ __('Click here to re-send the verification email.') }}
+                @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
+                    <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] text-amber-800">
+                        Your email address is unverified.
+                        <button form="send-verification" class="ml-1 font-bold underline hover:text-amber-900">
+                            Resend verification email
                         </button>
-                    </p>
-
-                    @if (session('status') === 'verification-link-sent')
-                        <p class="mt-2 font-medium text-sm text-green-600">
-                            {{ __('A new verification link has been sent to your email address.') }}
-                        </p>
-                    @endif
-                </div>
-            @endif
+                        @if (session('status') === 'verification-link-sent')
+                            <p class="mt-2 font-semibold text-emerald-700">A new verification link has been sent.</p>
+                        @endif
+                    </div>
+                @endif
+            </div>
         </div>
 
-        <div class="flex items-center gap-4">
-            <x-primary-button>{{ __('Save') }}</x-primary-button>
-
-            @if (session('status') === 'profile-updated')
-                <p
-                    x-data="{ show: true }"
-                    x-show="show"
-                    x-transition
-                    x-init="setTimeout(() => show = false, 2000)"
-                    class="text-sm text-gray-600"
-                >{{ __('Saved.') }}</p>
-            @endif
+        <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
+            <button type="submit" class="inline-flex items-center rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-bold text-white hover:bg-blue-700 shadow-sm shadow-blue-600/20">
+                Save changes
+            </button>
+            <a href="{{ route('dashboard') }}" class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">
+                Cancel
+            </a>
         </div>
     </form>
 </section>

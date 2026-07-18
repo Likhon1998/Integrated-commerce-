@@ -14,6 +14,14 @@
         selling: @js(old('selling_price', $product?->selling_price ?? '')),
         original: @js(old('original_price', $product?->original_price ?? '')),
         autoGroup: true,
+        categoryModal: false,
+        brandModal: false,
+        quickName: '',
+        quickLoading: false,
+        quickError: '',
+        categoryUrl: @js(route('categories.store')),
+        brandUrl: @js(route('brands.store')),
+        csrf: @js(csrf_token()),
         slugify(s) {
             return String(s || '').toLowerCase().trim()
                 .replace(/[^a-z0-9]+/g, '-')
@@ -28,7 +36,87 @@
         pickSwatch(hex, label) {
             this.colorHex = hex;
             if (!this.color) this.color = label;
-        }
+        },
+        openCategoryModal() {
+            this.quickName = '';
+            this.quickError = '';
+            this.categoryModal = true;
+            this.$nextTick(() => this.$refs.quickCategoryInput?.focus());
+        },
+        openBrandModal() {
+            this.quickName = '';
+            this.quickError = '';
+            this.brandModal = true;
+            this.$nextTick(() => this.$refs.quickBrandInput?.focus());
+        },
+        async saveQuickCategory() {
+            const name = (this.quickName || '').trim();
+            if (!name) { this.quickError = 'Enter a category name.'; return; }
+            this.quickLoading = true;
+            this.quickError = '';
+            try {
+                const res = await fetch(this.categoryUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ name }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    this.quickError = data.errors?.name?.[0] || data.message || 'Could not create category.';
+                    return;
+                }
+                const select = document.getElementById('category_id');
+                const opt = document.createElement('option');
+                opt.value = data.category.id;
+                opt.textContent = data.category.name;
+                opt.selected = true;
+                select.appendChild(opt);
+                this.categoryModal = false;
+            } catch (e) {
+                this.quickError = 'Network error. Please try again.';
+            } finally {
+                this.quickLoading = false;
+            }
+        },
+        async saveQuickBrand() {
+            const name = (this.quickName || '').trim();
+            if (!name) { this.quickError = 'Enter a brand name.'; return; }
+            this.quickLoading = true;
+            this.quickError = '';
+            try {
+                const res = await fetch(this.brandUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ name, is_active: true }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    this.quickError = data.errors?.name?.[0] || data.message || 'Could not create brand.';
+                    return;
+                }
+                const select = document.getElementById('brand_id');
+                const opt = document.createElement('option');
+                opt.value = data.brand.id;
+                opt.textContent = data.brand.name;
+                opt.selected = true;
+                select.appendChild(opt);
+                this.brandModal = false;
+            } catch (e) {
+                this.quickError = 'Network error. Please try again.';
+            } finally {
+                this.quickLoading = false;
+            }
+        },
      }"
      x-init="syncGroup()">
 
@@ -60,8 +148,15 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Category</label>
-                    <select name="category_id" class="block w-full rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5">
+                    <div class="mb-1.5 flex items-center justify-between gap-2">
+                        <label for="category_id" class="block text-xs font-semibold text-slate-600">Category</label>
+                        <button type="button" @click="openCategoryModal()"
+                                class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                                title="Add category">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        </button>
+                    </div>
+                    <select id="category_id" name="category_id" class="block w-full rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5">
                         <option value="">Select category</option>
                         @foreach($categories as $category)
                             <option value="{{ $category->id }}" {{ old('category_id', $product?->category_id ?? '') == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
@@ -69,8 +164,15 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Brand</label>
-                    <select name="brand_id" class="block w-full rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5">
+                    <div class="mb-1.5 flex items-center justify-between gap-2">
+                        <label for="brand_id" class="block text-xs font-semibold text-slate-600">Brand</label>
+                        <button type="button" @click="openBrandModal()"
+                                class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                                title="Add brand">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        </button>
+                    </div>
+                    <select id="brand_id" name="brand_id" class="block w-full rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5">
                         <option value="">No brand</option>
                         @foreach($brands as $brand)
                             <option value="{{ $brand->id }}" {{ old('brand_id', $product?->brand_id ?? '') == $brand->id ? 'selected' : '' }}>{{ $brand->name }}</option>
@@ -86,11 +188,24 @@
                 </div>
             </div>
 
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">SKU (optional)</label>
-                <input type="text" name="sku" value="{{ old('sku', $product?->sku ?? '') }}"
-                       class="block w-full md:max-w-xs rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 font-mono"
-                       placeholder="e.g. IPH15-256-NAT">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">SKU (optional)</label>
+                    <input type="text" name="sku" value="{{ old('sku', $product?->sku ?? '') }}"
+                           class="block w-full rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 font-mono"
+                           placeholder="e.g. IPH15-256-NAT">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Availability (shop filter)</label>
+                    <select name="availability" class="block w-full rounded-lg border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5">
+                        @php $avail = old('availability', $product?->availability ?? 'in_stock'); @endphp
+                        <option value="in_stock" @selected($avail === 'in_stock')>In Stock</option>
+                        <option value="pre_order" @selected($avail === 'pre_order')>Pre Order</option>
+                        <option value="up_coming" @selected($avail === 'up_coming')>Up Coming</option>
+                        <option value="out_of_stock" @selected($avail === 'out_of_stock')>Out of Stock</option>
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Used by category sidebar filters on the website.</p>
+                </div>
             </div>
         </div>
     </section>
@@ -306,4 +421,60 @@
             @endif
         </div>
     </section>
+
+    {{-- Quick add category modal --}}
+    <div x-show="categoryModal" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4" @keydown.escape.window="categoryModal = false">
+        <div class="absolute inset-0 bg-slate-900/40" @click="categoryModal = false"></div>
+        <div class="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl" @click.stop>
+            <div class="mb-4 flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-[15px] font-bold text-slate-900">Add category</h3>
+                    <p class="mt-0.5 text-[12px] text-slate-500">Create a category without leaving this page.</p>
+                </div>
+                <button type="button" @click="categoryModal = false" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <label class="mb-1.5 block text-[12px] font-semibold text-slate-700">Category name</label>
+            <input type="text" x-ref="quickCategoryInput" x-model="quickName" @keydown.enter.prevent="saveQuickCategory()"
+                   placeholder="e.g. Phones"
+                   class="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-blue-400 focus:ring-blue-100">
+            <p x-show="quickError" x-text="quickError" class="mt-2 text-[12px] font-medium text-rose-600"></p>
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" @click="categoryModal = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                <button type="button" @click="saveQuickCategory()" :disabled="quickLoading"
+                        class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+                    <span x-text="quickLoading ? 'Saving…' : 'Add category'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{-- Quick add brand modal --}}
+    <div x-show="brandModal" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4" @keydown.escape.window="brandModal = false">
+        <div class="absolute inset-0 bg-slate-900/40" @click="brandModal = false"></div>
+        <div class="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl" @click.stop>
+            <div class="mb-4 flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-[15px] font-bold text-slate-900">Add brand</h3>
+                    <p class="mt-0.5 text-[12px] text-slate-500">Create a brand without leaving this page.</p>
+                </div>
+                <button type="button" @click="brandModal = false" class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <label class="mb-1.5 block text-[12px] font-semibold text-slate-700">Brand name</label>
+            <input type="text" x-ref="quickBrandInput" x-model="quickName" @keydown.enter.prevent="saveQuickBrand()"
+                   placeholder="e.g. Apple"
+                   class="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-blue-400 focus:ring-blue-100">
+            <p x-show="quickError" x-text="quickError" class="mt-2 text-[12px] font-medium text-rose-600"></p>
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" @click="brandModal = false" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                <button type="button" @click="saveQuickBrand()" :disabled="quickLoading"
+                        class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+                    <span x-text="quickLoading ? 'Saving…' : 'Add brand'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>

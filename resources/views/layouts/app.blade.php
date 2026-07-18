@@ -11,6 +11,7 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet" />
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>[x-cloak]{display:none!important}</style>
 </head>
 <body class="admin-panel font-sans antialiased text-slate-900 bg-[#F4F6FB]">
     <div x-data="{ sidebarOpen: false }" class="flex h-screen overflow-hidden">
@@ -37,25 +38,31 @@
     <script>
         function onlineOrderBell(listUrl, seenUrl) {
             return {
-                open: false,
+                panelOpen: false,
                 loading: false,
                 loaded: false,
                 unread: 0,
                 items: [],
-                closeTimer: null,
                 init() {
+                    this.panelOpen = false;
                     this.fetchBadge();
                 },
-                openPanel() {
-                    clearTimeout(this.closeTimer);
-                    this.open = true;
-                    this.fetchList(true);
+                togglePanel(event) {
+                    if (event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    this.panelOpen = !this.panelOpen;
+                    if (this.panelOpen) {
+                        this.fetchList(true);
+                    } else {
+                        this.markSeen();
+                    }
                 },
                 closePanel() {
-                    this.closeTimer = setTimeout(() => {
-                        this.open = false;
-                        this.markSeen();
-                    }, 180);
+                    if (!this.panelOpen) return;
+                    this.panelOpen = false;
+                    this.markSeen();
                 },
                 async fetchBadge() {
                     try {

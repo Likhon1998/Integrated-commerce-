@@ -1,24 +1,3 @@
-{{-- Top utility bar --}}
-<div class="gaget-topbar hidden md:block">
-    <div class="max-w-[1280px] mx-auto px-6 py-2 flex items-center justify-between">
-        <div class="flex items-center gap-6">
-            @forelse($topBarNav ?? [] as $link)
-                <span>{{ $link->label }}</span>
-            @empty
-                <span>Free shipping on all orders over $50</span>
-                <span>30-day easy returns</span>
-                <span>1 Year Warranty</span>
-            @endforelse
-        </div>
-        <div class="flex items-center gap-5">
-            <a href="{{ route('website.track') }}">Track Order</a>
-            <a href="{{ route('website.faqs') }}">Help Center</a>
-            <a href="{{ route('website.blogs') }}">Blog</a>
-            <span class="font-semibold text-slate-700">{{ $settings->currency_code ?? 'USD' }}</span>
-        </div>
-    </div>
-</div>
-
 <div class="gaget-sticky-header">
     {{-- Main header --}}
     <div class="gaget-header-main">
@@ -35,19 +14,66 @@
                     <span class="gaget-logo-text">{{ $settings->store_name ?? 'GAGET STORE' }}</span>
                 </a>
 
-                {{-- Search: input | categories | navy button --}}
-                <form action="{{ route('website.shop') }}" method="GET" class="hidden lg:flex gaget-search-wrap flex-1 mx-2">
-                    <input type="search" name="search" value="{{ request('search') }}" placeholder="Search for products, brands..." class="gaget-search-input">
-                    <select name="category" class="gaget-search-select">
-                        <option value="">All Categories</option>
-                        @foreach($allCategories ?? $categories ?? [] as $cat)
-                            <option value="{{ $cat->slug }}" {{ request('category')==$cat->slug?'selected':'' }}>{{ $cat->name }}</option>
-                        @endforeach
-                    </select>
-                    <button type="submit" class="gaget-search-btn" aria-label="Search">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    </button>
-                </form>
+                {{-- Live search: suggestions on focus + as you type --}}
+                <div class="hidden lg:block flex-1 mx-2 max-w-[640px]"
+                     x-data="headerSearch(@js(route('website.search.suggest')), @js(route('website.shop')), @js($settings->currency_symbol ?? '$'))"
+                     @click.outside="open = false">
+                    <form action="{{ route('website.shop') }}" method="GET" class="gaget-search-wrap relative" @submit="open = false">
+                        <input type="search"
+                               name="search"
+                               x-model="q"
+                               value="{{ request('search') }}"
+                               placeholder="Search for products, brands..."
+                               class="gaget-search-input"
+                               autocomplete="off"
+                               @focus="onFocus()"
+                               @input.debounce.250ms="fetchSuggestions()"
+                               @keydown.escape.prevent="open = false"
+                               @keydown.arrow-down.prevent="move(1)"
+                               @keydown.arrow-up.prevent="move(-1)"
+                               @keydown.enter="onEnter($event)">
+                        <select name="category" class="gaget-search-select" x-model="category" @change="fetchSuggestions()">
+                            <option value="">All Categories</option>
+                            @foreach($allCategories ?? $categories ?? [] as $cat)
+                                <option value="{{ $cat->slug }}" {{ request('category')==$cat->slug?'selected':'' }}>{{ $cat->name }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="gaget-search-btn" aria-label="Search">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </button>
+
+                        <div class="gaget-search-suggest" x-show="open" x-cloak x-transition.opacity.duration.120ms>
+                            <div class="gaget-search-suggest__head">
+                                <span x-text="mode === 'best' ? 'Best picks for you' : 'Products'"></span>
+                                <span class="gaget-search-suggest__hint" x-show="loading">Searching…</span>
+                            </div>
+
+                            <template x-if="!loading && products.length === 0">
+                                <p class="gaget-search-suggest__empty" x-text="q ? 'No products found' : 'No products available yet'"></p>
+                            </template>
+
+                            <div class="gaget-search-suggest__list" x-show="products.length > 0">
+                                <template x-for="(item, index) in products" :key="item.id">
+                                    <a :href="item.url"
+                                       class="gaget-search-suggest__item"
+                                       :class="{ 'is-active': index === activeIndex }"
+                                       @mouseenter="activeIndex = index">
+                                        <img :src="item.image" :alt="item.name" loading="lazy">
+                                        <div class="min-w-0 flex-1">
+                                            <p class="gaget-search-suggest__name" x-text="item.name"></p>
+                                            <p class="gaget-search-suggest__meta" x-text="item.brand || 'Product'"></p>
+                                        </div>
+                                        <strong class="gaget-search-suggest__price" x-text="currency + Number(item.price).toFixed(2)"></strong>
+                                    </a>
+                                </template>
+                            </div>
+
+                            <a :href="shopUrl" class="gaget-search-suggest__all" x-show="q.length > 0">
+                                View all results for “<span x-text="q"></span>”
+                            </a>
+                        </div>
+                    </form>
+                </div>
 
                 <div class="flex items-center ml-auto gap-0.5">
                     {{-- Wishlist with hover preview --}}
@@ -160,10 +186,24 @@
                             </a>
                         @endif
                     @else
-                        <button type="button" @click="openSignIn()" class="gaget-action-btn" title="Sign in">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            <span class="hidden xl:inline text-xs font-semibold ml-1">Sign in</span>
-                        </button>
+                        <div class="gaget-action-wrap" x-data="{ open: false }" @mouseenter="open=true" @mouseleave="open=false">
+                            <button type="button" @click="openSignIn('login')" class="gaget-action-btn" title="Sign in">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                <span class="hidden xl:inline text-xs font-semibold ml-1">Account</span>
+                            </button>
+                            <div class="gaget-hover-panel gaget-hover-panel--account" x-show="open" x-cloak x-transition.opacity.duration.150ms>
+                                <div class="gaget-account-menu__links">
+                                    <button type="button" @click="open=false; openSignIn('login')" class="gaget-account-menu__item w-full text-left">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                                        Sign in
+                                    </button>
+                                    <button type="button" @click="open=false; openSignIn('register')" class="gaget-account-menu__item w-full text-left">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                                        Create account
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     @endauth
                 </div>
             </div>
@@ -174,23 +214,6 @@
     <nav class="gaget-navbar hidden md:block">
         <div class="gaget-navbar-inner">
             <div class="gaget-navbar-left">
-                <div class="gaget-nav-dropdown">
-                    <a href="{{ route('website.shop') }}" class="gaget-all-cat">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-                        All Categories
-                        <svg class="gaget-nav-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </a>
-                    <div class="gaget-nav-dropdown-menu gaget-nav-dropdown-menu--wide">
-                        @forelse($allCategories ?? [] as $cat)
-                            <a href="{{ route('website.category', $cat->slug) }}" class="gaget-nav-dropdown-item">
-                                <span>{{ $cat->name }}</span>
-                                <span class="gaget-nav-dropdown-count">{{ $cat->products_count ?? 0 }}</span>
-                            </a>
-                        @empty
-                            <span class="gaget-nav-dropdown-empty">No categories yet</span>
-                        @endforelse
-                    </div>
-                </div>
                 <div class="gaget-nav-links">
                     @forelse($mainNav ?? [] as $link)
                         <a href="{{ $link->url }}" class="gaget-nav-link">{{ $link->label }}</a>

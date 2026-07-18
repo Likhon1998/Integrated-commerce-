@@ -28,6 +28,69 @@
             }
         }
 
+        function headerSearch(suggestUrl, shopBaseUrl, currencySymbol) {
+            return {
+                q: @json(request('search', '')),
+                category: @json(request('category', '')),
+                open: false,
+                loading: false,
+                products: [],
+                mode: 'best',
+                activeIndex: -1,
+                currency: currencySymbol || '$',
+                _req: 0,
+                get shopUrl() {
+                    const params = new URLSearchParams();
+                    if (this.q) params.set('search', this.q);
+                    if (this.category) params.set('category', this.category);
+                    const qs = params.toString();
+                    return qs ? `${shopBaseUrl}?${qs}` : shopBaseUrl;
+                },
+                onFocus() {
+                    this.open = true;
+                    this.fetchSuggestions();
+                },
+                async fetchSuggestions() {
+                    this.open = true;
+                    this.loading = true;
+                    this.activeIndex = -1;
+                    const req = ++this._req;
+                    try {
+                        const params = new URLSearchParams({
+                            q: this.q || '',
+                            category: this.category || '',
+                            limit: '8',
+                        });
+                        const res = await fetch(`${suggestUrl}?${params.toString()}`, {
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        const data = await res.json();
+                        if (req !== this._req) return;
+                        this.products = Array.isArray(data.products) ? data.products : [];
+                        this.mode = data.mode || (this.q ? 'search' : 'best');
+                    } catch (e) {
+                        if (req !== this._req) return;
+                        this.products = [];
+                    } finally {
+                        if (req === this._req) this.loading = false;
+                    }
+                },
+                move(step) {
+                    if (!this.products.length) return;
+                    this.open = true;
+                    const len = this.products.length;
+                    this.activeIndex = (this.activeIndex + step + len) % len;
+                },
+                onEnter(event) {
+                    if (this.open && this.activeIndex >= 0 && this.products[this.activeIndex]) {
+                        event.preventDefault();
+                        window.location.href = this.products[this.activeIndex].url;
+                    }
+                },
+            };
+        }
+        window.headerSearch = headerSearch;
+
         function storefrontCart() {
             return {
                 cart: readStorefrontList('gaget_cart'),
@@ -35,13 +98,13 @@
                 cartOpen: false,
                 checkoutOpen: false,
                 checkoutStep: 'auth',
+                authPurpose: 'account',
                 authTab: 'login',
                 authLoading: false,
                 authMessage: '',
                 ordering: false,
                 orderMessage: '',
                 orderSuccess: false,
-                trackUrl: '',
                 toastMessage: '',
                 toastVisible: false,
                 isLoggedIn: @json((bool) $storefrontUser),
@@ -114,6 +177,7 @@
                     if (this.cart.length === 0) return;
                     this.cartOpen = false;
                     this.checkoutOpen = true;
+                    this.authPurpose = 'checkout';
                     this.orderMessage = '';
                     this.orderSuccess = false;
                     this.authMessage = '';
@@ -124,11 +188,24 @@
                         this.authTab = 'login';
                     }
                 },
-                openSignIn() {
+                openSignIn(tab = 'login') {
+                    this.cartOpen = false;
                     this.checkoutOpen = true;
+                    this.authPurpose = 'account';
                     this.checkoutStep = 'auth';
-                    this.authTab = 'login';
+                    this.authTab = tab === 'register' ? 'register' : 'login';
                     this.authMessage = '';
+                    this.orderMessage = '';
+                    this.orderSuccess = false;
+                },
+                afterAuthSuccess(user) {
+                    this.isLoggedIn = true;
+                    this.prefillCheckout(user);
+                    if (this.authPurpose === 'checkout') {
+                        this.checkoutStep = 'order';
+                        return;
+                    }
+                    window.location.href = @json(route('website.account'));
                 },
                 async submitLogin() {
                     this.authLoading = true;
@@ -144,9 +221,7 @@
                             this.authMessage = data.message || data.errors?.email?.[0] || 'Sign in failed.';
                             return;
                         }
-                        this.isLoggedIn = true;
-                        this.prefillCheckout(data.user);
-                        this.checkoutStep = 'order';
+                        this.afterAuthSuccess(data.user);
                     } catch (e) {
                         this.authMessage = 'Network error. Please try again.';
                     } finally {
@@ -169,12 +244,10 @@
                         const data = await res.json();
                         if (!res.ok) {
                             const err = data.errors || {};
-                            this.authMessage = err.email?.[0] || err.phone?.[0] || err.password?.[0] || data.message || 'Registration failed.';
+                            this.authMessage = err.name?.[0] || err.email?.[0] || err.phone?.[0] || err.password?.[0] || data.message || 'Registration failed.';
                             return;
                         }
-                        this.isLoggedIn = true;
-                        this.prefillCheckout(data.user);
-                        this.checkoutStep = 'order';
+                        this.afterAuthSuccess(data.user);
                     } catch (e) {
                         this.authMessage = 'Network error. Please try again.';
                     } finally {
@@ -218,7 +291,6 @@
                             this.save();
                             this.orderSuccess = true;
                             this.orderMessage = 'Invoice: ' + data.invoice;
-                            this.trackUrl = data.track_url || '';
                             this.checkoutStep = 'success';
                         } else {
                             this.orderSuccess = false;
@@ -293,10 +365,10 @@
     <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
         <button type="button" @click="checkoutOpen=false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
 
-        {{-- Auth step --}}
+        {{-- Auth step (standalone account OR checkout) --}}
         <div x-show="checkoutStep==='auth'" x-cloak>
-            <h3 class="text-xl font-bold text-slate-900 pr-8">Sign in to checkout</h3>
-            <p class="text-sm text-slate-500 mt-1 mb-5">One quick step before we deliver your order.</p>
+            <h3 class="text-xl font-bold text-slate-900 pr-8" x-text="authPurpose === 'checkout' ? 'Sign in to checkout' : (authTab === 'register' ? 'Create your account' : 'Welcome back')"></h3>
+            <p class="text-sm text-slate-500 mt-1 mb-5" x-text="authPurpose === 'checkout' ? 'Sign in or create an account to place your order.' : 'Create an account anytime — no order required.'"></p>
 
             <div class="flex rounded-xl bg-slate-100 p-1 mb-5">
                 <button type="button" @click="authTab='login'; authMessage=''" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Sign in</button>
@@ -307,7 +379,7 @@
                 <input x-model="authLogin.email" type="email" placeholder="Email" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="email">
                 <input x-model="authLogin.password" type="password" placeholder="Password" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="current-password" @keydown.enter.prevent="submitLogin()">
                 <button type="button" @click="submitLogin()" :disabled="authLoading" class="w-full gaget-btn-primary text-center disabled:opacity-50">
-                    <span x-text="authLoading ? 'Signing in...' : 'Sign in & continue'"></span>
+                    <span x-text="authLoading ? 'Signing in...' : (authPurpose === 'checkout' ? 'Sign in & continue' : 'Sign in')"></span>
                 </button>
             </div>
 
@@ -316,9 +388,9 @@
                 <input x-model="authRegister.phone" type="text" placeholder="Phone number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="tel">
                 <input x-model="authRegister.email" type="email" placeholder="Email" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="email">
                 <input x-model="authRegister.password" type="password" placeholder="Password (min. 8 characters)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="new-password">
-                <textarea x-model="authRegister.address" placeholder="Delivery address (optional now)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" rows="2"></textarea>
+                <textarea x-model="authRegister.address" placeholder="Address (optional)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" rows="2"></textarea>
                 <button type="button" @click="submitRegister()" :disabled="authLoading" class="w-full gaget-btn-primary text-center disabled:opacity-50">
-                    <span x-text="authLoading ? 'Creating account...' : 'Create account & continue'"></span>
+                    <span x-text="authLoading ? 'Creating account...' : (authPurpose === 'checkout' ? 'Create account & continue' : 'Create account')"></span>
                 </button>
             </div>
 
@@ -348,8 +420,7 @@
             <h3 class="text-xl font-bold text-slate-900">Order placed!</h3>
             <p class="text-sm text-slate-500 mt-2" x-text="orderMessage"></p>
             <div class="mt-6 flex flex-col gap-2">
-                <a :href="trackUrl || @json(route('website.track'))" class="gaget-btn-primary text-center text-sm py-3">Track my order</a>
-                <a href="{{ route('website.account') }}" class="gaget-btn-primary text-center text-sm py-3">View my orders</a>
+                <a href="{{ route('website.account') }}" class="gaget-btn-primary block w-full text-center text-sm py-3">View my orders</a>
                 <button type="button" @click="checkoutOpen=false" class="text-sm font-semibold text-slate-600 hover:text-slate-800">Continue shopping</button>
             </div>
         </div>

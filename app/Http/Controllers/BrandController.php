@@ -48,7 +48,17 @@ class BrandController extends Controller
             $data['logo_path'] = $request->file('logo')->store('brands', 'public');
         }
 
-        Brand::create($data);
+        $brand = Brand::create($data);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'brand' => [
+                    'id' => $brand->id,
+                    'name' => $brand->name,
+                ],
+            ]);
+        }
 
         return redirect()->route('brands.index')->with('success', 'Brand created successfully!');
     }
