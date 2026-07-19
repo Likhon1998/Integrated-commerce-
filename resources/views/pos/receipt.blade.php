@@ -97,9 +97,15 @@
                     <td style="padding-bottom: 6px; border-bottom: 1px dashed #000;">Return Credit:</td>
                     <td class="text-right" style="padding-bottom: 6px; border-bottom: 1px dashed #000;">- ৳{{ number_format($order->exchange_credit, 2) }}</td>
                 </tr>
+                @if(($order->discount_amount ?? 0) > 0)
+                <tr>
+                    <td>Less / Discount:</td>
+                    <td class="text-right">- ৳{{ number_format($order->discount_amount, 2) }}</td>
+                </tr>
+                @endif
                 <tr>
                     <td class="bold" style="padding-top: 6px;">Net Payable:</td>
-                    <td class="text-right bold" style="padding-top: 6px;">৳{{ number_format(max(0, $order->total_amount - $order->exchange_credit), 2) }}</td>
+                    <td class="text-right bold" style="padding-top: 6px;">৳{{ number_format($order->netPayable(), 2) }}</td>
                 </tr>
             @else
                 @if(($order->delivery_charge ?? 0) > 0)
@@ -111,14 +117,30 @@
                         <td class="bold">Delivery Charge:</td>
                         <td class="text-right bold">+ ৳{{ number_format($order->delivery_charge, 2) }}</td>
                     </tr>
+                    @if(($order->discount_amount ?? 0) > 0)
+                    <tr>
+                        <td class="bold">Less / Discount:</td>
+                        <td class="text-right bold">- ৳{{ number_format($order->discount_amount, 2) }}</td>
+                    </tr>
+                    @endif
                     <tr>
                         <td class="bold border-top" style="border-top: 1px dashed #000; padding-top:4px;">GRAND TOTAL:</td>
-                        <td class="text-right bold border-top" style="border-top: 1px dashed #000; padding-top:4px; font-size: 14px;">৳{{ number_format($order->total_amount, 2) }}</td>
+                        <td class="text-right bold border-top" style="border-top: 1px dashed #000; padding-top:4px; font-size: 14px;">৳{{ number_format($order->netPayable(), 2) }}</td>
                     </tr>
                 @else
                     <tr>
+                        <td>Items Total:</td>
+                        <td class="text-right">৳{{ number_format($order->total_amount, 2) }}</td>
+                    </tr>
+                    @if(($order->discount_amount ?? 0) > 0)
+                    <tr>
+                        <td>Less / Discount:</td>
+                        <td class="text-right">- ৳{{ number_format($order->discount_amount, 2) }}</td>
+                    </tr>
+                    @endif
+                    <tr>
                         <td class="bold">GRAND TOTAL:</td>
-                        <td class="text-right bold" style="font-size: 14px;">৳{{ number_format($order->total_amount, 2) }}</td>
+                        <td class="text-right bold" style="font-size: 14px;">৳{{ number_format($order->netPayable(), 2) }}</td>
                     </tr>
                 @endif
             @endif

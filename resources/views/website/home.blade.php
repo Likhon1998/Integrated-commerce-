@@ -1,10 +1,10 @@
-@extends('website.layout')
+﻿@extends('website.layout')
 @php $ws = app(\App\Services\WebsiteService::class); @endphp
 
 @section('content')
 
-@php $slideCount = max($heroSlides->count(), 1); @endphp
-<section class="gaget-hero" x-data="{ slide: 0, total: {{ $slideCount }} }" x-init="if(total>1) setInterval(()=>{ slide=(slide+1)%total }, 8000)">
+<section class="gaget-hero" x-data="{ slide: 0, total: {{ max($heroSlides->count(), 1) }} }"
+         @if($heroSlides->count() > 1) x-init="setInterval(()=>{ slide=(slide+1)%total }, 6000)" @endif>
     @if($heroSlides->count() > 1)
         <button type="button" @click="slide=(slide-1+total)%total" class="gaget-hero-arrow left" aria-label="Prev">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
@@ -15,66 +15,43 @@
     @endif
 
     @forelse($heroSlides as $i => $slide)
-        <div x-show="slide==={{ $i }}" x-cloak>
-            <div class="gaget-hero-inner">
-                <div class="gaget-hero-grid">
-                    <div>
-                        <span class="gaget-hero-badge">{{ strtoupper($slide->badge_text ?? 'NEW ARRIVAL') }}</span>
-                        <h1 class="gaget-hero-title">{{ $slide->title }}</h1>
-                        <p class="gaget-hero-desc">{{ $slide->description }}</p>
-                        @if($slide->price_from)
-                            <p class="gaget-hero-price">From <strong>{{ $ws->formatPrice($slide->price_from, $settings) }}</strong></p>
-                        @endif
-                        <div class="gaget-hero-btns">
-                            <a href="{{ $slide->button_url ?? route('website.shop') }}" class="gaget-btn-primary">{{ $slide->button_text ?? 'Shop Now' }}</a>
-                            <a href="{{ $slide->learn_more_url ?? route('website.shop') }}" class="gaget-btn-outline">Learn More</a>
-                        </div>
-                        @if($heroSlides->count() > 1)
-                            <div class="gaget-hero-dots">
-                                @foreach($heroSlides as $di => $ds)
-                                    <button type="button" @click="slide={{ $di }}" class="gaget-hero-dot" :class="slide==={{ $di }}?'active':''"></button>
-                                @endforeach
-                            </div>
-                        @endif
-                    </div>
-                    <div class="gaget-hero-visual">
-                        @if($slide->image_path)
-                            <img src="{{ public_storage_url($slide->image_path) }}" alt="{{ $slide->title }}">
-                        @else
-                            <img src="{{ config('website_assets.hero') }}" alt="{{ $slide->title }}">
-                            <img src="{{ config('website_assets.hero_secondary') }}" alt="" class="hidden lg:block" style="max-height:300px">
-                        @endif
-                    </div>
+        @php
+            $posterUrl = $slide->image_path
+                ? public_storage_url($slide->image_path)
+                : config('website_assets.hero');
+            $link = $slide->button_url ?: null;
+        @endphp
+        <div class="gaget-poster-slide" x-show="slide==={{ $i }}" @if($i > 0) x-cloak @endif>
+            @if($link)
+                <a href="{{ $link }}" class="gaget-poster-link" aria-label="{{ $slide->title }}">
+                    <img src="{{ $posterUrl }}" alt="{{ $slide->title }}" class="gaget-poster-img">
+                </a>
+            @else
+                <div class="gaget-poster-link">
+                    <img src="{{ $posterUrl }}" alt="{{ $slide->title }}" class="gaget-poster-img">
                 </div>
-            </div>
+            @endif
         </div>
     @empty
-        <div class="gaget-hero-inner">
-            <div class="gaget-hero-grid">
-                <div>
-                    <span class="gaget-hero-badge">NEW ARRIVAL</span>
-                    <h1 class="gaget-hero-title">iPhone 15 Pro Max</h1>
-                    <p class="gaget-hero-desc">Titanium. So strong. So light. So Pro.</p>
-                    <p class="gaget-hero-price">From <strong>$1,199.00</strong></p>
-                    <div class="gaget-hero-btns">
-                        <a href="{{ route('website.shop') }}" class="gaget-btn-primary">Shop Now</a>
-                        <a href="{{ route('website.shop') }}" class="gaget-btn-outline">Learn More</a>
-                    </div>
-                    <div class="gaget-hero-dots"><span class="gaget-hero-dot active"></span><span class="gaget-hero-dot"></span><span class="gaget-hero-dot"></span></div>
-                </div>
-                <div class="gaget-hero-visual">
-                    <img src="{{ config('website_assets.hero') }}" alt="iPhone 15 Pro Max">
-                    <img src="{{ config('website_assets.hero_secondary') }}" alt="" class="hidden lg:block" style="max-height:300px">
-                </div>
-            </div>
+        <div class="gaget-poster-slide gaget-poster-empty">
+            <div class="gaget-poster-empty-inner" aria-hidden="true"></div>
         </div>
     @endforelse
+
+    @if($heroSlides->count() > 1)
+        <div class="gaget-hero-dots gaget-poster-dots">
+            @foreach($heroSlides as $di => $ds)
+                <button type="button" @click="slide={{ $di }}" class="gaget-hero-dot" :class="slide==={{ $di }}?'active':''" aria-label="Poster {{ $di + 1 }}"></button>
+            @endforeach
+        </div>
+    @endif
 </section>
 
-{{-- Features --}}
+{{-- Features (CMS → Landing Page) --}}
+@if($features->isNotEmpty())
 <section class="gaget-features hidden md:block">
-    <div class="gaget-features-grid">
-        @forelse($features as $feature)
+    <div class="gaget-features-grid" style="grid-template-columns: repeat({{ min($features->count(), 5) }}, 1fr);">
+        @foreach($features as $feature)
             <div class="gaget-feature-card">
                 <div class="gaget-feature-icon">@include('website.partials.feature-icon', ['icon' => $feature->icon])</div>
                 <div>
@@ -82,22 +59,16 @@
                     @if($feature->subtitle)<p class="gaget-feature-sub">{{ $feature->subtitle }}</p>@endif
                 </div>
             </div>
-        @empty
-            @foreach([['truck','Free Shipping','On all orders over $50'],['return','30-Day Returns','Hassle-free returns'],['lock','Secure Payments','100% secure payments'],['shield','1 Year Warranty','Product warranty'],['support','24/7 Support','Dedicated support']] as $f)
-                <div class="gaget-feature-card">
-                    <div class="gaget-feature-icon">@include('website.partials.feature-icon', ['icon'=>$f[0]])</div>
-                    <div><p class="gaget-feature-title">{{ $f[1] }}</p><p class="gaget-feature-sub">{{ $f[2] }}</p></div>
-                </div>
-            @endforeach
-        @endforelse
+        @endforeach
     </div>
 </section>
+@endif
 
 {{-- Categories --}}
 <section class="gaget-section">
     <div class="gaget-section-header">
         <h2 class="gaget-section-title">Shop By Category</h2>
-        <a href="{{ route('website.shop') }}" class="gaget-section-link">View All Categories →</a>
+        <a href="{{ route('website.shop') }}" class="gaget-section-link">View All Categories ΓåÆ</a>
     </div>
     <div class="gaget-cat-grid">
         @forelse($categories as $category)
@@ -120,11 +91,11 @@
     </div>
 </section>
 
-{{-- Promo banners --}}
+{{-- Promo banners (CMS → Landing Page) --}}
+@if($promoBanners->isNotEmpty())
 <section class="gaget-section" style="padding-top:0">
     <div class="gaget-promo-grid">
-        @php $promoImgs = ['headphones','macbook','watch']; @endphp
-        @forelse($promoBanners as $idx => $banner)
+        @foreach($promoBanners as $banner)
             <div class="gaget-promo {{ $banner->theme === 'light' ? 'gaget-promo-light' : 'gaget-promo-dark' }}">
                 <div class="gaget-promo-content">
                     <p class="gaget-promo-title">{{ $banner->title }}</p>
@@ -136,42 +107,21 @@
                         <a href="{{ $banner->button_url ?? route('website.shop') }}" class="gaget-promo-btn">{{ $banner->button_text ?? 'Shop Now' }}</a>
                     @endif
                 </div>
-                <img src="{{ $banner->image_path ? public_storage_url($banner->image_path) : config('website_assets.promos.'.$promoImgs[$idx % 3]) }}" alt="" class="gaget-promo-img">
+                @if($banner->image_path)
+                    <img src="{{ public_storage_url($banner->image_path) }}" alt="{{ $banner->title }}" class="gaget-promo-img">
+                @endif
             </div>
-        @empty
-            <div class="gaget-promo gaget-promo-dark">
-                <div class="gaget-promo-content">
-                    <p class="gaget-promo-title">Summer Sale</p><p class="gaget-promo-sub">Up to 40% Off</p>
-                    <a href="{{ route('website.shop') }}" class="gaget-promo-btn">Shop Now</a>
-                </div>
-                <img src="{{ config('website_assets.promos.headphones') }}" alt="" class="gaget-promo-img">
-            </div>
-            <div class="gaget-promo gaget-promo-light">
-                <div class="gaget-promo-content">
-                    <p class="gaget-promo-title">MacBook Air</p><p class="gaget-promo-sub">Supercharged by M3</p>
-                    <p class="gaget-promo-price">From <strong>$1,099.00</strong></p>
-                    <a href="{{ route('website.shop') }}" class="gaget-promo-btn-text">Shop Now</a>
-                </div>
-                <img src="{{ config('website_assets.promos.macbook') }}" alt="" class="gaget-promo-img">
-            </div>
-            <div class="gaget-promo gaget-promo-dark">
-                <div class="gaget-promo-content">
-                    <p class="gaget-promo-title">Best Deals</p><p class="gaget-promo-sub">Smartwatches</p>
-                    <p class="gaget-promo-price">From <strong>$99.00</strong></p>
-                    <a href="{{ route('website.shop') }}" class="gaget-promo-btn">Shop Now</a>
-                </div>
-                <img src="{{ config('website_assets.promos.watch') }}" alt="" class="gaget-promo-img">
-            </div>
-        @endforelse
+        @endforeach
     </div>
 </section>
+@endif
 
 {{-- Best Sellers --}}
 <section class="gaget-bestsellers-bg">
     <div class="gaget-section">
         <div class="gaget-section-header">
             <h2 class="gaget-section-title">Best Sellers</h2>
-            <a href="{{ route('website.shop', ['filter'=>'bestsellers']) }}" class="gaget-section-link">View All Products →</a>
+            <a href="{{ route('website.shop', ['filter'=>'bestsellers']) }}" class="gaget-section-link">View All Products ΓåÆ</a>
         </div>
         @php $items = $bestSellers; $perPage = 5; $pages = max(1, (int) ceil($items->count() / $perPage)); @endphp
         <div class="gaget-carousel-wrap" x-data="{ page: 0, pages: {{ $pages }} }">
@@ -187,7 +137,7 @@
                 </div>
             @endfor
             @if($items->isEmpty())
-                <p class="text-center text-gray-500 py-10 col-span-5">Add products in Inventory → Products to show them here.</p>
+                <p class="text-center text-gray-500 py-10 col-span-5">Add products in Inventory ΓåÆ Products to show them here.</p>
             @endif
         </div>
     </div>
@@ -215,8 +165,8 @@
     <div class="grid gap-4 md:grid-cols-3">
         @foreach($featuredReviews as $review)
             <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                <div class="mb-2 text-amber-500 text-sm">{{ str_repeat('★', (int) $review->rating) }}{{ str_repeat('☆', max(0, 5 - (int) $review->rating)) }}</div>
-                <p class="text-sm text-slate-600 leading-relaxed">“{{ $review->body }}”</p>
+                <div class="mb-2 text-amber-500 text-sm">{{ str_repeat('Γÿà', (int) $review->rating) }}{{ str_repeat('Γÿå', max(0, 5 - (int) $review->rating)) }}</div>
+                <p class="text-sm text-slate-600 leading-relaxed">ΓÇ£{{ $review->body }}ΓÇ¥</p>
                 <div class="mt-4 text-sm font-bold text-slate-900">{{ $review->customer_name }}</div>
                 @if($review->customer_title)
                     <div class="text-xs text-slate-400">{{ $review->customer_title }}</div>
@@ -231,7 +181,7 @@
 <section class="gaget-section">
     <div class="gaget-section-header">
         <h2 class="gaget-section-title">From the blog</h2>
-        <a href="{{ route('website.blogs') }}" class="gaget-section-link">View all →</a>
+        <a href="{{ route('website.blogs') }}" class="gaget-section-link">View all ΓåÆ</a>
     </div>
     <div class="grid gap-4 md:grid-cols-3">
         @foreach($latestBlogs as $post)
@@ -241,7 +191,7 @@
                     @if($post->category)
                         <div class="text-[10px] font-bold uppercase tracking-wider text-blue-600">{{ $post->category->name }}</div>
                     @endif
-                    <div class="text-xs text-slate-400 mt-0.5">{{ optional($post->published_at)->format('M d, Y') }} · {{ $post->viewsLabel() }}</div>
+                    <div class="text-xs text-slate-400 mt-0.5">{{ optional($post->published_at)->format('M d, Y') }} ┬╖ {{ $post->viewsLabel() }}</div>
                     <div class="mt-1 font-bold text-slate-900 text-sm">{{ $post->title }}</div>
                     <p class="mt-1 text-sm text-slate-500 line-clamp-2">{{ $post->excerpt }}</p>
                 </div>
@@ -252,3 +202,4 @@
 @endif
 
 @endsection
+

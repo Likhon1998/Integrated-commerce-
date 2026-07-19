@@ -63,7 +63,7 @@
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <h3 class="text-base font-bold text-slate-900">Homepage features</h3>
-                    <p class="text-sm text-slate-500">Icons under the hero (shipping, warranty, etc.).</p>
+                    <p class="text-sm text-slate-500">Trust bar under the hero (shipping, warranty, support…). Fully CMS-managed — edits show on the storefront.</p>
                 </div>
                 <button type="button" @click="addFeature()" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">+ Feature</button>
             </div>
@@ -71,7 +71,17 @@
                 <template x-for="(f, i) in features" :key="i">
                     <div class="grid gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 md:grid-cols-12">
                         <input type="hidden" :name="'features['+i+'][id]'" :value="f.id || ''">
-                        <input :name="'features['+i+'][icon]'" x-model="f.icon" placeholder="icon" class="md:col-span-2 rounded-lg border-slate-200 text-sm">
+                        <select :name="'features['+i+'][icon]'" x-model="f.icon" class="md:col-span-2 rounded-lg border-slate-200 text-sm">
+                            <option value="truck">Truck</option>
+                            <option value="return">Return</option>
+                            <option value="lock">Lock</option>
+                            <option value="shield">Shield</option>
+                            <option value="support">Support</option>
+                            <option value="shipping">Shipping</option>
+                            <option value="payment">Payment</option>
+                            <option value="warranty">Warranty</option>
+                            <option value="chat">Chat</option>
+                        </select>
                         <input :name="'features['+i+'][title]'" x-model="f.title" placeholder="Title" class="md:col-span-3 rounded-lg border-slate-200 text-sm">
                         <input :name="'features['+i+'][subtitle]'" x-model="f.subtitle" placeholder="Subtitle" class="md:col-span-4 rounded-lg border-slate-200 text-sm">
                         <input type="number" :name="'features['+i+'][sort_order]'" x-model="f.sort_order" class="md:col-span-1 rounded-lg border-slate-200 text-sm">
@@ -81,6 +91,7 @@
                         <button type="button" @click="features.splice(i,1)" class="md:col-span-1 text-xs font-bold text-rose-600">Remove</button>
                     </div>
                 </template>
+                <p x-show="features.length === 0" class="text-sm text-slate-400 py-2" x-cloak>No features yet. Click “+ Feature” to add items for the homepage trust bar.</p>
             </div>
         </div>
 
@@ -88,18 +99,18 @@
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <h3 class="text-base font-bold text-slate-900">Promo banners</h3>
-                    <p class="text-sm text-slate-500">Homepage promo cards linked to shop collections.</p>
+                    <p class="text-sm text-slate-500">Homepage promo cards. Upload an image for each card — images are stored and shown from the database.</p>
                 </div>
                 <button type="button" @click="addBanner()" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">+ Banner</button>
             </div>
             <div class="mt-4 space-y-4">
                 <template x-for="(b, i) in banners" :key="i">
-                    <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4 space-y-2">
+                    <div class="rounded-xl border border-slate-100 bg-slate-50/70 p-4 space-y-3">
                         <input type="hidden" :name="'banners['+i+'][id]'" :value="b.id || ''">
                         <div class="grid gap-2 md:grid-cols-2">
                             <input :name="'banners['+i+'][title]'" x-model="b.title" placeholder="Title" class="rounded-lg border-slate-200 text-sm">
                             <input :name="'banners['+i+'][subtitle]'" x-model="b.subtitle" placeholder="Subtitle" class="rounded-lg border-slate-200 text-sm">
-                            <input type="number" step="0.01" :name="'banners['+i+'][price_from]'" x-model="b.price_from" placeholder="Price from" class="rounded-lg border-slate-200 text-sm">
+                            <input type="number" step="0.01" :name="'banners['+i+'][price_from]'" x-model="b.price_from" placeholder="Price from (optional)" class="rounded-lg border-slate-200 text-sm">
                             <input :name="'banners['+i+'][button_url]'" x-model="b.button_url" placeholder="Button URL" class="rounded-lg border-slate-200 text-sm">
                             <input :name="'banners['+i+'][button_text]'" x-model="b.button_text" placeholder="Button text" class="rounded-lg border-slate-200 text-sm">
                             <select :name="'banners['+i+'][theme]'" x-model="b.theme" class="rounded-lg border-slate-200 text-sm">
@@ -108,8 +119,16 @@
                             </select>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
-                            <input type="file" :name="'banners['+i+'][image]'" accept="image/*" class="text-sm">
-                            <input type="number" :name="'banners['+i+'][sort_order]'" x-model="b.sort_order" class="w-20 rounded-lg border-slate-200 text-sm">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <template x-if="b.image_path">
+                                    <img :src="'{{ asset('storage') }}/' + b.image_path" alt="" class="h-14 w-14 rounded-lg object-cover border border-slate-200 bg-white">
+                                </template>
+                                <div>
+                                    <label class="text-[11px] font-bold uppercase text-slate-500">Banner image</label>
+                                    <input type="file" :name="'banners['+i+'][image]'" accept="image/jpeg,image/png,image/webp,image/gif" class="mt-1 block text-sm">
+                                </div>
+                            </div>
+                            <input type="number" :name="'banners['+i+'][sort_order]'" x-model="b.sort_order" class="w-20 rounded-lg border-slate-200 text-sm" title="Sort order">
                             <label class="flex items-center gap-1 text-xs font-semibold text-slate-600">
                                 <input type="checkbox" :name="'banners['+i+'][is_active]'" value="1" x-model="b.is_active" class="rounded border-slate-300"> Active
                             </label>
@@ -117,6 +136,7 @@
                         </div>
                     </div>
                 </template>
+                <p x-show="banners.length === 0" class="text-sm text-slate-400 py-2" x-cloak>No promo banners yet. Click “+ Banner” and upload an image for each card.</p>
             </div>
         </div>
 

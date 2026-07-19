@@ -28,7 +28,9 @@ class OnlineOrderController extends Controller
 
         session(['online_orders_seen_at' => now()->toDateTimeString()]);
 
-        $statsQuery = Order::where('shop_id', $shopId)->whereNull('counter_id');
+        $statsQuery = Order::where('shop_id', $shopId)
+            ->whereNull('counter_id')
+            ->where('invoice_no', 'like', 'WEB-%');
         if ($filterDate) {
             $statsQuery->whereDate('created_at', $filterDate);
         }
@@ -50,6 +52,7 @@ class OnlineOrderController extends Controller
         // Preload recent orders for instant client-side filtering (no page reload).
         $liveQuery = Order::where('shop_id', $shopId)
             ->whereNull('counter_id')
+            ->where('invoice_no', 'like', 'WEB-%')
             ->with([
                 'customer:id,name,phone,address',
                 'items:id,order_id,product_id,quantity,subtotal',
@@ -138,6 +141,7 @@ class OnlineOrderController extends Controller
 
         $orders = Order::where('shop_id', $shopId)
             ->whereNull('counter_id')
+            ->where('invoice_no', 'like', 'WEB-%')
             ->with('customer:id,name,phone')
             ->latest('created_at')
             ->limit(10)

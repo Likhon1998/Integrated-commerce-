@@ -107,7 +107,7 @@ class CounterSessionService
         $otherSales = 0.0;
 
         foreach ($completed as $order) {
-            $amount = (float) $order->total_amount;
+            $amount = $order->netPayable();
             $method = strtolower((string) $order->payment_method);
 
             if ($this->isPureCash($method)) {
@@ -127,11 +127,11 @@ class CounterSessionService
 
         $cashRefunds = $refunded
             ->filter(fn ($o) => $this->isPureCash(strtolower((string) $o->payment_method)) || str_contains(strtolower((string) $o->payment_method), 'cash'))
-            ->sum(fn ($o) => (float) $o->total_amount);
+            ->sum(fn ($o) => $o->netPayable());
 
         return [
             'order_count' => $completed->count(),
-            'total_sales' => round((float) $completed->sum('total_amount'), 2),
+            'total_sales' => round((float) $completed->sum(fn ($o) => $o->netPayable()), 2),
             'cash_sales' => round($cashSales, 2),
             'card_sales' => round($cardSales, 2),
             'mobile_sales' => round($mobileSales, 2),

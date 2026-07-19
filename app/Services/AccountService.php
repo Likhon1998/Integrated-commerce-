@@ -132,10 +132,11 @@ class AccountService
         $paymentAccount = $this->resolvePaymentAccount($order);
         $revenue = $this->getAccount($order->shop_id, 'REVENUE');
         $cogs = $this->calculateCogs($order);
+        $netAmount = $order->netPayable();
 
         $lines = [
-            ['account' => $paymentAccount, 'debit' => $order->total_amount, 'credit' => 0, 'counter_id' => $order->counter_id],
-            ['account' => $revenue, 'debit' => 0, 'credit' => $order->total_amount, 'counter_id' => $order->counter_id],
+            ['account' => $paymentAccount, 'debit' => $netAmount, 'credit' => 0, 'counter_id' => $order->counter_id],
+            ['account' => $revenue, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => $order->counter_id],
         ];
 
         if ($cogs > 0) {
@@ -234,10 +235,11 @@ class AccountService
 
         $revenue = $this->getAccount($order->shop_id, 'REVENUE');
         $cogs = $this->calculateCogs($order);
+        $netAmount = $order->netPayable();
 
         $lines = [
-            ['account' => $revenue, 'debit' => $order->total_amount, 'credit' => 0, 'counter_id' => $order->counter_id],
-            ['account' => $paymentAccount, 'debit' => 0, 'credit' => $order->total_amount, 'counter_id' => $order->counter_id],
+            ['account' => $revenue, 'debit' => $netAmount, 'credit' => 0, 'counter_id' => $order->counter_id],
+            ['account' => $paymentAccount, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => $order->counter_id],
         ];
 
         if ($cogs > 0) {

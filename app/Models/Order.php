@@ -13,7 +13,8 @@ class Order extends Model
         'customer_id', 
         'counter_id', 
         'invoice_no', 
-        'total_amount', 
+        'total_amount',
+        'discount_amount',
         'paid_amount', 
         'change_amount', 
         'payment_method',
@@ -29,6 +30,22 @@ class Order extends Model
         'return_qty',
         'exchange_credit',
     ];
+
+    protected $casts = [
+        'total_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'paid_amount' => 'decimal:2',
+        'change_amount' => 'decimal:2',
+        'delivery_charge' => 'decimal:2',
+        'exchange_credit' => 'decimal:2',
+        'is_exchange_receipt' => 'boolean',
+    ];
+
+    /** Gross − discount − exchange credit (what the customer owes). */
+    public function netPayable(): float
+    {
+        return max(0, (float) $this->total_amount - (float) ($this->discount_amount ?? 0) - (float) ($this->exchange_credit ?? 0));
+    }
 
     // The items on the receipt
     public function items()

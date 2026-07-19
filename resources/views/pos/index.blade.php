@@ -192,6 +192,7 @@
     box-shadow: 0 1px 2px rgba(15,23,42,.04);
     overflow: hidden;
 }
+.panel-left { overflow: visible; }
 .panel-right {
     overflow-y: auto;
     overflow-x: hidden;
@@ -202,6 +203,9 @@
     padding: 12px 14px 10px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0; background: var(--surface);
+    overflow: visible;
+    position: relative;
+    z-index: 25;
 }
 .top-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .icon-btn {
@@ -213,23 +217,69 @@
 .icon-btn:hover { color: var(--text-1); background: #eef2f7; }
 .icon-btn svg { width: 16px; height: 16px; }
 
-.cat-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.cat-row::-webkit-scrollbar { display: none; }
-.cat-pill {
-    padding: 7px 14px; border-radius: 999px;
-    font-size: 12.5px; font-weight: 650; white-space: nowrap; cursor: pointer;
-    border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
-    font-family: var(--font);
+.filter-label {
+    font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 6px;
 }
-.cat-pill:hover { color: var(--text-1); border-color: #cbd5e1; }
-.cat-pill.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+.cat-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;
+}
+.cat-item {
+    position: relative; z-index: 1;
+}
+.cat-item.open { z-index: 40; }
+.cat-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 11px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2);
+    font-family: var(--font); font-size: 12.5px; font-weight: 700; color: var(--text-2);
+    white-space: nowrap;
+}
+.cat-btn:hover, .cat-item.open .cat-btn {
+    border-color: #93c5fd; background: #eff6ff; color: #1d4ed8;
+}
+.cat-btn.active {
+    background: var(--blue); border-color: var(--blue); color: #fff;
+}
+.cat-btn.active .cat-btn-count {
+    background: rgba(255,255,255,.2); border-color: transparent; color: #fff;
+}
+.cat-btn-count {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+    color: var(--text-3); background: #fff; border: 1px solid var(--border);
+    border-radius: 999px; padding: 1px 6px; min-width: 22px; text-align: center;
+}
+.cat-btn-chevron {
+    width: 12px; height: 12px; opacity: .7; transition: transform .15s;
+}
+.cat-item.open .cat-btn-chevron { transform: rotate(180deg); }
+.cat-brand-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; min-width: 200px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 28px rgba(15,23,42,.14); padding: 4px 0; z-index: 50;
+}
+.cat-brand-menu-title {
+    padding: 6px 12px 4px; font-size: 10px; font-weight: 800; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-3);
+}
+.cat-brand-item {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 12px; border: none; background: transparent; cursor: pointer;
+    font-family: var(--font); font-size: 12.5px; font-weight: 650; color: var(--text-1); text-align: left;
+}
+.cat-brand-item:hover { background: #f1f5f9; }
+.cat-brand-item.active { background: #f0fdfa; color: #0f766e; }
+.p-brand-tag {
+    font-size: 10px; font-weight: 700; color: var(--text-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .product-list {
     flex: 1 1 0; min-height: 0; overflow-y: auto;
     padding: 12px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 8px;
     background: var(--bg);
     align-content: start;
     scrollbar-width: none;
@@ -240,7 +290,7 @@
     position: relative;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     padding: 0;
     cursor: pointer;
     display: flex; flex-direction: column; overflow: hidden;
@@ -264,40 +314,40 @@
 }
 .product-card.in-cart .p-name { color: #1e3a8a; }
 .p-selected-badge {
-    position: absolute; top: 8px; right: 8px; z-index: 2;
-    min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px;
+    position: absolute; top: 6px; right: 6px; z-index: 2;
+    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
     background: var(--blue); color: #fff;
-    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center;
     box-shadow: 0 4px 10px rgba(37,99,235,.4);
 }
 .p-in-cart-tag {
-    position: absolute; top: 8px; left: 8px; z-index: 2;
-    font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+    position: absolute; top: 6px; left: 6px; z-index: 2;
+    font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
     color: #1d4ed8; background: #fff; border: 1px solid #93c5fd;
-    border-radius: 999px; padding: 3px 8px;
+    border-radius: 999px; padding: 2px 6px;
 }
 .p-img-wrap {
-    width: 100%; height: 110px;
+    width: 100%; height: 72px;
     background: var(--surface-2);
     border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
-.p-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
+.p-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 6px; }
 .p-avatar {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 26px; font-weight: 700; color: var(--text-3);
+    font-size: 20px; font-weight: 700; color: var(--text-3);
     background: linear-gradient(180deg, #f8fafc, #eef2f7);
 }
-.p-body { padding: 10px 11px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.p-body { padding: 8px 9px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .p-name {
-    font-size: 13px; font-weight: 650; color: var(--text-1); line-height: 1.3;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.5em;
+    font-size: 12px; font-weight: 650; color: var(--text-1); line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.4em;
 }
-.p-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: auto; }
-.p-price { font-size: 15px; font-weight: 700; color: var(--text-1); }
-.p-price-sym { font-size: 11px; color: var(--text-3); margin-right: 2px; font-weight: 650; }
+.p-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: auto; }
+.p-price { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.p-price-sym { font-size: 10px; color: var(--text-3); margin-right: 2px; font-weight: 650; }
 .stock-chip {
     font-size: 10.5px; font-weight: 650; padding: 3px 8px;
     border-radius: 999px; border: 1px solid; white-space: nowrap;
@@ -642,6 +692,8 @@
 .pay-summary-cell.paid .ps-val { color: #0f172a; }
 .pay-summary-cell.change.ok .ps-val { color: var(--green); }
 .pay-summary-cell.change.err .ps-val { color: var(--red); }
+.pay-summary-cell.change.less .ps-val { color: #b45309; }
+.pay-summary-cell.change.less .ps-label { color: #b45309; }
 
 .invoice-overlay { z-index: 90; }
 .invoice-modal {
@@ -788,9 +840,15 @@
                     Close day
                 </a>
             @endif
-            <div class="status-badge" :class="isOnline ? 'online' : 'offline'">
+            <div class="status-badge" :class="isOnline ? 'online' : 'offline'"
+                 @click="isOnline && pendingOfflineCount() > 0 && (syncPromptOpen = true)"
+                 :title="pendingOfflineCount() > 0 ? (pendingOfflineCount() + ' offline bill(s) waiting') : ''"
+                 :style="pendingOfflineCount() > 0 ? 'cursor:pointer' : ''">
                 <span class="status-dot"></span>
                 <span x-text="isOnline ? 'Online' : 'Offline'"></span>
+                <span x-show="pendingOfflineCount() > 0" x-cloak
+                      style="margin-left:4px;background:rgba(255,255,255,.2);padding:0 5px;border-radius:999px;font-size:10px;font-weight:800"
+                      x-text="pendingOfflineCount()"></span>
             </div>
             <div class="pos-user">
                 <div class="pos-user-avatar">{{ strtoupper(substr(Auth::user()->name, 0, 1)) }}</div>
@@ -839,20 +897,68 @@
     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
     <div class="panel-left">
         <div class="panel-top">
-            <!-- Category Pills -->
-            <div class="cat-row">
-                <button @click="selectedCategory = 'all'"
-                    :class="selectedCategory == 'all' ? 'active' : ''"
-                    class="cat-pill">All</button>
-                @foreach($categories as $cat)
-                    <button @click="selectedCategory = '{{ $cat->id }}'"
-                        :class="selectedCategory == '{{ $cat->id }}' ? 'active' : ''"
-                        class="cat-pill">{{ $cat->name }}</button>
-                @endforeach
+            <div class="filter-label">Category</div>
+            <div class="cat-bar" @keydown.escape.window="openCatId = null">
+                {{-- All products --}}
+                <div class="cat-item">
+                    <button type="button"
+                            class="cat-btn"
+                            :class="selectedCategory === 'all' ? 'active' : ''"
+                            @click="pickAllProducts()">
+                        All
+                        <span class="cat-btn-count" x-text="products.length"></span>
+                    </button>
+                </div>
+
+                {{-- Every category = its own brand dropdown --}}
+                <template x-for="cat in categories" :key="'cat-btn-' + cat.id">
+                    <div class="cat-item"
+                         :class="openCatId == String(cat.id) ? 'open' : ''"
+                         @mouseenter="openCatId = String(cat.id)"
+                         @mouseleave="openCatId = null">
+                        <button type="button"
+                                class="cat-btn"
+                                :class="selectedCategory == String(cat.id) ? 'active' : ''"
+                                @click="toggleCatMenu(cat.id)">
+                            <span x-text="cat.name"></span>
+                            <span class="cat-btn-count" x-text="categoryProductCount(cat.id)"></span>
+                            <svg class="cat-btn-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        <div class="cat-brand-menu" x-show="openCatId == String(cat.id)" x-cloak>
+                            <div class="cat-brand-menu-title">Brands</div>
+                            <button type="button" class="cat-brand-item"
+                                    :class="selectedCategory == String(cat.id) && selectedBrand === 'all' ? 'active' : ''"
+                                    @click="pickCategory(cat.id)">
+                                <span>All brands</span>
+                                <span class="cat-btn-count" x-text="categoryProductCount(cat.id)"></span>
+                            </button>
+                            <template x-for="brand in brandsForCategory(cat.id)" :key="'brand-' + cat.id + '-' + brand.id">
+                                <button type="button" class="cat-brand-item"
+                                        :class="selectedCategory == String(cat.id) && selectedBrand == String(brand.id) ? 'active' : ''"
+                                        @click="pickBrand(cat.id, brand.id)">
+                                    <span x-text="brand.name"></span>
+                                    <span class="cat-btn-count" x-text="brandProductCount(cat.id, brand.id)"></span>
+                                </button>
+                            </template>
+                            <button type="button" class="cat-brand-item"
+                                    x-show="unbrandedCount(cat.id) > 0"
+                                    :class="selectedCategory == String(cat.id) && selectedBrand === 'none' ? 'active' : ''"
+                                    @click="pickBrand(cat.id, 'none')">
+                                <span>No brand</span>
+                                <span class="cat-btn-count" x-text="unbrandedCount(cat.id)"></span>
+                            </button>
+                            <div x-show="brandsForCategory(cat.id).length === 0 && unbrandedCount(cat.id) === 0"
+                                 style="padding:8px 12px;font-size:12px;color:var(--text-3)">No products</div>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
 
-        <!-- Product Grid -->
+        <!-- Product grid with pictures (always visible) -->
         <div class="product-list">
             <template x-for="product in filteredProducts()" :key="product.id">
                 <div @click="addToCart(product)"
@@ -880,6 +986,10 @@
                     <div class="p-body">
                         <div class="p-name" x-text="product.name" :title="product.name"></div>
                         <div class="p-meta">
+                            <div class="p-brand-tag"
+                                 x-show="product.brand_name || product.category_name"
+                                 x-text="[product.brand_name, product.category_name].filter(Boolean).join(' · ')"
+                                 x-cloak></div>
                             <div class="p-barcode" x-text="product.barcode || '—'"></div>
                         </div>
                         <div class="p-foot">
@@ -898,7 +1008,7 @@
             <div x-show="filteredProducts().length === 0"
                  style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;color:var(--text-3);text-align:center">
                 <p style="font-size:14px;font-weight:650;color:var(--text-2)">No products found</p>
-                <p style="font-size:12.5px;margin-top:4px">Try another search, or add stock from Inventory.</p>
+                <p style="font-size:12.5px;margin-top:4px">Try another category/brand, or clear search.</p>
             </div>
         </div>
     </div>
@@ -1106,15 +1216,18 @@
 
             <div class="modal-body">
                 <div class="amount-display">
-                    <div class="amount-label">Total amount due</div>
+                    <div class="amount-label">Bill total</div>
                     <div class="amount-value">
                         <span class="ccy">Tk</span><span x-text="formatNumber(getPayableTotal())"></span>
                     </div>
                     <div x-show="getDiscount() > 0" class="amount-note" style="color:var(--green)" x-cloak>
-                         Saved Tk<span x-text="formatNumber(getDiscount())"></span>
+                         Discount Tk<span x-text="formatNumber(getDiscount())"></span>
                     </div>
                     <div x-show="isExchangeMode" class="amount-note" style="color:var(--amber)" x-cloak>
                         Exchange credit: -Tk<span x-text="formatNumber(exchangeCredit)"></span>
+                    </div>
+                    <div class="amount-note" style="color:var(--slate);margin-top:4px">
+                        Enter what the customer pays — any shortfall is counted as Less.
                     </div>
                 </div>
 
@@ -1127,24 +1240,24 @@
 
                 <div>
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                        <label class="field-label" style="margin-bottom:0">Payment method</label>
+                        <label class="field-label" style="margin-bottom:0">Customer pays</label>
                         <span style="font-size:9px;font-weight:800;color:var(--teal);background:var(--teal-bg);padding:2px 7px;border-radius:100px;border:1px solid var(--teal-border)">Split pay</span>
                     </div>
                     <div class="split-grid">
                         <div class="sp-row">
                             <div class="sp-label">Cash</div>
-                            <input type="number" x-model.number="payCash" class="sp-input" placeholder="0"
-                                   @keydown.enter.prevent="if (getChange() >= 0 && !isProcessing) submitOrder()">
+                            <input type="number" x-model.number="payCash" class="sp-input" placeholder="0" min="0" step="0.01"
+                                   @keydown.enter.prevent="if (canConfirmSale() && !isProcessing) submitOrder()">
                         </div>
                         <div class="sp-row">
                             <div class="sp-label">Card</div>
-                            <input type="number" x-model.number="payCard" class="sp-input" placeholder="0"
-                                   @keydown.enter.prevent="if (getChange() >= 0 && !isProcessing) submitOrder()">
+                            <input type="number" x-model.number="payCard" class="sp-input" placeholder="0" min="0" step="0.01"
+                                   @keydown.enter.prevent="if (canConfirmSale() && !isProcessing) submitOrder()">
                         </div>
                         <div class="sp-row">
                             <div class="sp-label">bKash</div>
-                            <input type="number" x-model.number="payBkash" class="sp-input" placeholder="0"
-                                   @keydown.enter.prevent="if (getChange() >= 0 && !isProcessing) submitOrder()">
+                            <input type="number" x-model.number="payBkash" class="sp-input" placeholder="0" min="0" step="0.01"
+                                   @keydown.enter.prevent="if (canConfirmSale() && !isProcessing) submitOrder()">
                         </div>
                     </div>
                     <div class="qc-grid">
@@ -1155,22 +1268,25 @@
                     </div>
                 </div>
 
-                {{-- Paid / change summary --}}
+                {{-- Paid / less / change summary --}}
                 <div class="pay-summary">
                     <div class="pay-summary-cell due">
-                        <div class="ps-label">Amount due</div>
+                        <div class="ps-label">Bill total</div>
                         <div class="ps-val">Tk<span x-text="formatNumber(getPayableTotal())"></span></div>
                     </div>
                     <div class="pay-summary-cell paid">
-                        <div class="ps-label">Customer paid</div>
+                        <div class="ps-label">Customer pays</div>
                         <div class="ps-val">Tk<span x-text="formatNumber(getPaidAmount())"></span></div>
                     </div>
-                    <div class="pay-summary-cell change" :class="getChange() >= 0 ? 'ok' : 'err'">
-                        <div class="ps-label" x-text="getChange() >= 0 ? 'Change to return' : 'Still owed'"></div>
-                        <div class="ps-val">Tk<span x-text="formatNumber(Math.abs(getChange()))"></span></div>
+                    <div class="pay-summary-cell change"
+                         :class="getLessAmount() > 0 ? 'less' : (getChange() >= 0 ? 'ok' : 'err')">
+                        <div class="ps-label" x-text="getLessAmount() > 0 ? 'Less (discount)' : (getChange() >= 0 ? 'Change to return' : 'Still owed')"></div>
+                        <div class="ps-val">Tk<span x-text="formatNumber(getLessAmount() > 0 ? getLessAmount() : Math.abs(getChange()))"></span></div>
                     </div>
                 </div>
-                <p x-show="getChange() < 0" class="err-hint" x-cloak>Received amount is less than total due</p>
+                <p x-show="getLessAmount() > 0" class="err-hint" style="color:var(--green);border-color:var(--green)" x-cloak>
+                    Rest of bill (Tk<span x-text="formatNumber(getLessAmount())"></span>) will be counted as Less / discount.
+                </p>
             </div>
 
             <div class="modal-foot">
@@ -1178,7 +1294,7 @@
                     Cancel <span class="modal-kbd">ESC</span>
                 </button>
                 <button type="button" @click="submitOrder()"
-                        :disabled="getChange() < 0 || isProcessing"
+                        :disabled="!canConfirmSale() || isProcessing"
                         class="modal-confirm"
                         x-ref="confirmSaleBtn">
                     <svg x-show="!isProcessing" x-cloak fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1217,13 +1333,20 @@
                     <div class="im-label">Customer paid</div>
                     <div class="im-val">Tk<span x-text="formatNumber(lastSale?.paid_amount || 0)"></span></div>
                 </div>
-                <div class="invoice-meta-item change">
+                <div class="invoice-meta-item change" x-show="(lastSale?.discount_amount || 0) > 0 && (lastSale?.change || 0) <= 0" x-cloak>
+                    <div class="im-label">Less / discount</div>
+                    <div class="im-val">Tk<span x-text="formatNumber(lastSale?.discount_amount || 0)"></span></div>
+                </div>
+                <div class="invoice-meta-item change" x-show="(lastSale?.change || 0) > 0 || ((lastSale?.discount_amount || 0) <= 0)" x-cloak>
                     <div class="im-label">Change to return</div>
                     <div class="im-val">Tk<span x-text="formatNumber(lastSale?.change || 0)"></span></div>
                 </div>
             </div>
             <div class="invoice-frame-wrap">
-                <iframe x-ref="receiptFrame" class="invoice-frame" :src="lastSale?.receipt_url || 'about:blank'" title="POS Invoice"></iframe>
+                <iframe x-ref="receiptFrame" class="invoice-frame"
+                        :src="lastSale?.receipt_html ? 'about:blank' : (lastSale?.receipt_url || 'about:blank')"
+                        :srcdoc="lastSale?.receipt_html || undefined"
+                        title="POS Invoice"></iframe>
             </div>
             <div class="modal-foot">
                 <button type="button" @click="closeInvoiceModal()" class="modal-cancel">
@@ -1239,9 +1362,46 @@
         </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    <!-- SYNC PERMISSION (when network returns) -->
+    <div x-show="syncPromptOpen" style="display:none" class="modal-overlay"
+         x-transition:enter="ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+         x-transition:leave="ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+        <div class="modal-bg" @click="syncPromptOpen = false"></div>
+        <div class="modal" style="max-width:420px"
+             x-show="syncPromptOpen"
+             x-transition:enter="ease-out duration-250" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+            <div class="modal-head">
+                <div>
+                    <div class="modal-title">Network is back</div>
+                    <div class="modal-subtitle">Offline bills are ready to upload</div>
+                </div>
+                <button type="button" @click="syncPromptOpen = false" class="modal-close" aria-label="Close">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13.5px;line-height:1.5;color:var(--text-2);margin:0">
+                    <strong x-text="pendingOfflineCount()"></strong> offline bill(s) were saved while the network was down.
+                    Sync now to update stock and sales on the server?
+                </p>
+                <p style="font-size:12px;color:var(--text-3);margin:10px 0 0">You can also sync later by clicking the Online badge.</p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" @click="syncPromptOpen = false" class="modal-cancel">Later</button>
+                <button type="button" @click="confirmSyncOffline()" class="modal-confirm" :disabled="isSyncing"
+                        style="background:var(--blue);box-shadow:0 4px 12px rgba(37,99,235,.25)">
+                    <span x-show="!isSyncing" x-cloak>Sync now</span>
+                    <span x-show="isSyncing" x-cloak>Syncing...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
          HELD CARTS MODAL
-    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    ═══════════════════════════════════════════════════════════════ -->
     <div x-show="holdCartsModalOpen" style="display:none" class="modal-overlay"
          x-transition:enter="ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
          x-transition:leave="ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
@@ -1372,10 +1532,18 @@ function posSystem() {
         isOnline: navigator.onLine,
         showExtras: false,
         isSyncing: false,
+        syncPromptOpen: false,
         darkMode: localStorage.getItem('nexa_dark') === 'true',
+        shopName: @json(Auth::user()->shop->name ?? 'Nexa POS'),
+        cashierName: @json(Auth::user()->name),
+        offlinePendingTick: 0, // forces UI refresh of pending count
 
         search: '',
         selectedCategory: 'all',
+        selectedBrand: 'all',
+        openCatId: null,
+        categories: @json($categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()),
+        brands: @json($brands),
         products: @json($products),
         cart: [],
         lastAddedId: null,
@@ -1417,16 +1585,21 @@ function posSystem() {
            INIT
         â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
         init() {
-            window.addEventListener('online',  () => {
+            window.addEventListener('online', () => {
                 this.isOnline = true;
-                this.showToast('Connection restored. Syncing orders...', 'success');
-                this.syncOfflineOrders();
+                this.showToast('Network is back', 'success');
+                if (this.pendingOfflineCount() > 0) {
+                    this.syncPromptOpen = true;
+                }
             });
             window.addEventListener('offline', () => {
                 this.isOnline = false;
-                this.showToast('Offline mode - orders are saved locally', 'warning');
+                this.showToast('Offline mode — you can still sell and print bills', 'warning');
             });
-            if (this.isOnline) this.syncOfflineOrders();
+            // Ask permission if offline bills already waiting when POS opens online
+            if (this.isOnline && this.pendingOfflineCount() > 0) {
+                this.$nextTick(() => { this.syncPromptOpen = true; });
+            }
         },
 
         /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1487,7 +1660,7 @@ function posSystem() {
                 if (e.key === 'Enter' || e.key === 'NumpadEnter') {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (this.getChange() >= 0 && !this.isProcessing) this.submitOrder();
+                    if (this.canConfirmSale() && !this.isProcessing) this.submitOrder();
                 }
                 if (e.key === 'Escape') {
                     e.preventDefault();
@@ -1508,23 +1681,66 @@ function posSystem() {
             // Enter on search is handled by @keydown.enter on the input
         },
 
-        /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-           PRODUCT FILTER + BARCODE AUTO-ADD
-        â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ───────────────────────────────
+           EACH CATEGORY HAS BRAND DROPDOWN
+        ─────────────────────────────── */
+        toggleCatMenu(id) {
+            const key = String(id);
+            this.openCatId = this.openCatId === key ? null : key;
+        },
+        pickAllProducts() {
+            this.selectedCategory = 'all';
+            this.selectedBrand = 'all';
+            this.openCatId = null;
+        },
+        pickCategory(id) {
+            this.selectedCategory = String(id);
+            this.selectedBrand = 'all';
+            this.openCatId = null;
+        },
+        pickBrand(categoryId, brandId) {
+            this.selectedCategory = String(categoryId);
+            this.selectedBrand = String(brandId);
+            this.openCatId = null;
+        },
+        productsInCategory(categoryId) {
+            return this.products.filter(p => String(p.category_id) === String(categoryId));
+        },
+        categoryProductCount(categoryId) {
+            return this.productsInCategory(categoryId).length;
+        },
+        brandsForCategory(categoryId) {
+            const ids = new Set();
+            this.productsInCategory(categoryId).forEach(p => {
+                if (p.brand_id) ids.add(String(p.brand_id));
+            });
+            return (this.brands || []).filter(b => ids.has(String(b.id)));
+        },
+        brandProductCount(categoryId, brandId) {
+            return this.productsInCategory(categoryId).filter(p => String(p.brand_id) === String(brandId)).length;
+        },
+        unbrandedCount(categoryId) {
+            return this.productsInCategory(categoryId).filter(p => !p.brand_id).length;
+        },
+        matchesBrand(product) {
+            if (this.selectedBrand === 'all') return true;
+            if (this.selectedBrand === 'none') return !product.brand_id;
+            return String(product.brand_id) === String(this.selectedBrand);
+        },
+        matchesCategory(product) {
+            return this.selectedCategory === 'all' || String(product.category_id) === String(this.selectedCategory);
+        },
         filteredProducts() {
             const q = (this.search || '').trim().toLowerCase();
-            if (!q) {
-                return this.products.filter(p =>
-                    this.selectedCategory === 'all' || p.category_id == this.selectedCategory
-                );
-            }
             return this.products.filter(p => {
+                if (!this.matchesCategory(p) || !this.matchesBrand(p)) return false;
+                if (!q) return true;
                 const name = (p.name || '').toLowerCase();
                 const barcode = String(p.barcode || '').toLowerCase();
                 const sku = String(p.sku || '').toLowerCase();
-                const matchSearch = name.includes(q) || barcode.includes(q) || sku.includes(q);
-                const matchCat = this.selectedCategory === 'all' || p.category_id == this.selectedCategory;
-                return matchSearch && matchCat;
+                const brand = String(p.brand_name || '').toLowerCase();
+                const category = String(p.category_name || '').toLowerCase();
+                return name.includes(q) || barcode.includes(q) || sku.includes(q) || brand.includes(q) || category.includes(q);
             });
         },
 
@@ -1732,8 +1948,23 @@ function posSystem() {
         getPaidAmount() {
             return (Number(this.payCash) || 0) + (Number(this.payCard) || 0) + (Number(this.payBkash) || 0);
         },
+        /** Shortfall when customer pays less than bill — counted as Less / discount. */
+        getLessAmount() {
+            return Math.max(0, this.getPayableTotal() - this.getPaidAmount());
+        },
+        /** Cart discount + pay-less amount. */
+        getTotalDiscountAmount() {
+            return this.getDiscount() + this.getLessAmount();
+        },
         getChange() {
-            return this.getPaidAmount() - this.getPayableTotal();
+            return Math.max(0, this.getPaidAmount() - this.getPayableTotal());
+        },
+        canConfirmSale() {
+            if (this.cart.length === 0) return false;
+            // Fully covered by exchange credit — nothing to collect
+            if (this.getPayableTotal() <= 0) return true;
+            // Must enter what the customer pays (shortfall becomes Less)
+            return this.getPaidAmount() > 0;
         },
         canProceedToCheckout() {
             if (this.cart.length === 0) return false;
@@ -1803,26 +2034,26 @@ openCheckout() {
                 return;
             }
             if (this.hasLowStockItems()) this.showToast('! Some items are at stock limit - check before confirming', 'warning');
-            this.payCash  = this.getPayableTotal();
+            // Leave cash empty so cashier types what the customer pays; Exact fills bill total
+            this.payCash  = '';
             this.payCard  = 0;
             this.payBkash = 0;
             this.checkoutModalOpen = true;
             this.$nextTick(() => {
-                // Prefer focusing Cash so cashier can adjust; Enter still confirms from inputs
                 const cash = document.querySelector('.modal .sp-input');
                 if (cash) { cash.focus(); cash.select(); }
             });
         },
 
         async submitOrder() {
-            if (this.isProcessing || this.getChange() < 0) return;
+            if (this.isProcessing || !this.canConfirmSale()) return;
             this.isProcessing = true;
 
             const payload = {
                 cart:                    this.cart,
                 items:                   this.cart,
                 total_amount:            this.getTotal(),
-                discount_amount:         this.getDiscount(),
+                discount_amount:         this.getTotalDiscountAmount(),
                 coupon_code:             this.appliedCoupon?.code || null,
                 payment_method:          this.getPaymentMethodString(),
                 paid_amount:             this.getPaidAmount(),
@@ -1848,6 +2079,7 @@ openCheckout() {
                     if (res.ok && data.success) {
                         this.playBeep(true);
                         const paidSnap = this.getPaidAmount();
+                        const lessSnap = this.getLessAmount();
                         const changeSnap = data.change ?? Math.max(0, paidSnap - this.getPayableTotal());
                         const customerSnap = this.customerName || 'Walk-in Customer';
 
@@ -1861,38 +2093,178 @@ openCheckout() {
                             invoice_no: data.invoice_no || ('#' + data.order_id),
                             paid_amount: data.paid_amount ?? paidSnap,
                             change: changeSnap,
+                            discount_amount: data.discount_amount ?? lessSnap,
                             total_amount: data.total_amount ?? 0,
                             customer: customerSnap,
                             receipt_url: data.receipt_url || ('/pos/receipt/' + data.order_id),
+                            receipt_html: null,
+                            offline: false,
                         };
                         this.invoiceModalOpen = true;
-                        this.showToast('Sale complete! Change to return: Tk' + this.formatNumber(changeSnap), 'success');
+                        if (lessSnap > 0) {
+                            this.showToast('Sale complete! Less: Tk' + this.formatNumber(lessSnap), 'success');
+                        } else {
+                            this.showToast('Sale complete! Change to return: Tk' + this.formatNumber(changeSnap), 'success');
+                        }
                     } else {
                         this.playBeep(false);
                         this.showToast('Error: ' + (data.message || 'Something went wrong'), 'error');
                     }
                 } catch(e) {
-                    this.playBeep(false);
-                    this.showToast('Server error. Please check your connection.', 'error');
+                    // Network failed mid-request — save offline + allow print
+                    this.isOnline = false;
+                    this.saveOfflineSale(payload);
                 }
             } else {
-                if (this.isExchangeMode) {
-                    this.showToast('Cannot process exchanges while offline.', 'error');
-                    this.isProcessing = false; return;
-                }
-                const offline = JSON.parse(localStorage.getItem('nexa_offline_orders')) || [];
-                offline.push(payload);
-                localStorage.setItem('nexa_offline_orders', JSON.stringify(offline));
-                this.showToast('Offline order saved. Will auto-sync when online.', 'warning');
-                this.cart = []; this.customerName = ''; this.customerPhone = '';
-                this.discountValue = 0; this.appliedCoupon = null; this.couponCode = '';
-                this.checkoutModalOpen = false;
+                this.saveOfflineSale(payload);
             }
 
             this.isProcessing = false;
         },
 
+        saveOfflineSale(payload) {
+            if (this.isExchangeMode) {
+                this.showToast('Cannot process exchanges while offline.', 'error');
+                return;
+            }
+
+            const paidSnap = this.getPaidAmount();
+            const lessSnap = this.getLessAmount();
+            const changeSnap = this.getChange();
+            const customerSnap = this.customerName || 'Walk-in Customer';
+            const invoiceNo = 'OFF-' + Date.now().toString().slice(-10);
+            const cartSnap = JSON.parse(JSON.stringify(this.cart));
+
+            payload.local_invoice_no = invoiceNo;
+            payload.items = cartSnap;
+            payload.cart = cartSnap;
+
+            const offline = JSON.parse(localStorage.getItem('nexa_offline_orders')) || [];
+            offline.push(payload);
+            localStorage.setItem('nexa_offline_orders', JSON.stringify(offline));
+            this.offlinePendingTick++;
+
+            // Reduce local stock so POS stays accurate until sync
+            cartSnap.forEach(item => {
+                const product = this.products.find(p => p.id === item.id);
+                if (product) {
+                    product.stock_quantity = Math.max(0, (Number(product.stock_quantity) || 0) - (Number(item.qty) || 0));
+                }
+            });
+
+            const receiptHtml = this.buildOfflineReceiptHtml({
+                invoiceNo,
+                customer: customerSnap,
+                phone: this.customerPhone || '',
+                items: cartSnap,
+                total: this.getTotal(),
+                discount: this.getTotalDiscountAmount(),
+                payable: this.getPayableTotal(),
+                paid: paidSnap,
+                change: changeSnap,
+                method: this.getPaymentMethodString(),
+                createdAt: payload.created_at,
+            });
+
+            this.playBeep(true);
+            this.cart = []; this.customerName = ''; this.customerPhone = '';
+            this.discountValue = 0; this.appliedCoupon = null; this.couponCode = '';
+            this.lastAddedId = null;
+            this.checkoutModalOpen = false;
+
+            this.lastSale = {
+                order_id: null,
+                invoice_no: invoiceNo,
+                paid_amount: paidSnap,
+                change: changeSnap,
+                discount_amount: payload.discount_amount || 0,
+                total_amount: payload.total_amount,
+                customer: customerSnap,
+                receipt_url: null,
+                receipt_html: receiptHtml,
+                offline: true,
+            };
+            this.invoiceModalOpen = true;
+            this.showToast('Offline bill saved — print now. Sync when network returns.', 'warning');
+        },
+
+        buildOfflineReceiptHtml(data) {
+            const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const money = (n) => this.formatNumber(n);
+            const when = new Date(data.createdAt || Date.now());
+            const dateStr = when.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const rows = (data.items || []).map(i => `
+                <tr>
+                    <td class="text-left">${esc((i.name || '').slice(0, 18))}</td>
+                    <td class="text-center">${Number(i.qty) || 0}</td>
+                    <td class="text-right">৳${money(i.price)}</td>
+                    <td class="text-right">৳${money((Number(i.price) || 0) * (Number(i.qty) || 0))}</td>
+                </tr>`).join('');
+
+            return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt - ${esc(data.invoiceNo)}</title>
+<style>
+body{font-family:'Courier New',Courier,monospace;font-size:12px;color:#000;margin:0;padding:0;background:#fff}
+.ticket{width:80mm;max-width:80mm;margin:0 auto;padding:10px}
+.text-center{text-align:center}.text-right{text-align:right}.text-left{text-align:left}
+.bold{font-weight:bold}.divider{border-top:1px dashed #000;margin:10px 0}
+table{width:100%;border-collapse:collapse}th,td{padding:4px 0;vertical-align:top}
+</style></head><body>
+<div class="ticket">
+<div class="text-center">
+<h2 style="margin:0;font-size:18px">${esc(this.shopName)}</h2>
+<p style="margin:2px 0">Invoice: ${esc(data.invoiceNo)}</p>
+<p style="margin:2px 0">Date: ${esc(dateStr)}</p>
+<p style="margin:2px 0">Cashier: ${esc(this.cashierName)}</p>
+<p style="margin:2px 0" class="bold">*** OFFLINE BILL ***</p>
+</div>
+<div class="divider"></div>
+<div class="text-left">
+<p style="margin:2px 0"><span class="bold">Customer:</span> ${esc(data.customer)}</p>
+${data.phone ? `<p style="margin:2px 0"><span class="bold">Phone:</span> ${esc(data.phone)}</p>` : ''}
+</div>
+<div class="divider"></div>
+<table>
+<thead><tr>
+<th class="text-left" style="border-bottom:1px solid #000">Item</th>
+<th class="text-center" style="border-bottom:1px solid #000">Qty</th>
+<th class="text-right" style="border-bottom:1px solid #000">Price</th>
+<th class="text-right" style="border-bottom:1px solid #000">Total</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<div class="divider"></div>
+<table>
+<tr><td>Items Total:</td><td class="text-right">৳${money(data.total)}</td></tr>
+${(data.discount || 0) > 0 ? `<tr><td>Less / Discount:</td><td class="text-right">- ৳${money(data.discount)}</td></tr>` : ''}
+<tr><td class="bold">GRAND TOTAL:</td><td class="text-right bold" style="font-size:14px">৳${money(data.payable)}</td></tr>
+<tr><td style="padding-top:6px">Paid (${esc(String(data.method || 'cash').toUpperCase())}):</td><td class="text-right" style="padding-top:6px">৳${money(data.paid)}</td></tr>
+${(data.change || 0) > 0 ? `<tr><td class="bold">Change Due:</td><td class="text-right bold">৳${money(data.change)}</td></tr>` : ''}
+</table>
+<div class="divider"></div>
+<div class="text-center"><p style="margin-top:10px;font-weight:bold">Thank you for your business!</p>
+<p style="font-size:10px;margin-top:4px">Will sync when network is available</p></div>
+</div></body></html>`;
+        },
+
         printLastReceipt() {
+            if (this.lastSale?.receipt_html) {
+                try {
+                    const frame = this.$refs.receiptFrame;
+                    if (frame && frame.contentWindow) {
+                        frame.contentWindow.focus();
+                        frame.contentWindow.print();
+                        return;
+                    }
+                } catch (e) {}
+                const w = window.open('', '_blank', 'noopener,noreferrer,width=420,height=640');
+                if (w) {
+                    w.document.open();
+                    w.document.write(this.lastSale.receipt_html);
+                    w.document.close();
+                    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 250);
+                }
+                return;
+            }
             if (!this.lastSale?.receipt_url) return;
             try {
                 const frame = this.$refs.receiptFrame;
@@ -1902,7 +2274,6 @@ openCheckout() {
                     return;
                 }
             } catch (e) {}
-            // Fallback: open print-ready receipt in a new tab
             window.open(this.lastSale.receipt_url + (this.lastSale.receipt_url.includes('?') ? '&' : '?') + 'print=1', '_blank');
         },
 
@@ -1913,9 +2284,21 @@ openCheckout() {
             });
         },
 
-        /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-           OFFLINE SYNC
-        â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ───────────────────────────────
+           OFFLINE SYNC (ask permission first)
+        ─────────────────────────────── */
+        pendingOfflineCount() {
+            this.offlinePendingTick; // dependency for Alpine reactivity
+            try {
+                return (JSON.parse(localStorage.getItem('nexa_offline_orders')) || []).length;
+            } catch (e) {
+                return 0;
+            }
+        },
+        async confirmSyncOffline() {
+            this.syncPromptOpen = false;
+            await this.syncOfflineOrders();
+        },
         async syncOfflineOrders() {
             const offline = JSON.parse(localStorage.getItem('nexa_offline_orders')) || [];
             if (!offline.length || this.isSyncing) return;
@@ -1927,12 +2310,17 @@ openCheckout() {
                     body:    JSON.stringify({ orders: offline })
                 });
                 const data = await res.json();
-                if (data.success) {
+                if (res.ok && data.success) {
                     localStorage.removeItem('nexa_offline_orders');
-                    this.showToast(`OK:  ${data.synced} offline order(s) synced!`, 'success');
-                    setTimeout(() => window.location.reload(), 1800);
+                    this.offlinePendingTick++;
+                    this.showToast(`Synced ${data.synced} offline bill(s)!`, 'success');
+                    setTimeout(() => window.location.reload(), 1600);
+                } else {
+                    this.showToast(data.message || 'Sync failed. Try again.', 'error');
                 }
-            } catch(e) {}
+            } catch(e) {
+                this.showToast('Sync failed. Check network and try again.', 'error');
+            }
             this.isSyncing = false;
         }
     };

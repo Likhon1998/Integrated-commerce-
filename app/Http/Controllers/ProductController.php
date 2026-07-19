@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Services\AccountService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
@@ -63,9 +64,8 @@ class ProductController extends Controller
                 'nullable',
                 Rule::exists('brands', 'id')->where(fn ($q) => $q->where('shop_id', $shopId)),
             ],
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'image_2' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'image_3' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'images' => 'nullable|array|max:20',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
             'is_published' => 'nullable|boolean',
             'is_new_arrival' => 'nullable|boolean',
             'is_featured' => 'nullable|boolean',
@@ -79,9 +79,6 @@ class ProductController extends Controller
 
         try {
             $product = DB::transaction(function () use ($request, $validated, $shopId, $openingQty, &$uploadedPaths) {
-                $imageData = $this->storeProductImages($request);
-                $uploadedPaths = array_values(array_filter($imageData));
-
                 $data = [
                     'shop_id' => $shopId,
                     'name' => $validated['name'],
@@ -105,11 +102,12 @@ class ProductController extends Controller
                     'is_featured' => $request->boolean('is_featured'),
                 ];
 
-                $data = array_merge($data, $imageData);
                 $data = $this->applyBrandData($data);
                 $data = $this->normalizeVariantFields($data);
 
                 $product = Product::create($data);
+                $uploadedPaths = $this->storeGalleryImages($request, $product);
+                $this->syncPrimaryImageFromGallery($product);
 
                 if ($openingQty > 0) {
                     $this->stock->ensureDefaultLocations($product->shop_id);
@@ -117,7 +115,7 @@ class ProductController extends Controller
                     $this->accounts->postOpeningInventory($movement);
                 }
 
-                return $product->fresh();
+                return $product->fresh(['galleryImages']);
             });
         } catch (\Throwable $e) {
             foreach ($uploadedPaths as $path) {
@@ -157,6 +155,7 @@ class ProductController extends Controller
 
         $categories = Category::where('shop_id', Auth::user()->shop_id)->orderBy('name')->get();
         $brands = Brand::where('shop_id', Auth::user()->shop_id)->orderBy('name')->get();
+        $product->load('galleryImages');
 
         return view('products.edit', compact('product', 'categories', 'brands'));
     }
@@ -182,19 +181,17 @@ class ProductController extends Controller
             'short_description' => 'nullable|string|max:2000',
             'category_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'image_2' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'image_3' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'remove_image' => 'nullable|boolean',
-            'remove_image_2' => 'nullable|boolean',
-            'remove_image_3' => 'nullable|boolean',
+            'images' => 'nullable|array|max:20',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
+            'remove_images' => 'nullable|array',
+            'remove_images.*' => 'integer',
             'is_published' => 'nullable|boolean',
             'is_new_arrival' => 'nullable|boolean',
             'is_featured' => 'nullable|boolean',
         ]);
 
         $data = $request->except([
-            'image', 'image_2', 'image_3', 'stock_quantity',
+            'image', 'image_2', 'image_3', 'images', 'remove_images', 'stock_quantity',
             'remove_image', 'remove_image_2', 'remove_image_3',
             'is_published', 'is_new_arrival', 'is_featured',
         ]);
@@ -204,9 +201,11 @@ class ProductController extends Controller
         $data['availability'] = $request->input('availability', $product->availability ?? 'in_stock');
         $data = $this->applyBrandData($data);
         $data = $this->normalizeVariantFields($data);
-        $data = array_merge($data, $this->storeProductImages($request, $product));
 
         $product->update($data);
+        $this->removeGalleryImages($product, (array) $request->input('remove_images', []));
+        $this->storeGalleryImages($request, $product);
+        $this->syncPrimaryImageFromGallery($product);
 
         return redirect()->route('products.index')->with('success', 'Product updated successfully!');
     }
@@ -217,6 +216,7 @@ class ProductController extends Controller
             abort(403, 'Unauthorized access.');
         }
 
+        $product->load('galleryImages');
         foreach ($product->imagePaths() as $path) {
             Storage::disk('public')->delete($path);
         }
@@ -422,29 +422,62 @@ class ProductController extends Controller
     }
 
     /**
-     * Handle up to 3 product images (primary + gallery). Keys: image, image_2, image_3.
+     * Store unlimited gallery images (capped at 20 per request). First image becomes primary thumbnail.
+     *
+     * @return list<string> newly stored paths
      */
-    private function storeProductImages(Request $request, ?Product $existing = null): array
+    private function storeGalleryImages(Request $request, Product $product): array
     {
-        $out = [];
-        $slots = ['image', 'image_2', 'image_3'];
-
-        foreach ($slots as $slot) {
-            $removeKey = 'remove_'.$slot;
-            if ($existing && $request->boolean($removeKey) && $existing->{$slot}) {
-                Storage::disk('public')->delete($existing->{$slot});
-                $out[$slot] = null;
-            }
-
-            if ($request->hasFile($slot)) {
-                if ($existing && $existing->{$slot}) {
-                    Storage::disk('public')->delete($existing->{$slot});
-                }
-                $out[$slot] = $request->file($slot)->store('products', 'public');
-            }
+        if (! $request->hasFile('images')) {
+            return [];
         }
 
-        return $out;
+        $existingCount = $product->galleryImages()->count();
+        $remaining = max(0, 20 - $existingCount);
+        if ($remaining === 0) {
+            return [];
+        }
+
+        $files = array_slice($request->file('images'), 0, $remaining);
+        $sort = (int) ($product->galleryImages()->max('sort_order') ?? -1);
+        $paths = [];
+
+        foreach ($files as $file) {
+            if (! $file || ! $file->isValid()) {
+                continue;
+            }
+            $path = $file->store('products', 'public');
+            $paths[] = $path;
+            $product->galleryImages()->create([
+                'path' => $path,
+                'sort_order' => ++$sort,
+            ]);
+        }
+
+        return $paths;
+    }
+
+    private function removeGalleryImages(Product $product, array $imageIds): void
+    {
+        if ($imageIds === []) {
+            return;
+        }
+
+        $images = $product->galleryImages()->whereIn('id', $imageIds)->get();
+        foreach ($images as $image) {
+            Storage::disk('public')->delete($image->path);
+            $image->delete();
+        }
+    }
+
+    private function syncPrimaryImageFromGallery(Product $product): void
+    {
+        $first = $product->galleryImages()->orderBy('sort_order')->orderBy('id')->value('path');
+        $product->forceFill([
+            'image' => $first,
+            'image_2' => null,
+            'image_3' => null,
+        ])->saveQuietly();
     }
 
     private function productReturnRoute(?string $from): array

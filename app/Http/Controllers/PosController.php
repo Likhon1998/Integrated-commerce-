@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\Brand;
 use App\Models\Customer;
 use App\Services\AccountService;
 use App\Services\StockService;
@@ -39,12 +40,33 @@ class PosController extends Controller
         }
 
         $shopId = $user->shop_id;
-        $categories = Category::where('shop_id', $shopId)->get();
-        
-        // Only show products that belong to this shop and are in stock
-        $products = Product::where('shop_id', $shopId)
+        $categories = Category::where('shop_id', $shopId)->orderBy('name')->get();
+        $brands = Brand::where('shop_id', $shopId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name']);
+
+        $products = Product::where('shop_id', $shopId)
+            ->with(['category:id,name', 'brand:id,name'])
+            ->orderBy('name')
+            ->get()
+            ->map(function (Product $product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'barcode' => $product->barcode,
+                    'sku' => $product->sku,
+                    'selling_price' => $product->selling_price,
+                    'stock_quantity' => $product->stock_quantity,
+                    'image' => $product->image,
+                    'category_id' => $product->category_id,
+                    'brand_id' => $product->brand_id,
+                    'category_name' => $product->category?->name,
+                    'brand_name' => $product->brand?->name ?? $product->brand_name,
+                ];
+            })
+            ->values();
 
         $openSession = null;
         if ($user->counter_id) {
@@ -62,6 +84,7 @@ class PosController extends Controller
 
         return view('pos.index', compact(
             'categories',
+            'brands',
             'products',
             'exchangeOrder',
             'returnProduct',
@@ -121,14 +144,27 @@ class PosController extends Controller
 
             // 🚀 EXCHANGE MATH & SECURITY
             $isExchange = $request->is_exchange ?? false;
-            $exchangeCredit = $request->exchange_credit ?? 0;
+            $exchangeCredit = (float) ($request->exchange_credit ?? 0);
 
             if ($isExchange && $totalAmount < $exchangeCredit) {
                 throw new \Exception("Exchange Blocked: Cart total must equal or exceed the return credit. No cash refunds allowed.");
             }
 
-            // Calculate what the customer actually owes after credit
-            $payableAmount = max(0, $totalAmount - $exchangeCredit);
+            // After exchange credit, before discount
+            $afterCredit = max(0, $totalAmount - $exchangeCredit);
+
+            // Cart/coupon discount from POS; if customer pays under due, remainder = less (discount)
+            $paidAmount = max(0, (float) $request->paid_amount);
+            $requestedDiscount = max(0, (float) ($request->discount_amount ?? 0));
+            $discountAmount = min($afterCredit, $requestedDiscount);
+            $payableAmount = max(0, $afterCredit - $discountAmount);
+
+            if ($paidAmount < $payableAmount) {
+                $discountAmount = min($afterCredit, $afterCredit - $paidAmount);
+                $payableAmount = $paidAmount;
+            }
+
+            $changeAmount = max(0, $paidAmount - $payableAmount);
 
             // 2. Customer Handling
             $customerId = null;
@@ -164,8 +200,9 @@ class PosController extends Controller
                 'customer_id' => $customerId, 
                 'invoice_no' => $invoiceNo,
                 'total_amount' => $totalAmount,
-                'paid_amount' => $request->paid_amount,
-                'change_amount' => max(0, $request->paid_amount - $payableAmount),
+                'discount_amount' => $discountAmount,
+                'paid_amount' => $paidAmount,
+                'change_amount' => $changeAmount,
                 'payment_method' => $request->payment_method,
                 'status' => 'completed',
                 
@@ -231,6 +268,7 @@ class PosController extends Controller
                 'change' => $order->change_amount,
                 'paid_amount' => $order->paid_amount,
                 'total_amount' => $order->total_amount,
+                'discount_amount' => $order->discount_amount,
                 'receipt_url' => route('pos.receipt', $order),
             ]);
 
@@ -338,15 +376,26 @@ class PosController extends Controller
                 $invoiceNo = 'OFF-' . $shopId . '-' . date('Y') . '-' . str_pad($nextId, 5, '0', STR_PAD_LEFT);
 
                 // 3. Create Order
+                $gross = (float) ($offlineOrder['total_amount'] ?? 0);
+                $paid = max(0, (float) ($offlineOrder['paid_amount'] ?? $gross));
+                $requestedDiscount = max(0, (float) ($offlineOrder['discount_amount'] ?? 0));
+                $discount = min($gross, $requestedDiscount);
+                $payable = max(0, $gross - $discount);
+                if ($paid < $payable) {
+                    $discount = min($gross, $gross - $paid);
+                    $payable = $paid;
+                }
+
                 $order = Order::create([
                     'shop_id' => $shopId,
                     'user_id' => $userId,
                     'counter_id' => $user->counter_id, // If Admin has no counter, this will safely be null
                     'customer_id' => $customerId,
                     'invoice_no' => $invoiceNo,
-                    'total_amount' => $offlineOrder['total_amount'],
-                    'paid_amount' => $offlineOrder['paid_amount'] ?? $offlineOrder['total_amount'],
-                    'change_amount' => max(0, ($offlineOrder['paid_amount'] ?? $offlineOrder['total_amount']) - $offlineOrder['total_amount']),
+                    'total_amount' => $gross,
+                    'discount_amount' => $discount,
+                    'paid_amount' => $paid,
+                    'change_amount' => max(0, $paid - $payable),
                     'payment_method' => $offlineOrder['payment_method'],
                     'status' => 'completed',
                     'created_at' => Carbon::parse($offlineOrder['created_at'] ?? now()), 

@@ -124,7 +124,7 @@
     <section class="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
             <h3 class="text-sm font-semibold text-slate-800">1. Product gallery</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Up to 3 photos — shown as thumbnails on the store product page.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Add as many photos as you need — shown as a gallery on the store product page.</p>
         </div>
         <div class="p-4">
             @include('products.partials.image-uploads', ['product' => $product ?? null])

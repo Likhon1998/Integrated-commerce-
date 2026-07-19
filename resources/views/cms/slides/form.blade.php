@@ -1,6 +1,6 @@
 <x-cms-layout
-    title="{{ $slide->exists ? 'Edit slide' : 'New home slide' }}"
-    subtitle="Appears in the homepage hero carousel when Active."
+    title="{{ $slide->exists ? 'Edit poster' : 'New homepage poster' }}"
+    subtitle="Full-design poster banners on the homepage. Upload the complete designed image — text/layout should be inside the poster art."
     previewUrl="{{ route('home') }}"
 >
     <form method="POST"
@@ -10,55 +10,49 @@
         @csrf
         @if($slide->exists) @method('PUT') @endif
 
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
+            Recommended poster size: <strong>1600×400</strong> (or similar wide banner). Upload a fully designed image — the website shows the poster as-is.
+        </div>
+
         <div class="grid gap-4 md:grid-cols-2">
             <div class="md:col-span-2">
-                <label class="text-xs font-bold uppercase text-slate-500">Title</label>
-                <input name="title" value="{{ old('title', $slide->title) }}" class="mt-1 w-full rounded-xl border-slate-200" required>
-            </div>
-            <div>
-                <label class="text-xs font-bold uppercase text-slate-500">Badge text</label>
-                <input name="badge_text" value="{{ old('badge_text', $slide->badge_text) }}" class="mt-1 w-full rounded-xl border-slate-200" placeholder="NEW ARRIVAL">
-            </div>
-            <div>
-                <label class="text-xs font-bold uppercase text-slate-500">Price from</label>
-                <input type="number" step="0.01" name="price_from" value="{{ old('price_from', $slide->price_from) }}" class="mt-1 w-full rounded-xl border-slate-200">
+                <label class="text-xs font-bold uppercase text-slate-500">Poster image {{ $slide->exists ? '' : '*' }}</label>
+                <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"
+                       class="mt-1 w-full rounded-xl border-slate-200 text-sm" {{ $slide->exists ? '' : 'required' }}>
+                @if($slide->image_path)
+                    <img src="{{ public_storage_url($slide->image_path) }}" class="mt-2 h-28 w-full rounded-xl object-cover border border-slate-200" alt="">
+                @endif
+                @error('image') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="md:col-span-2">
-                <label class="text-xs font-bold uppercase text-slate-500">Description</label>
-                <textarea name="description" rows="3" class="mt-1 w-full rounded-xl border-slate-200">{{ old('description', $slide->description) }}</textarea>
+                <label class="text-xs font-bold uppercase text-slate-500">Title (admin / alt text)</label>
+                <input name="title" value="{{ old('title', $slide->title) }}" class="mt-1 w-full rounded-xl border-slate-200" required placeholder="Summer sale poster">
             </div>
-            <div>
-                <label class="text-xs font-bold uppercase text-slate-500">Button text</label>
-                <input name="button_text" value="{{ old('button_text', $slide->button_text) }}" class="mt-1 w-full rounded-xl border-slate-200">
-            </div>
-            <div>
-                <label class="text-xs font-bold uppercase text-slate-500">Button URL</label>
-                <input name="button_url" value="{{ old('button_url', $slide->button_url) }}" class="mt-1 w-full rounded-xl border-slate-200" placeholder="/shop">
-            </div>
-            <div>
-                <label class="text-xs font-bold uppercase text-slate-500">Learn more URL</label>
-                <input name="learn_more_url" value="{{ old('learn_more_url', $slide->learn_more_url) }}" class="mt-1 w-full rounded-xl border-slate-200">
+            <div class="md:col-span-2">
+                <label class="text-xs font-bold uppercase text-slate-500">Click URL (optional)</label>
+                <input name="button_url" value="{{ old('button_url', $slide->button_url) }}" class="mt-1 w-full rounded-xl border-slate-200" placeholder="/shop or https://...">
+                <p class="mt-1 text-[11px] text-slate-400">If set, the whole poster is clickable.</p>
             </div>
             <div>
                 <label class="text-xs font-bold uppercase text-slate-500">Sort order</label>
                 <input type="number" name="sort_order" value="{{ old('sort_order', $slide->sort_order ?? 0) }}" class="mt-1 w-full rounded-xl border-slate-200">
             </div>
-            <div class="md:col-span-2">
-                <label class="text-xs font-bold uppercase text-slate-500">Image</label>
-                <input type="file" name="image" accept="image/*" class="mt-1 w-full rounded-xl border-slate-200 text-sm">
-                @if($slide->image_path)
-                    <img src="{{ public_storage_url($slide->image_path) }}" class="mt-2 h-28 rounded-xl object-cover" alt="">
-                @endif
-            </div>
-            <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300" @checked(old('is_active', $slide->is_active))>
+            <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 self-end pb-2">
+                <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300" @checked(old('is_active', $slide->is_active ?? true))>
                 Active on website
             </label>
         </div>
 
+        {{-- Keep optional legacy fields hidden so existing rows stay valid --}}
+        <input type="hidden" name="badge_text" value="{{ old('badge_text', $slide->badge_text) }}">
+        <input type="hidden" name="description" value="{{ old('description', $slide->description) }}">
+        <input type="hidden" name="button_text" value="{{ old('button_text', $slide->button_text ?: 'Shop Now') }}">
+        <input type="hidden" name="learn_more_text" value="{{ old('learn_more_text', $slide->learn_more_text ?: 'Learn More') }}">
+        <input type="hidden" name="learn_more_url" value="{{ old('learn_more_url', $slide->learn_more_url) }}">
+
         <div class="flex justify-end gap-2 pt-2">
             <a href="{{ route('cms.slides.index') }}" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600">Cancel</a>
-            <button class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white">Save slide</button>
+            <button class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white">Save poster</button>
         </div>
     </form>
 </x-cms-layout>

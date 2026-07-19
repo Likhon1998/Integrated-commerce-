@@ -557,52 +557,61 @@
     padding: 0 4px;
 }
 
-/* ── HERO ── */
+/* ── HERO POSTERS (full-design image only, no text overlay) ── */
 .gaget-hero {
-    background: var(--g-bg-hero);
+    background: #f3f5f8;
     position: relative;
     overflow: hidden;
 }
-.gaget-hero-inner { max-width: 1280px; margin: 0 auto; padding: 48px 24px; }
-.gaget-hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
-.gaget-hero-badge {
-    display: inline-block;
-    color: var(--g-blue);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    margin-bottom: 12px;
+.gaget-poster-slide {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 18px 16px 22px;
 }
-.gaget-hero-title {
-    font-size: 42px;
-    font-weight: 800;
-    line-height: 1.1;
-    color: var(--g-text);
-    margin-bottom: 12px;
-    letter-spacing: -0.02em;
+.gaget-poster-link {
+    display: block;
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0b1220;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+    text-decoration: none;
+    line-height: 0;
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
 }
-.gaget-hero-desc {
-    color: var(--g-muted);
-    font-size: 15px;
-    line-height: 1.6;
-    margin-bottom: 20px;
-    max-width: 400px;
+.gaget-poster-link:hover {
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
 }
-.gaget-hero-price {
-    font-size: 14px;
-    color: var(--g-muted);
-    margin-bottom: 24px;
+.gaget-poster-img {
+    display: block;
+    width: 100%;
+    height: clamp(200px, 30vw, 340px);
+    object-fit: cover;
+    object-position: center;
 }
-.gaget-hero-price strong {
-    color: var(--g-text);
-    font-size: 20px;
-    font-weight: 800;
+.gaget-poster-empty { padding: 18px 16px 22px; }
+.gaget-poster-empty-inner {
+    height: clamp(200px, 30vw, 340px);
+    border-radius: 12px;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 55%, #1e3a5f 100%);
+    display: block;
 }
-.gaget-hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+.gaget-poster-dots {
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 5;
+    background: rgba(15, 23, 42, 0.45);
+    padding: 6px 12px;
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+}
 .gaget-btn-primary {
     background: var(--g-blue);
     color: #fff;
-    padding: 12px 28px;
+    padding: 10px 22px;
     border-radius: var(--g-radius);
     font-weight: 600;
     font-size: 14px;
@@ -612,57 +621,42 @@
     display: inline-block;
 }
 .gaget-btn-primary:hover { background: var(--g-blue-hover); }
-.gaget-btn-outline {
-    background: #fff;
-    color: var(--g-text);
-    padding: 12px 28px;
-    border-radius: var(--g-radius);
-    font-weight: 600;
-    font-size: 14px;
-    text-decoration: none;
-    border: 1px solid var(--g-border);
-    display: inline-block;
-}
-.gaget-btn-outline:hover { border-color: var(--g-blue); color: var(--g-blue); }
-.gaget-hero-visual {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 16px;
-    min-height: 360px;
-}
-.gaget-hero-visual img {
-    max-height: 340px;
-    object-fit: contain;
-    filter: drop-shadow(0 20px 40px rgba(0,0,0,.15));
-}
 .gaget-hero-arrow {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
     width: 40px; height: 40px;
     border-radius: 50%;
-    background: rgba(255,255,255,.9);
-    border: 1px solid var(--g-border);
+    background: rgba(255,255,255,.96);
+    border: 1px solid rgba(15, 23, 42, 0.08);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; z-index: 10;
-    color: var(--g-muted);
-    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    color: #475569;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
-.gaget-hero-arrow:hover { background: #fff; color: var(--g-blue); }
-.gaget-hero-arrow.left { left: 20px; }
-.gaget-hero-arrow.right { right: 20px; }
-.gaget-hero-dots { display: flex; gap: 6px; }
+.gaget-hero-arrow:hover {
+    background: #fff;
+    color: var(--g-blue);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.16);
+}
+.gaget-hero-arrow.left { left: 28px; }
+.gaget-hero-arrow.right { right: 28px; }
+.gaget-hero-dots { display: flex; gap: 7px; }
 .gaget-hero-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
-    background: #cbd5e1;
+    background: rgba(255,255,255,.45);
     border: none; cursor: pointer; padding: 0;
+    transition: background 0.2s ease, transform 0.2s ease;
 }
-.gaget-hero-dot.active { background: var(--g-blue); }
+.gaget-hero-dot.active {
+    background: #fff;
+    transform: scale(1.15);
+}
 
-/* ── FEATURES ── */
-.gaget-features { background: var(--g-bg-soft); border-top: 1px solid var(--g-border); border-bottom: 1px solid var(--g-border); }
+/* ── FEATURES (CMS-managed) ── */
+.gaget-features { background: #fff; border-top: 1px solid var(--g-border); border-bottom: 1px solid var(--g-border); }
 .gaget-features-grid {
     max-width: 1280px; margin: 0 auto; padding: 0 24px;
     display: grid;
@@ -671,18 +665,34 @@
 .gaget-feature-card {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 20px 12px;
+    gap: 10px;
+    padding: 16px 12px;
     border-right: 1px solid var(--g-border);
 }
 .gaget-feature-card:last-child { border-right: none; }
 .gaget-feature-icon {
-    width: 40px; height: 40px;
-    color: var(--g-muted);
+    width: 32px; height: 32px;
+    color: #64748b;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.gaget-feature-title { font-size: 13px; font-weight: 700; color: var(--g-text); }
-.gaget-feature-sub { font-size: 11px; color: var(--g-muted); margin-top: 1px; }
+.gaget-feature-icon svg { width: 18px; height: 18px; stroke-width: 1.5; }
+.gaget-feature-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: #0f172a;
+    line-height: 1.2;
+}
+.gaget-feature-sub {
+    font-size: 11px;
+    font-weight: 400;
+    color: #94a3b8;
+    margin-top: 2px;
+    line-height: 1.3;
+}
 
 /* ── SECTIONS ── */
 .gaget-section { max-width: 1280px; margin: 0 auto; padding: 48px 24px; }
@@ -716,38 +726,38 @@
 .gaget-cat-name { font-size: 14px; font-weight: 700; color: var(--g-text); }
 .gaget-cat-count { font-size: 11px; color: var(--g-muted); margin-top: 3px; }
 
-/* ── PROMO BANNERS ── */
+/* ── PROMO BANNERS (CMS-managed) ── */
 .gaget-promo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .gaget-promo {
     border-radius: var(--g-radius-lg);
-    min-height: 196px;
+    min-height: 180px;
     position: relative;
     overflow: hidden;
     display: flex;
     align-items: center;
-    padding: 24px;
+    padding: 22px;
 }
 .gaget-promo-dark { background: var(--g-navy); color: #fff; }
 .gaget-promo-light { background: #e8f0fe; color: var(--g-text); }
-.gaget-promo-content { position: relative; z-index: 2; max-width: 55%; }
-.gaget-promo-title { font-size: 18px; font-weight: 800; line-height: 1.25; margin-bottom: 4px; }
-.gaget-promo-sub { font-size: 13px; opacity: .85; margin-bottom: 8px; }
-.gaget-promo-price { font-size: 13px; margin-bottom: 14px; }
-.gaget-promo-price strong { font-size: 16px; font-weight: 800; }
+.gaget-promo-content { position: relative; z-index: 2; max-width: 58%; }
+.gaget-promo-title { font-size: 15px; font-weight: 700; line-height: 1.25; margin-bottom: 3px; letter-spacing: 0.01em; }
+.gaget-promo-sub { font-size: 12px; opacity: .8; margin-bottom: 6px; font-weight: 400; }
+.gaget-promo-price { font-size: 12px; margin-bottom: 12px; opacity: .95; }
+.gaget-promo-price strong { font-size: 14px; font-weight: 700; }
 .gaget-promo-btn {
     display: inline-block;
     background: var(--g-blue);
     color: #fff;
-    padding: 8px 18px;
+    padding: 7px 14px;
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     text-decoration: none;
 }
 .gaget-promo-btn:hover { background: var(--g-blue-hover); }
 .gaget-promo-btn-text {
     color: var(--g-blue);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     text-decoration: none;
 }
@@ -1041,13 +1051,13 @@
     .gaget-filter-sidebar { position: static; }
 }
 @media (max-width: 1024px) {
-    .gaget-hero-grid { grid-template-columns: 1fr; }
-    .gaget-hero-title { font-size: 32px; }
     .gaget-cat-grid { grid-template-columns: repeat(2, 1fr); }
     .gaget-promo-grid { grid-template-columns: 1fr; }
     .gaget-product-grid-5, .gaget-shop-grid { grid-template-columns: repeat(3, 1fr); }
     .gaget-features-grid { grid-template-columns: repeat(2, 1fr); }
     .gaget-feature-card { border-right: none; border-bottom: 1px solid var(--g-border); }
+    .gaget-hero-arrow.left { left: 12px; }
+    .gaget-hero-arrow.right { right: 12px; }
 }
 @media (max-width: 640px) {
     .gaget-product-grid-5, .gaget-shop-grid { grid-template-columns: repeat(2, 1fr); }

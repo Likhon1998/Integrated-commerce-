@@ -120,7 +120,7 @@ class WebsiteService
         return [
             'settings' => $settings,
             'shop' => $this->shop(),
-            'heroSlides' => HeroSlide::where('shop_id', $shopId)->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get(),
+            'heroSlides' => $this->resolveHeroSlides($shopId),
             'features' => SiteFeature::where('shop_id', $shopId)->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get(),
             'categories' => $categories,
             'allCategories' => Category::where('shop_id', $shopId)
@@ -379,6 +379,21 @@ class WebsiteService
         ]);
     }
 
+    /** Homepage posters from CMS only (no product auto-link). */
+    public function resolveHeroSlides(?int $shopId = null)
+    {
+        $shopId ??= $this->shopId();
+        if (! $shopId) {
+            return collect();
+        }
+
+        return HeroSlide::where('shop_id', $shopId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function formatPrice(?float $amount, ?object $settings = null): string
     {
         $settings ??= $this->settings();
@@ -397,6 +412,7 @@ class WebsiteService
         $shopId ??= $this->shopId();
 
         return Product::query()
+            ->with('galleryImages')
             ->where('shop_id', $shopId)
             ->where('stock_quantity', '>', 0)
             ->where(function ($q) {

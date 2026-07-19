@@ -30,14 +30,27 @@ class Product extends Model
         'filter_attributes' => 'array',
     ];
 
-    /** Stored image paths (slot 1–3), skipping empty slots. */
+    /** Stored gallery paths (new table first, then legacy columns). */
     public function imagePaths(): array
     {
+        $gallery = $this->relationLoaded('galleryImages')
+            ? $this->galleryImages
+            : $this->galleryImages()->get();
+
+        if ($gallery->isNotEmpty()) {
+            return $gallery->pluck('path')->filter()->values()->all();
+        }
+
         return array_values(array_filter([
             $this->image,
             $this->image_2,
             $this->image_3,
         ]));
+    }
+
+    public function galleryImages()
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function category()

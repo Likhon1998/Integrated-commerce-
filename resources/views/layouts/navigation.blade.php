@@ -121,6 +121,7 @@
         @php
             $pendingWebOrders = \App\Models\Order::where('shop_id', Auth::user()->shop_id)
                                 ->whereNull('counter_id')
+                                ->where('invoice_no', 'like', 'WEB-%')
                                 ->where('status', 'pending')
                                 ->count();
         @endphp
