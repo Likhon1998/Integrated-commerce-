@@ -58,4 +58,14 @@ class Category extends Model
     {
         return $this->hasMany(Product::class);
     }
+
+    public function scopeWhereSlugOrId($query, string|int $value)
+    {
+        return $query->where(function ($q) use ($value) {
+            $q->where('slug', $value);
+            if (ctype_digit((string) $value)) {
+                $q->orWhere('id', (int) $value);
+            }
+        });
+    }
 }

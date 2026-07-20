@@ -68,14 +68,19 @@ class DashboardController extends Controller
         $prevWeekStart = $today->copy()->subDays(13)->startOfDay();
         $prevWeekEnd = $today->copy()->subDays(7)->endOfDay();
 
-        $todaySales = (float) (clone $queryOrders)->whereDate('created_at', $today)->sum('total_amount');
+        $todaySales = (float) (clone $queryOrders)->whereDate('created_at', $today)
+            ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+            ->value('revenue');
         $todayOrdersCount = (int) (clone $queryOrders)->whereDate('created_at', $today)->count();
 
-        $weekSales = (float) (clone $queryOrders)->where('created_at', '>=', $weekStart)->sum('total_amount');
+        $weekSales = (float) (clone $queryOrders)->where('created_at', '>=', $weekStart)
+            ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+            ->value('revenue');
         $weekOrders = (int) (clone $queryOrders)->where('created_at', '>=', $weekStart)->count();
         $prevWeekSales = (float) (clone $queryOrders)
             ->whereBetween('created_at', [$prevWeekStart, $prevWeekEnd])
-            ->sum('total_amount');
+            ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+            ->value('revenue');
         $prevWeekOrders = (int) (clone $queryOrders)
             ->whereBetween('created_at', [$prevWeekStart, $prevWeekEnd])
             ->count();
@@ -113,8 +118,12 @@ class DashboardController extends Controller
             $day = $today->copy()->subDays($i);
             $prevDay = $day->copy()->subDays(7);
             $salesChartLabels[] = $day->format('M j');
-            $salesChartThisWeek[] = round((float) (clone $queryOrders)->whereDate('created_at', $day)->sum('total_amount'), 2);
-            $salesChartLastWeek[] = round((float) (clone $queryOrders)->whereDate('created_at', $prevDay)->sum('total_amount'), 2);
+            $salesChartThisWeek[] = round((float) (clone $queryOrders)->whereDate('created_at', $day)
+                ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+                ->value('revenue'), 2);
+            $salesChartLastWeek[] = round((float) (clone $queryOrders)->whereDate('created_at', $prevDay)
+                ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+                ->value('revenue'), 2);
         }
 
         $recentOrders = (clone $queryOrders)
@@ -185,7 +194,7 @@ class DashboardController extends Controller
                 DB::raw("COALESCE(categories.name, 'Uncategorized') as category_name"),
                 DB::raw('SUM(order_items.subtotal) as revenue')
             )
-            ->groupBy('category_name')
+            ->groupBy(DB::raw("COALESCE(categories.name, 'Uncategorized')"))
             ->orderByDesc('revenue')
             ->take(5)
             ->get();
@@ -214,7 +223,7 @@ class DashboardController extends Controller
                 ->select(
                     'counter_id',
                     DB::raw('COUNT(*) as orders_count'),
-                    DB::raw('COALESCE(SUM(total_amount), 0) as sales_total'),
+                    DB::raw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as sales_total'),
                     DB::raw('COUNT(DISTINCT customer_id) as customers_count')
                 )
                 ->groupBy('counter_id')
@@ -244,7 +253,7 @@ class DashboardController extends Controller
                     $q->where('is_exchange_receipt', false)
                         ->orWhereNull('is_exchange_receipt');
                 })
-                ->selectRaw('COUNT(*) as orders_count, COALESCE(SUM(total_amount), 0) as sales_total, COUNT(DISTINCT customer_id) as customers_count')
+                ->selectRaw('COUNT(*) as orders_count, COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as sales_total, COUNT(DISTINCT customer_id) as customers_count')
                 ->first();
 
             $onlineToday = (object) [

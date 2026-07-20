@@ -3,16 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\Brand;
-use App\Models\Category;
 use App\Models\HeroSlide;
 use App\Models\NavigationLink;
-use App\Models\Product;
 use App\Models\PromoBanner;
 use App\Models\Shop;
 use App\Models\SiteFeature;
 use App\Models\SiteSetting;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class WebsiteSeeder extends Seeder
 {
@@ -94,58 +91,6 @@ class WebsiteSeeder extends Seeder
         ];
         foreach ($navLinks as $link) {
             NavigationLink::create(array_merge($link, ['shop_id' => $shop->id, 'is_active' => true]));
-        }
-
-        $categoryData = [
-            ['name' => 'Smartphones', 'label' => '120+ Products'],
-            ['name' => 'Laptops', 'label' => '85+ Products'],
-            ['name' => 'Headphones', 'label' => '200+ Products'],
-            ['name' => 'Smartwatches', 'label' => '60+ Products'],
-            ['name' => 'Cameras', 'label' => '45+ Products'],
-            ['name' => 'Accessories', 'label' => '300+ Products'],
-            ['name' => 'Tablets', 'label' => '50+ Products'],
-            ['name' => 'Gaming', 'label' => '90+ Products'],
-        ];
-
-        foreach ($categoryData as $cat) {
-            $category = Category::firstOrCreate(
-                ['shop_id' => $shop->id, 'name' => $cat['name']],
-                ['slug' => Str::slug($cat['name'])]
-            );
-            $category->update([
-                'is_featured' => true,
-                'product_count_label' => $cat['label'],
-                'slug' => Str::slug($cat['name']),
-            ]);
-        }
-
-        $sampleProducts = [
-            ['name' => 'Apple AirPods Pro (2nd Gen)', 'category' => 'Headphones', 'brand' => 'Apple', 'price' => 249, 'original' => 279, 'rating' => 4.8, 'reviews' => 2847, 'bestseller' => true],
-            ['name' => 'Samsung Galaxy S24 Ultra', 'category' => 'Smartphones', 'brand' => 'Samsung', 'price' => 1199, 'original' => 1299, 'rating' => 4.9, 'reviews' => 1523, 'bestseller' => true],
-            ['name' => 'Sony WH-1000XM5', 'category' => 'Headphones', 'brand' => 'Sony', 'price' => 348, 'original' => 399, 'rating' => 4.7, 'reviews' => 3102, 'bestseller' => true],
-            ['name' => 'Apple Watch Series 9', 'category' => 'Smartwatches', 'brand' => 'Apple', 'price' => 399, 'original' => 429, 'rating' => 4.6, 'reviews' => 987, 'bestseller' => true],
-            ['name' => 'Canon EOS R50', 'category' => 'Cameras', 'brand' => 'Canon', 'price' => 679, 'original' => 749, 'rating' => 4.5, 'reviews' => 456, 'bestseller' => true],
-        ];
-
-        foreach ($sampleProducts as $i => $p) {
-            $category = Category::where('shop_id', $shop->id)->where('name', $p['category'])->first();
-            Product::firstOrCreate(
-                ['shop_id' => $shop->id, 'barcode' => 'WEB-DEMO-' . ($i + 1)],
-                [
-                    'category_id' => $category?->id,
-                    'name' => $p['name'],
-                    'cost_price' => $p['price'] * 0.7,
-                    'selling_price' => $p['price'],
-                    'original_price' => $p['original'],
-                    'stock_quantity' => 0,
-                    'brand_name' => $p['brand'],
-                    'rating' => $p['rating'],
-                    'review_count' => $p['reviews'],
-                    'is_best_seller' => $p['bestseller'],
-                    'is_published' => true,
-                    'short_description' => 'Premium quality electronics with fast delivery.',
-                ]
-            );
         }
     }
 }

@@ -38,10 +38,7 @@ class WebsiteController extends Controller
         $query = $this->website->catalogQuery($shopId)->with(['category', 'brand']);
 
         if ($request->filled('category')) {
-            $query->whereHas('category', function ($q) use ($request) {
-                $q->where('slug', $request->category)
-                    ->orWhere('id', $request->category);
-            });
+            $query->whereHas('category', fn ($q) => $q->whereSlugOrId($request->category));
         }
 
         if ($request->filled('search')) {
@@ -87,9 +84,7 @@ class WebsiteController extends Controller
         $query = $this->website->catalogQuery($shopId)->with(['category', 'brand']);
 
         if ($category !== '') {
-            $query->whereHas('category', function ($builder) use ($category) {
-                $builder->where('slug', $category)->orWhere('id', $category);
-            });
+            $query->whereHas('category', fn ($builder) => $builder->whereSlugOrId($category));
         }
 
         if ($q !== '') {
@@ -126,9 +121,7 @@ class WebsiteController extends Controller
         abort_unless($shopId, 404);
 
         $category = Category::where('shop_id', $shopId)
-            ->where(function ($q) use ($slug) {
-                $q->where('slug', $slug)->orWhere('id', $slug);
-            })
+            ->whereSlugOrId($slug)
             ->firstOrFail();
 
         if (blank($category->slug)) {
@@ -167,15 +160,14 @@ class WebsiteController extends Controller
             ? $this->buildSidebarFacets($category, $filterConfig)
             : [];
 
+        $priceBoundsQuery = Product::query()
+            ->where('shop_id', $shopId)
+            ->where('category_id', $category->id)
+            ->where(fn ($q) => $q->where('is_published', true)->orWhereNull('is_published'));
+
         $priceBounds = [
-            'min' => (float) (Product::query()
-                ->where('shop_id', $shopId)
-                ->where('category_id', $category->id)
-                ->min('selling_price') ?? 0),
-            'max' => (float) (Product::query()
-                ->where('shop_id', $shopId)
-                ->where('category_id', $category->id)
-                ->max('selling_price') ?? 0),
+            'min' => (float) ((clone $priceBoundsQuery)->min('selling_price') ?? 0),
+            'max' => (float) ((clone $priceBoundsQuery)->max('selling_price') ?? 0),
         ];
 
         return view('website.shop', array_merge($this->website->homepageData(), [

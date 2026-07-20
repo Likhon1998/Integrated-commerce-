@@ -54,6 +54,7 @@ class DashboardSummaryService
             'session_status' => $cash['session_status'],
             'orders_count' => $cash['orders_count'],
             'has_session' => $cash['has_session'],
+            'stale_open' => $cash['stale_open'] ?? false,
         ];
     }
 
@@ -73,6 +74,7 @@ class DashboardSummaryService
             'session_status' => 'none',
             'orders_count' => 0,
             'has_session' => false,
+            'stale_open' => false,
         ];
     }
 
@@ -100,7 +102,8 @@ class DashboardSummaryService
     {
         return (float) $this->revenueOrdersQuery($shopId, $counterId)
             ->whereDate('created_at', $today)
-            ->sum('total_amount');
+            ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+            ->value('revenue');
     }
 
     protected function todayReturns(int $shopId, ?int $counterId, Carbon $today): float
@@ -161,10 +164,13 @@ class DashboardSummaryService
             $closingLedger += (float) $row['closing'];
         }
 
-        // Latest session per counter for today (avoid double-counting reopened tills)
+        // Today's sessions + any still-open sessions from prior days (overnight tills)
         $sessions = CounterSession::where('shop_id', $shopId)
-            ->whereDate('opened_at', $today)
             ->when($counterId !== null, fn ($q) => $q->where('counter_id', $counterId))
+            ->where(function ($q) use ($today) {
+                $q->whereDate('opened_at', $today)
+                    ->orWhere('status', 'open');
+            })
             ->orderByDesc('opened_at')
             ->get()
             ->unique('counter_id')
@@ -173,19 +179,28 @@ class DashboardSummaryService
         $hasSession = $sessions->isNotEmpty();
         $anyOpen = $sessions->contains(fn ($s) => $s->status === 'open');
         $allClosed = $hasSession && $sessions->every(fn ($s) => $s->status === 'closed');
+        $staleOpen = $sessions->contains(
+            fn ($s) => $s->status === 'open' && ! $s->opened_at->isSameDay($today)
+        );
 
         $openingSession = (float) $sessions->sum('opening_cash');
         $closingSession = 0.0;
         $ordersCount = 0;
+        $sessionCashIn = 0.0;
+        $sessionCashOut = 0.0;
 
         foreach ($sessions as $session) {
             if ($session->status === 'closed' && $session->closing_cash !== null) {
                 $closingSession += (float) $session->closing_cash;
                 $ordersCount += (int) ($session->order_count ?: 0);
+                $sessionCashIn += (float) ($session->cash_sales ?: 0);
+                $sessionCashOut += (float) ($session->cash_refunds ?: 0);
             } else {
                 $live = $this->sessions->liveStats($session);
                 $closingSession += $this->sessions->expectedCash($session, $live);
                 $ordersCount += (int) ($live['order_count'] ?? 0);
+                $sessionCashIn += (float) ($live['cash_sales'] ?? 0);
+                $sessionCashOut += (float) ($live['cash_refunds'] ?? 0);
             }
         }
 
@@ -193,8 +208,19 @@ class DashboardSummaryService
         $opening = $hasSession ? $openingSession : $openingLedger;
         $closing = $hasSession ? $closingSession : $closingLedger;
 
+        // Session-based cash in/out keeps overnight tills consistent with expected drawer cash.
+        // Still include today's ledger transfers (not tracked on the session itself).
+        $cashIn = $hasSession
+            ? ($sessionCashIn + $transfersIn)
+            : ($salesIn + $transfersIn);
+        $cashOut = $hasSession
+            ? ($sessionCashOut + $transfersOut)
+            : ($transfersOut + $refundsOut);
+
         $sessionStatus = 'none';
-        if ($anyOpen) {
+        if ($staleOpen) {
+            $sessionStatus = 'stale';
+        } elseif ($anyOpen) {
             $sessionStatus = 'open';
         } elseif ($allClosed) {
             $sessionStatus = 'closed';
@@ -202,12 +228,13 @@ class DashboardSummaryService
 
         return [
             'opening' => $opening,
-            'cash_in' => $salesIn + $transfersIn,
-            'cash_out' => $transfersOut + $refundsOut,
+            'cash_in' => $cashIn,
+            'cash_out' => $cashOut,
             'closing' => $closing,
             'session_status' => $sessionStatus,
             'orders_count' => $ordersCount,
             'has_session' => $hasSession,
+            'stale_open' => $staleOpen,
         ];
     }
 }

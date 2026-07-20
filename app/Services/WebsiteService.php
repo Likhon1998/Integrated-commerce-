@@ -96,8 +96,12 @@ class WebsiteService
             return $this->emptyHomepage($settings);
         }
 
+        $visibleProducts = fn ($q) => $q->where('stock_quantity', '>', 0)
+            ->where(fn ($q) => $q->where('is_published', true)->orWhereNull('is_published'));
+
         $categories = Category::where('shop_id', $shopId)
-            ->withCount('products')
+            ->whereHas('products', $visibleProducts)
+            ->withCount(['products' => $visibleProducts])
             ->orderBy('name')
             ->take(8)
             ->get();
@@ -107,12 +111,29 @@ class WebsiteService
             ->orderByDesc('is_best_seller')
             ->orderByDesc('review_count')
             ->latest()
-            ->take(8)
+            ->take(10)
+            ->get();
+
+        $flashSaleProducts = $this->catalogQuery($shopId)
+            ->with(['category', 'brand'])
+            ->whereNotNull('original_price')
+            ->whereColumn('original_price', '>', 'selling_price')
+            ->orderByRaw('(original_price - selling_price) / NULLIF(original_price, 0) DESC')
+            ->take(5)
+            ->get();
+
+        $trendingProducts = $this->catalogQuery($shopId)
+            ->with(['category', 'brand'])
+            ->orderByDesc('is_best_seller')
+            ->orderByDesc('review_count')
+            ->latest()
+            ->take(5)
             ->get();
 
         $brands = Brand::where('shop_id', $shopId)
             ->where('is_active', true)
-            ->withCount(['products' => fn ($q) => $q->where('stock_quantity', '>', 0)])
+            ->whereHas('products', $visibleProducts)
+            ->withCount(['products' => $visibleProducts])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -129,6 +150,8 @@ class WebsiteService
                 ->get(),
             'promoBanners' => PromoBanner::where('shop_id', $shopId)->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get(),
             'bestSellers' => $bestSellers,
+            'flashSaleProducts' => $flashSaleProducts,
+            'trendingProducts' => $trendingProducts,
             'brands' => $brands,
             'mainNav' => NavigationLink::where('shop_id', $shopId)->where('location', 'main_nav')->where('is_active', true)->orderBy('sort_order')->get(),
             'topBarNav' => NavigationLink::where('shop_id', $shopId)->where('location', 'top_bar')->where('is_active', true)->orderBy('sort_order')->get(),
@@ -149,6 +172,8 @@ class WebsiteService
             'allCategories' => collect(),
             'promoBanners' => collect(),
             'bestSellers' => collect(),
+            'flashSaleProducts' => collect(),
+            'trendingProducts' => collect(),
             'brands' => collect(),
             'mainNav' => collect(),
             'topBarNav' => collect(),
@@ -509,15 +534,25 @@ class WebsiteService
         ];
     }
 
-    public function categoryImageUrl($category): string
+    public function categoryImageUrl($category): ?string
     {
         if ($category->image_path ?? null) {
             return public_storage_url($category->image_path);
         }
 
-        $slug = $category->slug ?? \Illuminate\Support\Str::slug($category->name);
+        $product = Product::query()
+            ->where('shop_id', $category->shop_id)
+            ->where('category_id', $category->id)
+            ->where('stock_quantity', '>', 0)
+            ->where(fn ($q) => $q->where('is_published', true)->orWhereNull('is_published'))
+            ->whereNotNull('image')
+            ->latest()
+            ->first();
 
-        return config('website_assets.categories.' . $slug)
-            ?? 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80';
+        if ($product) {
+            return $this->productImageUrl($product);
+        }
+
+        return null;
     }
 }

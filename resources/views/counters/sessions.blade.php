@@ -19,29 +19,45 @@
             <div class="lg:col-span-1 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                 <h3 class="text-sm font-bold text-gray-900 mb-1">Open counter</h3>
                 <p class="text-xs text-gray-500 mb-4">Enter the cash in the drawer before the first sale.</p>
-                <form method="POST" action="{{ route('counters.sessions.open') }}" class="space-y-3">
-                    @csrf
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 mb-1">Counter</label>
-                        <select name="counter_id" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
-                            <option value="">Select…</option>
-                            @foreach($counters as $counter)
-                                <option value="{{ $counter->id }}" @disabled(isset($openSessions[$counter->id]))>
-                                    {{ $counter->name }}{{ isset($openSessions[$counter->id]) ? ' (already open)' : '' }}
-                                </option>
-                            @endforeach
-                        </select>
+
+                @php
+                    $availableCounters = $counters->filter(fn ($c) => ! isset($openSessions[$c->id]));
+                @endphp
+
+                @if($availableCounters->isEmpty())
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <p class="font-semibold">All counters already have an open session.</p>
+                        <p class="text-xs mt-1 text-amber-800/90">Close the open session on the right first, then you can open a new one here.</p>
                     </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 mb-1">Starting cash (৳)</label>
-                        <input type="number" step="0.01" min="0" name="opening_cash" value="0" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-semibold text-gray-500 mb-1">Notes</label>
-                        <input type="text" name="notes" placeholder="Optional" class="w-full text-sm rounded-lg border-gray-200 py-1.5 placeholder:text-gray-400">
-                    </div>
-                    <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 rounded-lg">Open session</button>
-                </form>
+                @else
+                    <form method="POST" action="{{ route('counters.sessions.open') }}" class="space-y-3">
+                        @csrf
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-500 mb-1">Counter</label>
+                            <select name="counter_id" class="w-full text-sm rounded-lg border-gray-200 py-1.5 @error('counter_id') border-red-300 @enderror" required>
+                                <option value="">Select…</option>
+                                @foreach($availableCounters as $counter)
+                                    <option value="{{ $counter->id }}" @selected(old('counter_id') == $counter->id)>{{ $counter->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('counter_id')
+                                <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-500 mb-1">Starting cash (৳)</label>
+                            <input type="number" step="0.01" min="0" name="opening_cash" value="{{ old('opening_cash', '0') }}" class="w-full text-sm rounded-lg border-gray-200 py-1.5 @error('opening_cash') border-red-300 @enderror" required>
+                            @error('opening_cash')
+                                <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-500 mb-1">Notes</label>
+                            <input type="text" name="notes" value="{{ old('notes') }}" placeholder="Optional" class="w-full text-sm rounded-lg border-gray-200 py-1.5 placeholder:text-gray-400">
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 rounded-lg">Open session</button>
+                    </form>
+                @endif
             </div>
 
             <div class="lg:col-span-2 space-y-3">

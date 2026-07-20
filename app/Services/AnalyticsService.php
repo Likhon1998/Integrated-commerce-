@@ -34,21 +34,59 @@ class AnalyticsService
         return [$start, $end];
     }
 
+    /** Previous period of equal length for comparison. */
+    public function previousRange(Carbon $start, Carbon $end): array
+    {
+        $days = max(1, $start->diffInDays($end) + 1);
+
+        return [
+            $start->copy()->subDays($days)->startOfDay(),
+            $start->copy()->subDay()->endOfDay(),
+        ];
+    }
+
+    public function percentChange(float $current, float $previous): float
+    {
+        if ($previous == 0.0) {
+            return $current > 0 ? 100.0 : 0.0;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
+    }
+
     public function baseOrderQuery(int $shopId, Carbon $start, Carbon $end)
     {
         return Order::where('shop_id', $shopId)
             ->whereBetween('created_at', [$start, $end])
-            ->where('status', '!=', 'refunded');
+            ->where('status', 'completed')
+            ->where(function ($q) {
+                $q->where('is_exchange_receipt', false)
+                    ->orWhereNull('is_exchange_receipt');
+            });
     }
 
     public function revenue(int $shopId, Carbon $start, Carbon $end): float
     {
-        return (float) $this->baseOrderQuery($shopId, $start, $end)->sum('total_amount');
+        return (float) $this->baseOrderQuery($shopId, $start, $end)
+            ->selectRaw('COALESCE(SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)), 0) as revenue')
+            ->value('revenue');
     }
 
     public function orderCount(int $shopId, Carbon $start, Carbon $end): int
     {
         return $this->baseOrderQuery($shopId, $start, $end)->count();
+    }
+
+    public function averageOrderValue(int $shopId, Carbon $start, Carbon $end): float
+    {
+        $orders = $this->orderCount($shopId, $start, $end);
+
+        return $orders > 0 ? $this->revenue($shopId, $start, $end) / $orders : 0.0;
+    }
+
+    public function totalDiscounts(int $shopId, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->baseOrderQuery($shopId, $start, $end)->sum('discount_amount');
     }
 
     public function posOrders(int $shopId, Carbon $start, Carbon $end)
@@ -67,7 +105,11 @@ class AnalyticsService
             ->whereHas('order', function ($q) use ($shopId, $start, $end) {
                 $q->where('shop_id', $shopId)
                     ->whereBetween('created_at', [$start, $end])
-                    ->where('status', '!=', 'refunded');
+                    ->where('status', 'completed')
+                    ->where(function ($inner) {
+                        $inner->where('is_exchange_receipt', false)
+                            ->orWhereNull('is_exchange_receipt');
+                    });
             })
             ->join('products', 'order_items.product_id', '=', 'products.id')
             ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as cogs')
@@ -94,7 +136,7 @@ class AnalyticsService
             ->select(
                 DB::raw('DATE(created_at) as day'),
                 DB::raw('COUNT(id) as orders'),
-                DB::raw('SUM(total_amount) as revenue')
+                DB::raw('SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)) as revenue')
             )
             ->groupBy(DB::raw('DATE(created_at)'))
             ->orderBy('day')
@@ -106,13 +148,115 @@ class AnalyticsService
         return OrderItem::whereHas('order', function ($q) use ($shopId, $start, $end) {
                 $q->where('shop_id', $shopId)
                     ->whereBetween('created_at', [$start, $end])
-                    ->where('status', '!=', 'refunded');
+                    ->where('status', 'completed')
+                    ->where(function ($inner) {
+                        $inner->where('is_exchange_receipt', false)
+                            ->orWhereNull('is_exchange_receipt');
+                    });
             })
-            ->select('product_id', DB::raw('SUM(quantity) as sold'))
+            ->select(
+                'product_id',
+                DB::raw('SUM(quantity) as sold'),
+                DB::raw('SUM(order_items.subtotal) as revenue')
+            )
             ->groupBy('product_id')
-            ->with('product')
+            ->with(['product.category'])
             ->orderByDesc('sold')
             ->limit($limit)
             ->get();
+    }
+
+    public function salesByCategory(int $shopId, Carbon $start, Carbon $end, int $limit = 6)
+    {
+        return DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
+            ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+            ->where('orders.shop_id', $shopId)
+            ->whereBetween('orders.created_at', [$start, $end])
+            ->where('orders.status', 'completed')
+            ->where(function ($q) {
+                $q->where('orders.is_exchange_receipt', false)
+                    ->orWhereNull('orders.is_exchange_receipt');
+            })
+            ->select(
+                DB::raw("COALESCE(categories.name, 'Uncategorized') as category"),
+                DB::raw('SUM(order_items.subtotal) as revenue'),
+                DB::raw('SUM(order_items.quantity) as sold')
+            )
+            ->groupBy(DB::raw("COALESCE(categories.name, 'Uncategorized')"))
+            ->orderByDesc('revenue')
+            ->limit($limit)
+            ->get();
+    }
+
+    public function topCustomers(int $shopId, Carbon $start, Carbon $end, int $limit = 15)
+    {
+        return $this->baseOrderQuery($shopId, $start, $end)
+            ->whereNotNull('customer_id')
+            ->select(
+                'customer_id',
+                DB::raw('COUNT(id) as orders'),
+                DB::raw('SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)) as revenue'),
+                DB::raw('SUM(COALESCE(discount_amount, 0)) as discounts')
+            )
+            ->groupBy('customer_id')
+            ->with('customer')
+            ->orderByDesc('revenue')
+            ->limit($limit)
+            ->get();
+    }
+
+    public function discountBreakdown(int $shopId, Carbon $start, Carbon $end)
+    {
+        return $this->baseOrderQuery($shopId, $start, $end)
+            ->where('discount_amount', '>', 0)
+            ->with(['customer', 'counter'])
+            ->latest()
+            ->limit(50)
+            ->get();
+    }
+
+    public function salesKpis(int $shopId, Carbon $start, Carbon $end): array
+    {
+        [$prevStart, $prevEnd] = $this->previousRange($start, $end);
+
+        $revenue = $this->revenue($shopId, $start, $end);
+        $prevRevenue = $this->revenue($shopId, $prevStart, $prevEnd);
+        $orders = $this->orderCount($shopId, $start, $end);
+        $prevOrders = $this->orderCount($shopId, $prevStart, $prevEnd);
+        $aov = $this->averageOrderValue($shopId, $start, $end);
+        $prevAov = $this->averageOrderValue($shopId, $prevStart, $prevEnd);
+        $cogs = $this->costOfGoodsSold($shopId, $start, $end);
+        $prevCogs = $this->costOfGoodsSold($shopId, $prevStart, $prevEnd);
+        $profit = $revenue - $cogs;
+        $prevProfit = $prevRevenue - $prevCogs;
+        $discounts = $this->totalDiscounts($shopId, $start, $end);
+        $prevDiscounts = $this->totalDiscounts($shopId, $prevStart, $prevEnd);
+
+        return [
+            'revenue' => $revenue,
+            'orders' => $orders,
+            'aov' => $aov,
+            'profit' => $profit,
+            'discounts' => $discounts,
+            'cogs' => $cogs,
+            'prev' => [
+                'revenue' => $prevRevenue,
+                'orders' => $prevOrders,
+                'aov' => $prevAov,
+                'profit' => $prevProfit,
+                'discounts' => $prevDiscounts,
+                'start' => $prevStart,
+                'end' => $prevEnd,
+            ],
+            'change' => [
+                'revenue' => $this->percentChange($revenue, $prevRevenue),
+                'orders' => $this->percentChange((float) $orders, (float) $prevOrders),
+                'aov' => $this->percentChange($aov, $prevAov),
+                'profit' => $this->percentChange($profit, $prevProfit),
+                'discounts' => $this->percentChange($discounts, $prevDiscounts),
+            ],
+        ];
     }
 }

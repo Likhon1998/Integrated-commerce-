@@ -1,7 +1,7 @@
 <x-app-layout>
 @php
     $user = Auth::user();
-    $money = fn ($n) => 'Tk'.number_format((float) $n, 2);
+    $money = fn ($n) => '৳'.number_format((float) $n, 2);
     $statusClass = [
         'completed' => 'bg-emerald-50 text-emerald-700',
         'pending' => 'bg-amber-50 text-amber-700',
@@ -17,11 +17,18 @@
     $bs = $businessSummary ?? [];
     $sessionBadge = match ($bs['session_status'] ?? 'none') {
         'open' => ['Open session', 'bg-emerald-100 text-emerald-800'],
+        'stale' => ['Session still open (prev. day)', 'bg-amber-100 text-amber-900'],
         'closed' => ['Closed', 'bg-slate-100 text-slate-600'],
         default => ['No session yet', 'bg-amber-50 text-amber-800'],
     };
     $openingHint = !empty($bs['has_session']) ? 'Opening Balance' : 'Till cash on hand';
     $closingHint = !empty($bs['has_session']) ? 'Expected drawer cash' : 'Till cash on hand';
+    $cashInHint = !empty($bs['has_session'])
+        ? (!empty($bs['stale_open']) ? 'Cash sales since open' : 'Cash sales + transfers in')
+        : 'Sales + transfers in';
+    $cashOutHint = !empty($bs['has_session'])
+        ? (!empty($bs['stale_open']) ? 'Cash refunds since open' : 'Cash refunds + transfers out')
+        : 'Refunds + transfers out';
 @endphp
 
 <div class="space-y-5">
@@ -74,6 +81,32 @@
             @can('manage staff')
                 <a href="{{ route('staff.index') }}" class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-200">Assign</a>
             @endcan
+        </div>
+    @endif
+
+    @if(!empty($bs['stale_open']))
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 font-bold">!</div>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-amber-900">Cash session still open from a previous day</p>
+                    <p class="text-xs text-amber-700">Close it in Cash Sessions, then open a fresh session for today so drawer figures stay accurate.</p>
+                </div>
+            </div>
+            <a href="{{ route('counters.sessions.index') }}" class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-200 shrink-0">Cash Sessions</a>
+        </div>
+    @endif
+
+    @if(!empty($isAdmin) && ($pendingOnlineOrders ?? 0) > 0)
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200/80 bg-sky-50 px-4 py-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700 font-bold">{{ $pendingOnlineOrders }}</div>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-sky-900">Pending online orders</p>
+                    <p class="text-xs text-sky-700">{{ $pendingOnlineOrders }} order{{ $pendingOnlineOrders === 1 ? '' : 's' }} waiting to be processed.</p>
+                </div>
+            </div>
+            <a href="{{ route('online-orders.index') }}" class="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-bold text-sky-900 hover:bg-sky-200 shrink-0">View orders</a>
         </div>
     @endif
 
@@ -132,6 +165,7 @@
     {{-- Row 2+3: Cash drawer --}}
     <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-400 to-cyan-600 p-4 text-white shadow-md shadow-teal-200/50">
+            <a href="{{ route('accounts.petty-cash') }}" class="absolute inset-0 z-10" aria-label="Petty cash"></a>
             <div class="flex items-start justify-between gap-2">
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-white/80">Petty Cash</p>
@@ -144,6 +178,7 @@
             </div>
         </div>
         <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-white shadow-md shadow-amber-200/50">
+            <a href="{{ route('counters.sessions.index') }}" class="absolute inset-0 z-10" aria-label="Cash sessions"></a>
             <div class="flex items-start justify-between gap-2">
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-white/80">Opening Balance</p>
@@ -160,7 +195,7 @@
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-white/80">Cash In</p>
                     <p class="mt-2 text-lg font-bold tracking-tight">{{ $money($bs['cash_in'] ?? 0) }}</p>
-                    <p class="mt-1 text-[11px] text-white/75">Sales + transfers in</p>
+                    <p class="mt-1 text-[11px] text-white/75">{{ $cashInHint }}</p>
                 </div>
                 <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
@@ -172,7 +207,7 @@
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-white/80">Cash Out</p>
                     <p class="mt-2 text-lg font-bold tracking-tight">{{ $money($bs['cash_out'] ?? 0) }}</p>
-                    <p class="mt-1 text-[11px] text-white/75">Refunds + transfers out</p>
+                    <p class="mt-1 text-[11px] text-white/75">{{ $cashOutHint }}</p>
                 </div>
                 <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
@@ -246,7 +281,11 @@
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Products</p>
                     <p class="mt-2 text-xl font-bold text-slate-900 tracking-tight">{{ number_format($totalProducts) }}</p>
                     <p class="mt-1 text-[11px] {{ ($lowStockCount ?? 0) > 0 ? 'text-amber-600 font-semibold' : 'text-slate-400' }}">
-                        {{ $lowStockCount }} low stock · Inv {{ $money($inventoryValue) }}
+                        @if(($lowStockCount ?? 0) > 0)
+                            <a href="{{ route('reports.low_stock') }}" class="hover:underline">{{ $lowStockCount }} low stock</a> · Inv {{ $money($inventoryValue) }}
+                        @else
+                            {{ $lowStockCount }} low stock · Inv {{ $money($inventoryValue) }}
+                        @endif
                     </p>
                 </div>
                 <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
@@ -408,13 +447,15 @@
     </div>
     @endif
 
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         @can('process pos sales')
         <a href="{{ route('pos.index') }}" target="_blank" rel="noopener" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition">Launch POS Terminal</a>
         @endcan
         @can('manage inventory')
             <a href="{{ route('products.index') }}" class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition">Manage Products</a>
         @endcan
+        <a href="{{ route('counters.sessions.index') }}" class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-amber-800 hover:bg-amber-600 hover:text-white hover:border-amber-600 transition">Cash Sessions</a>
+        <a href="{{ route('analytics.overview') }}" class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-violet-700 hover:bg-violet-600 hover:text-white hover:border-violet-600 transition">Reports</a>
     </div>
 </div>
 

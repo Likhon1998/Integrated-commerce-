@@ -8,19 +8,23 @@
             @php
                 $boundMin = (float) ($priceBounds['min'] ?? 0);
                 $boundMax = max($boundMin, (float) ($priceBounds['max'] ?? 0));
-                $minVal = request('min_price', $boundMin);
-                $maxVal = request('max_price', $boundMax);
+                $currency = $settings->currency_symbol ?? '$';
+                $minVal = request()->filled('min_price') ? request('min_price') : '';
+                $maxVal = request()->filled('max_price') ? request('max_price') : '';
             @endphp
             <div class="gaget-filter-block">
                 <h3 class="gaget-filter-block__title">Price</h3>
+                @if($boundMax > 0)
+                    <p class="gaget-filter-price-hint">{{ $currency }}{{ number_format($boundMin, 0) }} – {{ $currency }}{{ number_format($boundMax, 0) }}</p>
+                @endif
                 <div class="gaget-filter-price-inputs">
                     <label>
                         <span>Min</span>
-                        <input type="number" name="min_price" min="0" step="1" value="{{ $minVal }}" placeholder="{{ $settings->currency_symbol ?? '$' }}">
+                        <input type="number" name="min_price" min="0" step="1" value="{{ $minVal }}" placeholder="{{ $currency }}{{ $boundMin > 0 ? number_format($boundMin, 0) : '0' }}">
                     </label>
                     <label>
                         <span>Max</span>
-                        <input type="number" name="max_price" min="0" step="1" value="{{ $maxVal }}" placeholder="{{ $settings->currency_symbol ?? '$' }}">
+                        <input type="number" name="max_price" min="0" step="1" value="{{ $maxVal }}" placeholder="{{ $currency }}{{ $boundMax > 0 ? number_format($boundMax, 0) : '0' }}">
                     </label>
                 </div>
             </div>

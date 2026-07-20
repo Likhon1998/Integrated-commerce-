@@ -15,7 +15,7 @@
         </a>
     </div>
 
-    <nav class="admin-scroll-hide p-3 space-y-0.5 flex-1 overflow-y-auto" x-data="{ inventoryOpen: {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, supplyOpen: {{ request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, analyticsOpen: {{ request()->routeIs('analytics.*') ? 'true' : 'false' }}, accountsOpen: {{ request()->routeIs('accounts.*') ? 'true' : 'false' }}, cmsOpen: {{ request()->routeIs('cms.*') ? 'true' : 'false' }} }">
+    <nav class="admin-scroll-hide p-3 space-y-0.5 flex-1 overflow-y-auto" x-data="{ inventoryOpen: {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, supplyOpen: {{ request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, cmsOpen: {{ request()->routeIs('cms.*') ? 'true' : 'false' }} }">
 
         @can('view dashboard')
         <a href="{{ route('dashboard') }}"
@@ -74,8 +74,10 @@
                 <a href="{{ route('supply.reorder-levels.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.reorder-levels.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Reorder Level</a>
                 <a href="{{ route('supply.purchase-returns.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.purchase-returns.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Purchase Return</a>
                 <a href="{{ route('supply.adjustments.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.adjustments.*', 'stock.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Stock Adjustment</a>
+                <a href="{{ route('supply.stock-transfers.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.stock-transfers.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Stock Transfer</a>
                 <a href="{{ route('supply.damage-products.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.damage-products.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Damage Product</a>
                 <a href="{{ route('supply.stores.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.stores.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Store Settings</a>
+                <a href="{{ route('supply.warehouses.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.warehouses.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Warehouse</a>
                 <a href="{{ route('supply.suppliers.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.suppliers.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Supplier</a>
             </div>
         </div>
@@ -136,97 +138,17 @@
             @endif
         </a>
 
-        <div class="pt-2">
-            <button @click="accountsOpen = !accountsOpen" 
-                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('accounts.*') ? 'text-white bg-white/10' : 'hover:bg-white/5 hover:text-white' }}">
-                <div class="flex items-center">
-                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('accounts.*') ? 'text-blue-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                    <span>Accounts</span>
-                </div>
-                <svg :class="accountsOpen ? 'rotate-180' : ''" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
+        <a href="{{ route('accounts.opening-balance') }}"
+           class="{{ request()->routeIs('accounts.*') ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'hover:bg-white/5 hover:text-white' }} flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm mt-1.5">
+            <svg class="w-5 h-5 mr-3 {{ request()->routeIs('accounts.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            Accounts
+        </a>
 
-            <div x-show="accountsOpen" 
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 transform -translate-y-2"
-                 x-transition:enter-end="opacity-100 transform translate-y-0"
-                 class="mt-1 ml-4 pl-4 border-l border-white/10 space-y-1">
-
-                <a href="{{ route('accounts.opening-balance') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.opening-balance') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Opening Balance
-                </a>
-                <a href="{{ route('accounts.chart') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.chart') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Chart of Accounts
-                </a>
-                <a href="{{ route('accounts.ledger') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.ledger') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Ledger
-                </a>
-                <a href="{{ route('accounts.cash-book') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.cash-book') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Cash Book
-                </a>
-                <a href="{{ route('accounts.daily-summary') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.daily-summary') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Daily Summary
-                </a>
-                <a href="{{ route('accounts.petty-cash') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.petty-cash') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Petty Cash
-                </a>
-                <a href="{{ route('accounts.transfer') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('accounts.transfer') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Account Transfer
-                </a>
-            </div>
-        </div>
-
-        <div class="pt-2">
-            <button @click="analyticsOpen = !analyticsOpen" 
-                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('analytics.*') ? 'text-white bg-white/10' : 'hover:bg-white/5 hover:text-white' }}">
-                <div class="flex items-center">
-                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('analytics.*') ? 'text-blue-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                    <span>Analytics</span>
-                </div>
-                <svg :class="analyticsOpen ? 'rotate-180' : ''" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-
-            <div x-show="analyticsOpen" 
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 transform -translate-y-2"
-                 x-transition:enter-end="opacity-100 transform translate-y-0"
-                 class="mt-1 ml-4 pl-4 border-l border-white/10 space-y-1">
-                
-                <a href="{{ route('analytics.overview') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.overview') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Overview
-                </a>
-                <a href="{{ route('analytics.orders') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.orders') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Orders
-                </a>
-                <a href="{{ route('analytics.revenue') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.revenue') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Revenue
-                </a>
-                <a href="{{ route('analytics.expense') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.expense') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Expense
-                </a>
-                <a href="{{ route('analytics.inventory') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.inventory') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Stock Overview
-                </a>
-                <a href="{{ route('analytics.balance') }}" 
-                   class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('analytics.balance') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">
-                    Balance
-                </a>
-            </div>
-        </div>
+        <a href="{{ route('analytics.overview') }}"
+           class="{{ request()->routeIs('analytics.*') ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'hover:bg-white/5 hover:text-white' }} flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm mt-1.5">
+            <svg class="w-5 h-5 mr-3 {{ request()->routeIs('analytics.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Reports
+        </a>
 
         <div class="pt-2 border-t border-white/5 mt-2">
             <a href="{{ route('customers.index') }}" 

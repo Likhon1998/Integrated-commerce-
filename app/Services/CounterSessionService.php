@@ -32,6 +32,17 @@ class CounterSessionService
             'notes' => $notes,
         ]);
 
+        if ($openingCash > 0) {
+            $cashAccount = $this->accounts->ensureCounterCashAccount($counter);
+            $this->accounts->postCounterFloat(
+                $counter->shop_id,
+                $cashAccount,
+                $openingCash,
+                "Opening float — {$counter->name} (session #{$session->id})",
+                $userId,
+            );
+        }
+
         return $session;
     }
 
@@ -98,7 +109,9 @@ class CounterSessionService
             ->whereBetween('created_at', [$from, $until])
             ->get();
 
-        $completed = $orders->where('status', 'completed');
+        // Include refunded sales so cash-in is counted before cash-out on refund.
+        // (Status flips from completed → refunded; counting only "completed" would understate the drawer.)
+        $sold = $orders->whereIn('status', ['completed', 'refunded']);
         $refunded = $orders->whereIn('status', ['refunded', 'returned']);
 
         $cashSales = 0.0;
@@ -106,7 +119,7 @@ class CounterSessionService
         $mobileSales = 0.0;
         $otherSales = 0.0;
 
-        foreach ($completed as $order) {
+        foreach ($sold as $order) {
             $amount = $order->netPayable();
             $method = strtolower((string) $order->payment_method);
 
@@ -130,8 +143,8 @@ class CounterSessionService
             ->sum(fn ($o) => $o->netPayable());
 
         return [
-            'order_count' => $completed->count(),
-            'total_sales' => round((float) $completed->sum(fn ($o) => $o->netPayable()), 2),
+            'order_count' => $sold->where('status', 'completed')->count(),
+            'total_sales' => round((float) $sold->where('status', 'completed')->sum(fn ($o) => $o->netPayable()), 2),
             'cash_sales' => round($cashSales, 2),
             'card_sales' => round($cardSales, 2),
             'mobile_sales' => round($mobileSales, 2),

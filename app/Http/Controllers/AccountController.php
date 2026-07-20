@@ -9,7 +9,6 @@ use App\Services\AccountService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class AccountController extends Controller
 {
@@ -23,23 +22,141 @@ class AccountController extends Controller
         return $shopId;
     }
 
-    public function openingBalance(Request $request)
+    protected function accountView(Request $request, string $activeTab)
     {
         $shopId = $this->bootstrap();
         [$start, $end] = $this->accounts->dateRange($request);
+        $counters = Counter::where('shop_id', $shopId)->get();
 
-        $accounts = Account::where('shop_id', $shopId)
-            ->where('is_active', true)
+        $allAccountModels = Account::where('shop_id', $shopId)
             ->with('counter')
             ->orderBy('type')
             ->orderBy('name')
-            ->get()
-            ->map(fn (Account $a) => [
-                'account' => $a,
-                'balance' => $this->accounts->accountBalance($a),
-            ]);
+            ->get();
 
-        return view('accounts.opening-balance', compact('accounts', 'start', 'end'));
+        $activeAccountModels = $allAccountModels->where('is_active', true)->values();
+        $balances = $this->accounts->accountBalances($allAccountModels);
+
+        $accounts = $activeAccountModels->map(fn (Account $a) => [
+            'account' => $a,
+            'balance' => $balances[$a->id] ?? 0,
+        ]);
+
+        $chartAccounts = $allAccountModels->map(fn (Account $a) => [
+            'account' => $a,
+            'balance' => $balances[$a->id] ?? 0,
+        ]);
+
+        $grouped = $chartAccounts->groupBy(fn ($row) => $row['account']->type);
+        $accountCount = $chartAccounts->count();
+
+        $accountList = $activeAccountModels->sortBy('name')->values();
+
+        $ledgerAccountId = $activeTab === 'ledger'
+            ? $request->get('account_id', $accountList->first()?->id)
+            : $accountList->first()?->id;
+        $ledgerAccount = $ledgerAccountId
+            ? $allAccountModels->firstWhere('id', (int) $ledgerAccountId)
+            : null;
+
+        $ledgerEntries = collect();
+
+        if ($ledgerAccount) {
+            $opening = (float) $ledgerAccount->opening_balance;
+            $priorEntries = AccountEntry::where('account_id', $ledgerAccount->id)
+                ->whereHas('transaction', fn ($q) => $q->where('transaction_date', '<', $start->toDateString()))
+                ->get();
+
+            foreach ($priorEntries as $entry) {
+                $opening += $this->entryDelta($ledgerAccount, $entry);
+            }
+
+            $periodEntries = AccountEntry::where('account_id', $ledgerAccount->id)
+                ->whereHas('transaction', fn ($q) => $q->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()]))
+                ->with(['transaction', 'counter'])
+                ->get()
+                ->sortBy(fn ($entry) => $entry->transaction->transaction_date . $entry->id);
+
+            $runningBalance = $opening;
+            $ledgerEntries = $periodEntries->map(function ($entry) use ($ledgerAccount, &$runningBalance) {
+                $delta = $this->entryDelta($ledgerAccount, $entry);
+                $runningBalance += $delta;
+
+                return [
+                    'entry' => $entry,
+                    'debit' => $entry->entry_type === 'debit' ? $entry->amount : 0,
+                    'credit' => $entry->entry_type === 'credit' ? $entry->amount : 0,
+                    'balance' => $runningBalance,
+                ];
+            });
+        }
+
+        $cashAccounts = $this->accounts->cashAccounts($shopId);
+        $cashAccountId = $activeTab === 'cash-book' ? $request->get('account_id') : null;
+        $counterId = $activeTab === 'cash-book' ? $request->get('counter_id') : null;
+
+        if ($counterId && ! $cashAccountId) {
+            $cashAccountId = $cashAccounts->firstWhere('counter_id', (int) $counterId)?->id;
+        }
+
+        $cashBookAccount = $cashAccountId
+            ? $cashAccounts->firstWhere('id', (int) $cashAccountId)
+            : $cashAccounts->first();
+
+        $cashBookEntries = collect();
+
+        if ($cashBookAccount) {
+            $cashBookEntries = AccountEntry::where('account_id', $cashBookAccount->id)
+                ->whereHas('transaction', fn ($q) => $q->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()]))
+                ->with(['transaction', 'counter'])
+                ->join('account_transactions', 'account_entries.account_transaction_id', '=', 'account_transactions.id')
+                ->orderBy('account_transactions.transaction_date')
+                ->orderBy('account_entries.id')
+                ->select('account_entries.*')
+                ->get();
+        }
+
+        $cashBookBalance = $cashBookAccount ? ($balances[$cashBookAccount->id] ?? 0) : 0;
+
+        $date = $request->filled('date') ? Carbon::parse($request->date) : now();
+        $summaryCounterId = $activeTab === 'daily-summary' ? $request->get('counter_id') : null;
+        $summaryRows = $this->accounts->dailySummary($shopId, $date, $summaryCounterId ? (int) $summaryCounterId : null);
+
+        $pettyAccount = $this->accounts->getAccount($shopId, 'PETTY');
+        $pettyBalance = $balances[$pettyAccount->id] ?? 0;
+
+        $transferAccounts = $activeAccountModels
+            ->where('type', 'asset')
+            ->sortBy('name')
+            ->values();
+
+        return view('accounts.layout', compact(
+            'activeTab',
+            'start',
+            'end',
+            'counters',
+            'accounts',
+            'chartAccounts',
+            'grouped',
+            'accountCount',
+            'ledgerAccount',
+            'accountList',
+            'ledgerEntries',
+            'cashAccounts',
+            'cashBookAccount',
+            'cashBookEntries',
+            'cashBookBalance',
+            'date',
+            'summaryRows',
+            'summaryCounterId',
+            'pettyBalance',
+            'transferAccounts',
+        ));
+    }
+
+    public function openingBalance(Request $request)
+    {
+        return $this->accountView($request, 'opening-balance');
     }
 
     public function updateOpeningBalance(Request $request)
@@ -56,27 +173,14 @@ class AccountController extends Controller
             $account->update(['opening_balance' => $amount ?? 0]);
         }
 
-        return back()->with('success', 'Opening balances updated successfully.');
+        return redirect()
+            ->route('accounts.opening-balance')
+            ->with('success', 'Opening balances updated successfully.');
     }
 
     public function chart(Request $request)
     {
-        $shopId = $this->bootstrap();
-        [$start, $end] = $this->accounts->dateRange($request);
-
-        $accounts = Account::where('shop_id', $shopId)
-            ->with('counter')
-            ->orderBy('type')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Account $a) => [
-                'account' => $a,
-                'balance' => $this->accounts->accountBalance($a),
-            ]);
-
-        $grouped = $accounts->groupBy(fn ($row) => $row['account']->type);
-
-        return view('accounts.chart', compact('grouped', 'start', 'end'));
+        return $this->accountView($request, 'chart');
     }
 
     public function storeAccount(Request $request)
@@ -99,110 +203,29 @@ class AccountController extends Controller
             'is_active' => true,
         ]);
 
-        return back()->with('success', 'Account added to chart.');
+        return redirect()
+            ->route('accounts.chart')
+            ->with('success', 'Account added to chart.');
     }
 
     public function ledger(Request $request)
     {
-        $shopId = $this->bootstrap();
-        [$start, $end] = $this->accounts->dateRange($request);
-
-        $accountList = Account::where('shop_id', $shopId)->where('is_active', true)->orderBy('name')->get();
-        $accountId = $request->get('account_id', $accountList->first()?->id);
-        $account = $accountId ? Account::where('shop_id', $shopId)->find($accountId) : null;
-
-        $entries = collect();
-        $runningBalance = 0;
-
-        if ($account) {
-            $opening = (float) $account->opening_balance;
-            $priorEntries = AccountEntry::where('account_id', $account->id)
-                ->whereHas('transaction', fn ($q) => $q->where('transaction_date', '<', $start->toDateString()))
-                ->get();
-
-            foreach ($priorEntries as $e) {
-                $opening += $this->entryDelta($account, $e);
-            }
-
-            $periodEntries = AccountEntry::where('account_id', $account->id)
-                ->whereHas('transaction', fn ($q) => $q->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()]))
-                ->with(['transaction', 'counter'])
-                ->get()
-                ->sortBy(fn ($e) => $e->transaction->transaction_date . $e->id);
-
-            $runningBalance = $opening;
-            $entries = $periodEntries->map(function ($e) use ($account, &$runningBalance) {
-                $delta = $this->entryDelta($account, $e);
-                $runningBalance += $delta;
-
-                return [
-                    'entry' => $e,
-                    'debit' => $e->entry_type === 'debit' ? $e->amount : 0,
-                    'credit' => $e->entry_type === 'credit' ? $e->amount : 0,
-                    'balance' => $runningBalance,
-                ];
-            });
-        }
-
-        $counters = Counter::where('shop_id', $shopId)->get();
-
-        return view('accounts.ledger', compact('account', 'accountList', 'entries', 'start', 'end', 'counters'));
+        return $this->accountView($request, 'ledger');
     }
 
     public function cashBook(Request $request)
     {
-        $shopId = $this->bootstrap();
-        [$start, $end] = $this->accounts->dateRange($request);
-
-        $cashAccounts = $this->accounts->cashAccounts($shopId);
-        $accountId = $request->get('account_id');
-        $counterId = $request->get('counter_id');
-
-        if ($counterId && !$accountId) {
-            $accountId = $cashAccounts->firstWhere('counter_id', (int) $counterId)?->id;
-        }
-
-        $account = $accountId
-            ? $cashAccounts->firstWhere('id', (int) $accountId)
-            : $cashAccounts->first();
-
-        $entries = collect();
-
-        if ($account) {
-            $entries = AccountEntry::where('account_id', $account->id)
-                ->whereHas('transaction', fn ($q) => $q->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()]))
-                ->with(['transaction', 'counter'])
-                ->join('account_transactions', 'account_entries.account_transaction_id', '=', 'account_transactions.id')
-                ->orderBy('account_transactions.transaction_date')
-                ->orderBy('account_entries.id')
-                ->select('account_entries.*')
-                ->get();
-        }
-
-        $counters = Counter::where('shop_id', $shopId)->get();
-        $balance = $account ? $this->accounts->accountBalance($account) : 0;
-
-        return view('accounts.cash-book', compact('cashAccounts', 'account', 'entries', 'start', 'end', 'counters', 'balance'));
+        return $this->accountView($request, 'cash-book');
     }
 
     public function dailySummary(Request $request)
     {
-        $shopId = $this->bootstrap();
-
-        $date = $request->filled('date') ? Carbon::parse($request->date) : now();
-        $counterId = $request->get('counter_id');
-        $rows = $this->accounts->dailySummary($shopId, $date, $counterId ? (int) $counterId : null);
-        $counters = Counter::where('shop_id', $shopId)->get();
-
-        return view('accounts.daily-summary', compact('rows', 'date', 'counters', 'counterId'));
+        return $this->accountView($request, 'daily-summary');
     }
 
-    public function pettyCashForm()
+    public function pettyCashForm(Request $request)
     {
-        $shopId = $this->bootstrap();
-        $pettyBalance = $this->accounts->accountBalance($this->accounts->getAccount($shopId, 'PETTY'));
-
-        return view('accounts.petty-cash', compact('pettyBalance'));
+        return $this->accountView($request, 'petty-cash');
     }
 
     public function pettyCashStore(Request $request)
@@ -218,28 +241,21 @@ class AccountController extends Controller
         $balance = $this->accounts->accountBalance($petty);
 
         if ($request->amount > $balance) {
-            return back()->with('error', 'Insufficient petty cash balance.');
+            return redirect()
+                ->route('accounts.petty-cash')
+                ->with('error', 'Insufficient petty cash balance.');
         }
 
         $this->accounts->postPettyCash($shopId, (float) $request->amount, $request->description);
 
-        return back()->with('success', 'Petty cash expense recorded.');
+        return redirect()
+            ->route('accounts.petty-cash')
+            ->with('success', 'Petty cash expense recorded.');
     }
 
-    public function transferForm()
+    public function transferForm(Request $request)
     {
-        $shopId = $this->bootstrap();
-
-        $accounts = Account::where('shop_id', $shopId)
-            ->where('is_active', true)
-            ->where('type', 'asset')
-            ->with('counter')
-            ->orderBy('name')
-            ->get();
-
-        $counters = Counter::where('shop_id', $shopId)->get();
-
-        return view('accounts.transfer', compact('accounts', 'counters'));
+        return $this->accountView($request, 'transfer');
     }
 
     public function transferStore(Request $request)
@@ -259,7 +275,9 @@ class AccountController extends Controller
 
         $fromBalance = $this->accounts->accountBalance($from);
         if ($request->amount > $fromBalance) {
-            return back()->with('error', 'Insufficient balance in source account.');
+            return redirect()
+                ->route('accounts.transfer')
+                ->with('error', 'Insufficient balance in source account.');
         }
 
         $this->accounts->postTransfer(
@@ -271,7 +289,9 @@ class AccountController extends Controller
             $request->counter_id ? (int) $request->counter_id : null,
         );
 
-        return back()->with('success', 'Transfer completed successfully.');
+        return redirect()
+            ->route('accounts.transfer')
+            ->with('success', 'Transfer completed successfully.');
     }
 
     protected function entryDelta(Account $account, AccountEntry $entry): float

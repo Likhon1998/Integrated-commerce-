@@ -25,6 +25,7 @@ use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\ReorderLevelController;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockLocationController;
+use App\Http\Controllers\StockTransferController;
 use App\Http\Controllers\StorefrontAuthController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WebsiteController;
@@ -116,7 +117,9 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::get('/products-barcodes', [ProductController::class, 'barcodes'])->name('products.barcodes');
     Route::get('/products-barcodes/print', [ProductController::class, 'barcodesPrint'])->name('products.barcodes.print');
     Route::get('/stock-ledger', fn () => redirect()->route('supply.adjustments.index'))->name('stock.index');
-    Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])->name('stock.store');
+    Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])
+        ->middleware('can:manage inventory')
+        ->name('stock.store');
 
     Route::prefix('supply')->name('supply.')->middleware('can:manage inventory')->group(function () {
         Route::get('/opening-inventory', [OpeningInventoryController::class, 'index'])->name('opening-inventory.index');
@@ -133,6 +136,14 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::post('/stores', [StockLocationController::class, 'storeSave'])->name('stores.store');
         Route::get('/stores/{location}/edit', [StockLocationController::class, 'storeEdit'])->name('stores.edit');
         Route::put('/stores/{location}', [StockLocationController::class, 'storeUpdate'])->name('stores.update');
+        Route::get('/warehouses', [StockLocationController::class, 'warehouses'])->name('warehouses.index');
+        Route::get('/warehouses/create', [StockLocationController::class, 'warehouseCreate'])->name('warehouses.create');
+        Route::post('/warehouses', [StockLocationController::class, 'warehouseSave'])->name('warehouses.store');
+        Route::get('/warehouses/{location}/edit', [StockLocationController::class, 'warehouseEdit'])->name('warehouses.edit');
+        Route::put('/warehouses/{location}', [StockLocationController::class, 'warehouseUpdate'])->name('warehouses.update');
+        Route::get('/stock-transfers', [StockTransferController::class, 'index'])->name('stock-transfers.index');
+        Route::get('/stock-transfers/create', [StockTransferController::class, 'create'])->name('stock-transfers.create');
+        Route::post('/stock-transfers', [StockTransferController::class, 'store'])->name('stock-transfers.store');
         Route::resource('purchase-orders', PurchaseOrderController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
         Route::post('/purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
         Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
@@ -165,6 +176,14 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::prefix('analytics')->name('analytics.')->group(function () {
         Route::get('/overview', [AnalyticsController::class, 'overview'])->name('overview');
         Route::get('/orders', [AnalyticsController::class, 'orders'])->name('orders');
+        Route::get('/products', [AnalyticsController::class, 'products'])->name('products');
+        Route::get('/customers', [AnalyticsController::class, 'customers'])->name('customers');
+        Route::get('/stock', [AnalyticsController::class, 'inventory'])->name('stock');
+        Route::get('/tax', [AnalyticsController::class, 'tax'])->name('tax');
+        Route::get('/discount', [AnalyticsController::class, 'discount'])->name('discount');
+        Route::get('/preview', [AnalyticsController::class, 'preview'])->name('preview');
+        Route::get('/export', [AnalyticsController::class, 'export'])->name('export');
+        // Legacy aliases
         Route::get('/revenue', [AnalyticsController::class, 'revenue'])->name('revenue');
         Route::get('/expense', [AnalyticsController::class, 'expense'])->name('expense');
         Route::get('/inventory', [AnalyticsController::class, 'inventory'])->name('inventory');

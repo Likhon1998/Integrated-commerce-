@@ -10,6 +10,17 @@ use Carbon\Carbon;
 
 class ReportController extends Controller
 {
+    protected function completedOrdersQuery(int $shopId, $startDate, $endDate)
+    {
+        return Order::where('shop_id', $shopId)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->where('status', 'completed')
+            ->where(function ($q) {
+                $q->where('is_exchange_receipt', false)
+                    ->orWhereNull('is_exchange_receipt');
+            });
+    }
+
     public function dailySales(Request $request)
     {
         $shopId = Auth::user()->shop_id;
@@ -26,53 +37,47 @@ class ReportController extends Controller
             $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::today()->endOfDay();
         }
 
+        $netExpr = 'GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)';
+
         // 1. PERIOD SNAPSHOT (Overview of Cash/Card/bKash for the selected date range)
-        $summary = Order::where('shop_id', $shopId)
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'refunded')
+        $summary = $this->completedOrdersQuery($shopId, $startDate, $endDate)
             ->select(
                 DB::raw('COUNT(id) as total_orders'),
-                DB::raw('SUM(total_amount) as total_revenue'),
-                DB::raw('SUM(CASE WHEN LOWER(payment_method) = "cash" THEN total_amount ELSE 0 END) as cash_total'),
-                DB::raw('SUM(CASE WHEN LOWER(payment_method) = "card" THEN total_amount ELSE 0 END) as card_total'),
-                DB::raw('SUM(CASE WHEN LOWER(payment_method) = "bkash" THEN total_amount ELSE 0 END) as bkash_total')
+                DB::raw("SUM({$netExpr}) as total_revenue"),
+                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN {$netExpr} ELSE 0 END) as cash_total"),
+                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'card' THEN {$netExpr} ELSE 0 END) as card_total"),
+                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'bkash' THEN {$netExpr} ELSE 0 END) as bkash_total")
             )->first();
 
         // 2. SALES BY EMPLOYEE (For the selected date range)
-        $employeeSales = Order::where('shop_id', $shopId)
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'refunded')
-            ->select('user_id', DB::raw('COUNT(id) as total_orders'), DB::raw('SUM(total_amount) as total_revenue'))
+        $employeeSales = $this->completedOrdersQuery($shopId, $startDate, $endDate)
+            ->select('user_id', DB::raw('COUNT(id) as total_orders'), DB::raw("SUM({$netExpr}) as total_revenue"))
             ->groupBy('user_id')
             ->with('user') 
             ->orderByDesc('total_revenue')
             ->get();
 
         // 3. SALES BY COUNTER (For the selected date range)
-        $counterSales = Order::where('shop_id', $shopId)
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'refunded')
-            ->select('counter_id', DB::raw('COUNT(id) as total_orders'), DB::raw('SUM(total_amount) as total_revenue'))
+        $counterSales = $this->completedOrdersQuery($shopId, $startDate, $endDate)
+            ->select('counter_id', DB::raw('COUNT(id) as total_orders'), DB::raw("SUM({$netExpr}) as total_revenue"))
             ->groupBy('counter_id')
             ->with('counter') 
             ->orderByDesc('total_revenue')
             ->get();
 
         // 4. HISTORICAL DAILY LEDGER (Filtered by the date range)
-        $historicalSales = Order::where('shop_id', $shopId)
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'refunded')
+        $historicalSales = $this->completedOrdersQuery($shopId, $startDate, $endDate)
             ->select(
                 DB::raw('DATE(created_at) as date'),
                 DB::raw('COUNT(id) as total_orders'),
-                DB::raw('SUM(total_amount) as total_revenue'),
-                DB::raw('SUM(CASE WHEN LOWER(payment_method) = "cash" THEN total_amount ELSE 0 END) as cash_total'),
-                DB::raw('SUM(CASE WHEN LOWER(payment_method) = "card" THEN total_amount ELSE 0 END) as card_total'),
-                DB::raw('SUM(CASE WHEN LOWER(payment_method) = "bkash" THEN total_amount ELSE 0 END) as bkash_total')
+                DB::raw("SUM({$netExpr}) as total_revenue"),
+                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN {$netExpr} ELSE 0 END) as cash_total"),
+                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'card' THEN {$netExpr} ELSE 0 END) as card_total"),
+                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'bkash' THEN {$netExpr} ELSE 0 END) as bkash_total")
             )
             ->groupBy(DB::raw('DATE(created_at)'))
             ->orderBy('date', 'desc')
-            ->get(); // 🚀 Changed from paginate() to get() so it shows all days on one page!
+            ->get();
 
         return view('reports.daily', compact('summary', 'employeeSales', 'counterSales', 'historicalSales', 'startDate', 'endDate'));
     }
@@ -87,7 +92,11 @@ class ReportController extends Controller
         $bestSellers = \App\Models\OrderItem::whereHas('order', function ($query) use ($shopId, $startDate, $endDate) {
                 $query->where('shop_id', $shopId)
                       ->whereBetween('created_at', [$startDate, $endDate])
-                      ->where('status', '!=', 'refunded');
+                      ->where('status', 'completed')
+                      ->where(function ($q) {
+                          $q->where('is_exchange_receipt', false)
+                              ->orWhereNull('is_exchange_receipt');
+                      });
             })
             ->select(
                 'product_id', 
@@ -130,7 +139,11 @@ class ReportController extends Controller
 
         $query = \App\Models\Order::where('shop_id', $shopId)
             ->whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'refunded');
+            ->where('status', 'completed')
+            ->where(function ($q) {
+                $q->where('is_exchange_receipt', false)
+                    ->orWhereNull('is_exchange_receipt');
+            });
 
         // Filter by employee if selected
         if ($selectedStaffId) {
@@ -143,7 +156,7 @@ class ReportController extends Controller
                 'user_id',
                 'counter_id',
                 \Illuminate\Support\Facades\DB::raw('COUNT(id) as total_orders'), 
-                \Illuminate\Support\Facades\DB::raw('SUM(total_amount) as total_revenue')
+                \Illuminate\Support\Facades\DB::raw('SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)) as total_revenue')
             )
             ->groupBy('sale_date', 'user_id', 'counter_id')
             ->with(['user', 'counter']) // Load relationships

@@ -2,55 +2,33 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
 use App\Services\AnalyticsService;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AnalyticsController extends Controller
 {
     public function __construct(private AnalyticsService $analytics) {}
 
-    public function overview(Request $request)
+    protected function reportView(Request $request, string $activeTab)
     {
-        [$start, $end] = $this->analytics->dateRange($request);
         $shopId = Auth::user()->shop_id;
+        [$start, $end] = $this->analytics->dateRange($request);
+        [$prevStart, $prevEnd] = $this->analytics->previousRange($start, $end);
 
-        $revenue = $this->analytics->revenue($shopId, $start, $end);
-        $expense = $this->analytics->costOfGoodsSold($shopId, $start, $end);
-        $orders = $this->analytics->orderCount($shopId, $start, $end);
-        $inventory = $this->analytics->inventorySnapshot($shopId);
-
-        $posRevenue = (float) $this->analytics->posOrders($shopId, $start, $end)->sum('total_amount');
-        $webRevenue = (float) $this->analytics->webOrders($shopId, $start, $end)->sum('total_amount');
-        $posCount = $this->analytics->posOrders($shopId, $start, $end)->count();
-        $webCount = $this->analytics->webOrders($shopId, $start, $end)->count();
-
+        $kpis = $this->analytics->salesKpis($shopId, $start, $end);
         $chart = $this->analytics->dailyRevenueChart($shopId, $start, $end);
-        $topProducts = $this->analytics->topSellingProducts($shopId, $start, $end);
+        $prevChart = $this->analytics->dailyRevenueChart($shopId, $prevStart, $prevEnd);
+        $categorySales = $this->analytics->salesByCategory($shopId, $start, $end);
+        $topProducts = $this->analytics->topSellingProducts($shopId, $start, $end, 8);
 
-        return view('analytics.overview', compact(
-            'start', 'end', 'revenue', 'expense', 'orders', 'inventory',
-            'posRevenue', 'webRevenue', 'posCount', 'webCount', 'chart', 'topProducts'
-        ));
-    }
-
-    public function orders(Request $request)
-    {
-        [$start, $end] = $this->analytics->dateRange($request);
-        $shopId = Auth::user()->shop_id;
-
-        $posQuery = $this->analytics->posOrders($shopId, $start, $end);
-        $webQuery = $this->analytics->webOrders($shopId, $start, $end);
-
-        $summary = [
+        $orderSummary = [
             'total' => $this->analytics->orderCount($shopId, $start, $end),
-            'pos' => (clone $posQuery)->count(),
-            'web' => (clone $webQuery)->count(),
+            'pos' => $this->analytics->posOrders($shopId, $start, $end)->count(),
+            'web' => $this->analytics->webOrders($shopId, $start, $end)->count(),
             'pending' => $this->analytics->baseOrderQuery($shopId, $start, $end)->where('status', 'pending')->count(),
             'completed' => $this->analytics->baseOrderQuery($shopId, $start, $end)->where('status', 'completed')->count(),
         ];
@@ -59,99 +37,21 @@ class AnalyticsController extends Controller
             ->whereBetween('created_at', [$start, $end])
             ->with(['customer', 'counter'])
             ->latest()
-            ->paginate(15)
-            ->appends($request->all());
-
-        $dailyOrders = $this->analytics->baseOrderQuery($shopId, $start, $end)
-            ->select(
-                DB::raw('DATE(created_at) as day'),
-                DB::raw('COUNT(id) as total'),
-                DB::raw('SUM(CASE WHEN counter_id IS NULL THEN 1 ELSE 0 END) as web_orders'),
-                DB::raw('SUM(CASE WHEN counter_id IS NOT NULL THEN 1 ELSE 0 END) as pos_orders')
-            )
-            ->groupBy(DB::raw('DATE(created_at)'))
-            ->orderByDesc('day')
+            ->limit(25)
             ->get();
 
-        return view('analytics.orders', compact('start', 'end', 'summary', 'recentOrders', 'dailyOrders'));
-    }
-
-    public function revenue(Request $request)
-    {
-        [$start, $end] = $this->analytics->dateRange($request);
-        $shopId = Auth::user()->shop_id;
-
-        $base = $this->analytics->baseOrderQuery($shopId, $start, $end);
-
-        $summary = (clone $base)->select(
-            DB::raw('COUNT(id) as total_orders'),
-            DB::raw('SUM(total_amount) as total_revenue'),
-            DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN total_amount ELSE 0 END) as cash_total"),
-            DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'card' THEN total_amount ELSE 0 END) as card_total"),
-            DB::raw("SUM(CASE WHEN LOWER(payment_method) IN ('bkash','mobile') THEN total_amount ELSE 0 END) as mobile_total"),
-            DB::raw('SUM(CASE WHEN counter_id IS NULL THEN total_amount ELSE 0 END) as web_revenue'),
-            DB::raw('SUM(CASE WHEN counter_id IS NOT NULL THEN total_amount ELSE 0 END) as pos_revenue')
-        )->first();
-
-        $daily = (clone $base)->select(
-            DB::raw('DATE(created_at) as day'),
-            DB::raw('COUNT(id) as orders'),
-            DB::raw('SUM(total_amount) as revenue'),
-            DB::raw('SUM(CASE WHEN counter_id IS NULL THEN total_amount ELSE 0 END) as web_revenue'),
-            DB::raw('SUM(CASE WHEN counter_id IS NOT NULL THEN total_amount ELSE 0 END) as pos_revenue')
-        )
-            ->groupBy(DB::raw('DATE(created_at)'))
-            ->orderByDesc('day')
-            ->get();
-
-        return view('analytics.revenue', compact('start', 'end', 'summary', 'daily'));
-    }
-
-    public function expense(Request $request)
-    {
-        [$start, $end] = $this->analytics->dateRange($request);
-        $shopId = Auth::user()->shop_id;
-
-        $cogs = $this->analytics->costOfGoodsSold($shopId, $start, $end);
-        $revenue = $this->analytics->revenue($shopId, $start, $end);
-
-        $productCosts = DB::table('order_items')
-            ->join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('products', 'order_items.product_id', '=', 'products.id')
-            ->where('orders.shop_id', $shopId)
-            ->whereBetween('orders.created_at', [$start, $end])
-            ->where('orders.status', '!=', 'refunded')
-            ->select(
-                'products.id',
-                'products.name',
-                DB::raw('SUM(order_items.quantity) as qty_sold'),
-                DB::raw('SUM(order_items.quantity * products.cost_price) as cost_total'),
-                DB::raw('SUM(order_items.subtotal) as sales_total')
-            )
-            ->groupBy('products.id', 'products.name')
-            ->orderByDesc('cost_total')
-            ->paginate(15)
-            ->appends($request->all());
-
-        return view('analytics.expense', compact('start', 'end', 'cogs', 'revenue', 'productCosts'));
-    }
-
-    public function inventory(Request $request)
-    {
-        $shopId = Auth::user()->shop_id;
+        $productRows = $this->analytics->topSellingProducts($shopId, $start, $end, 50);
+        $customers = $this->analytics->topCustomers($shopId, $start, $end, 25);
         $inventory = $this->analytics->inventorySnapshot($shopId);
-
-        [$start, $end] = $this->analytics->dateRange($request);
-        $topSelling = $this->analytics->topSellingProducts($shopId, $start, $end, 10);
 
         $lowStock = Product::where('shop_id', $shopId)
             ->whereColumn('stock_quantity', '<=', 'alert_quantity')
             ->with('category')
             ->orderBy('stock_quantity')
-            ->limit(10)
+            ->limit(25)
             ->get();
 
-        $categories = \App\Models\Category::where('shop_id', $shopId)
+        $stockCategories = \App\Models\Category::where('shop_id', $shopId)
             ->withCount('products')
             ->get()
             ->map(function ($category) use ($shopId) {
@@ -161,7 +61,7 @@ class AnalyticsController extends Controller
                     ->first();
 
                 return (object) [
-                    'category' => $category,
+                    'name' => $category->name,
                     'products' => $stats->products ?? 0,
                     'units' => $stats->units ?? 0,
                     'cost_value' => $stats->cost_value ?? 0,
@@ -170,51 +70,308 @@ class AnalyticsController extends Controller
             ->sortByDesc('cost_value')
             ->values();
 
-        return view('analytics.inventory', compact('start', 'end', 'inventory', 'topSelling', 'lowStock', 'categories'));
+        $discounts = $this->analytics->discountBreakdown($shopId, $start, $end);
+        $discountTotal = $kpis['discounts'];
+
+        // Tax is not stored on orders yet — report stays exportable with clear zero state.
+        $taxRows = collect();
+        $taxTotal = 0.0;
+
+        return view('analytics.layout', compact(
+            'activeTab',
+            'start',
+            'end',
+            'prevStart',
+            'prevEnd',
+            'kpis',
+            'chart',
+            'prevChart',
+            'categorySales',
+            'topProducts',
+            'orderSummary',
+            'recentOrders',
+            'productRows',
+            'customers',
+            'inventory',
+            'lowStock',
+            'stockCategories',
+            'discounts',
+            'discountTotal',
+            'taxRows',
+            'taxTotal',
+        ));
+    }
+
+    public function overview(Request $request)
+    {
+        return $this->reportView($request, 'sales');
+    }
+
+    public function orders(Request $request)
+    {
+        return $this->reportView($request, 'orders');
+    }
+
+    public function revenue(Request $request)
+    {
+        return $this->reportView($request, 'sales');
+    }
+
+    public function expense(Request $request)
+    {
+        return $this->reportView($request, 'discount');
+    }
+
+    public function inventory(Request $request)
+    {
+        return $this->reportView($request, 'stock');
     }
 
     public function balance(Request $request)
     {
-        [$start, $end] = $this->analytics->dateRange($request);
+        return $this->reportView($request, 'sales');
+    }
+
+    public function products(Request $request)
+    {
+        return $this->reportView($request, 'products');
+    }
+
+    public function customers(Request $request)
+    {
+        return $this->reportView($request, 'customers');
+    }
+
+    public function tax(Request $request)
+    {
+        return $this->reportView($request, 'tax');
+    }
+
+    public function discount(Request $request)
+    {
+        return $this->reportView($request, 'discount');
+    }
+
+    public function preview(Request $request)
+    {
         $shopId = Auth::user()->shop_id;
+        [$start, $end] = $this->analytics->dateRange($request);
+        $tab = $request->get('tab', 'sales');
 
-        $revenue = $this->analytics->revenue($shopId, $start, $end);
-        $expense = $this->analytics->costOfGoodsSold($shopId, $start, $end);
-        $profit = $revenue - $expense;
-        $margin = $revenue > 0 ? ($profit / $revenue) * 100 : 0;
+        $titles = [
+            'sales' => 'Sales Report',
+            'orders' => 'Orders Report',
+            'products' => 'Products Report',
+            'customers' => 'Customers Report',
+            'stock' => 'Stock Report',
+            'tax' => 'Tax Report',
+            'discount' => 'Discount Report',
+        ];
 
-        $posRevenue = (float) $this->analytics->posOrders($shopId, $start, $end)->sum('total_amount');
-        $webRevenue = (float) $this->analytics->webOrders($shopId, $start, $end)->sum('total_amount');
-
-        $posCogs = (float) DB::table('order_items')
-            ->join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('products', 'order_items.product_id', '=', 'products.id')
-            ->where('orders.shop_id', $shopId)
-            ->whereBetween('orders.created_at', [$start, $end])
-            ->where('orders.status', '!=', 'refunded')
-            ->whereNotNull('orders.counter_id')
-            ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as cogs')
-            ->value('cogs');
-
-        $webCogs = (float) DB::table('order_items')
-            ->join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('products', 'order_items.product_id', '=', 'products.id')
-            ->where('orders.shop_id', $shopId)
-            ->whereBetween('orders.created_at', [$start, $end])
-            ->where('orders.status', '!=', 'refunded')
-            ->whereNull('orders.counter_id')
-            ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as cogs')
-            ->value('cogs');
-
-        $daily = $this->analytics->baseOrderQuery($shopId, $start, $end)
-            ->select(DB::raw('DATE(created_at) as day'), DB::raw('SUM(total_amount) as revenue'))
-            ->groupBy(DB::raw('DATE(created_at)'))
-            ->orderBy('day')
-            ->get();
-
-        return view('analytics.balance', compact(
-            'start', 'end', 'revenue', 'expense', 'profit', 'margin',
-            'posRevenue', 'webRevenue', 'posCogs', 'webCogs', 'daily'
+        $title = $titles[$tab] ?? 'Sales Report';
+        $rows = $this->exportRows($shopId, $start, $end, $tab);
+        $shopName = Auth::user()->shop->name ?? config('app.name', 'Store');
+        $csvUrl = route('analytics.export', array_merge(
+            $request->only(['start_date', 'end_date', 'all_time']),
+            ['tab' => $tab]
         ));
+
+        if ($request->boolean('modal') || $request->ajax()) {
+            return view('analytics.partials.preview-body', compact(
+                'tab', 'title', 'rows', 'start', 'end', 'shopName', 'csvUrl'
+            ));
+        }
+
+        $backUrl = match ($tab) {
+            'orders' => route('analytics.orders', $request->only(['start_date', 'end_date', 'all_time'])),
+            'products' => route('analytics.products', $request->only(['start_date', 'end_date', 'all_time'])),
+            'customers' => route('analytics.customers', $request->only(['start_date', 'end_date', 'all_time'])),
+            'stock' => route('analytics.stock', $request->only(['start_date', 'end_date', 'all_time'])),
+            'tax' => route('analytics.tax', $request->only(['start_date', 'end_date', 'all_time'])),
+            'discount' => route('analytics.discount', $request->only(['start_date', 'end_date', 'all_time'])),
+            default => route('analytics.overview', $request->only(['start_date', 'end_date', 'all_time'])),
+        };
+
+        return view('analytics.preview', compact(
+            'tab', 'title', 'rows', 'start', 'end', 'shopName', 'csvUrl', 'backUrl'
+        ));
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $shopId = Auth::user()->shop_id;
+        [$start, $end] = $this->analytics->dateRange($request);
+        $tab = $request->get('tab', 'sales');
+        $filename = 'report-'.$tab.'-'.$start->format('Ymd').'-'.$end->format('Ymd').'.csv';
+        $rows = $this->exportRows($shopId, $start, $end, $tab);
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            foreach ($rows as $row) {
+                fputcsv($out, $row);
+            }
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    protected function exportRows(int $shopId, $start, $end, string $tab): array
+    {
+        return match ($tab) {
+            'orders' => $this->exportOrders($shopId, $start, $end),
+            'products' => $this->exportProducts($shopId, $start, $end),
+            'customers' => $this->exportCustomers($shopId, $start, $end),
+            'stock' => $this->exportStock($shopId),
+            'tax' => $this->exportTax($shopId, $start, $end),
+            'discount' => $this->exportDiscounts($shopId, $start, $end),
+            default => $this->exportSales($shopId, $start, $end),
+        };
+    }
+
+    protected function exportSales(int $shopId, $start, $end): array
+    {
+        $kpis = $this->analytics->salesKpis($shopId, $start, $end);
+        $rows = [
+            ['Metric', 'This Period', 'Last Period', 'Change %'],
+            ['Total Sales', number_format($kpis['revenue'], 2, '.', ''), number_format($kpis['prev']['revenue'], 2, '.', ''), $kpis['change']['revenue']],
+            ['Total Orders', $kpis['orders'], $kpis['prev']['orders'], $kpis['change']['orders']],
+            ['Average Order Value', number_format($kpis['aov'], 2, '.', ''), number_format($kpis['prev']['aov'], 2, '.', ''), $kpis['change']['aov']],
+            ['Total Profit', number_format($kpis['profit'], 2, '.', ''), number_format($kpis['prev']['profit'], 2, '.', ''), $kpis['change']['profit']],
+            ['Total Discounts', number_format($kpis['discounts'], 2, '.', ''), number_format($kpis['prev']['discounts'], 2, '.', ''), $kpis['change']['discounts']],
+            [],
+            ['Date', 'Orders', 'Revenue'],
+        ];
+
+        foreach ($this->analytics->dailyRevenueChart($shopId, $start, $end) as $day) {
+            $rows[] = [$day->day, $day->orders, number_format((float) $day->revenue, 2, '.', '')];
+        }
+
+        $rows[] = [];
+        $rows[] = ['Category', 'Revenue', 'Units Sold'];
+        foreach ($this->analytics->salesByCategory($shopId, $start, $end, 20) as $cat) {
+            $rows[] = [$cat->category, number_format((float) $cat->revenue, 2, '.', ''), $cat->sold];
+        }
+
+        return $rows;
+    }
+
+    protected function exportOrders(int $shopId, $start, $end): array
+    {
+        $rows = [['Invoice', 'Date', 'Customer', 'Channel', 'Payment', 'Status', 'Amount']];
+
+        Order::where('shop_id', $shopId)
+            ->whereBetween('created_at', [$start, $end])
+            ->with(['customer', 'counter'])
+            ->latest()
+            ->limit(2000)
+            ->get()
+            ->each(function ($order) use (&$rows) {
+                $rows[] = [
+                    $order->invoice_no,
+                    $order->created_at->format('Y-m-d H:i'),
+                    $order->customer?->name ?? 'Walk-in',
+                    $order->counter_id ? 'POS' : 'Online',
+                    $order->payment_method,
+                    $order->status,
+                    number_format((float) $order->total_amount, 2, '.', ''),
+                ];
+            });
+
+        return $rows;
+    }
+
+    protected function exportProducts(int $shopId, $start, $end): array
+    {
+        $rows = [['Product', 'Category', 'Units Sold', 'Revenue']];
+
+        foreach ($this->analytics->topSellingProducts($shopId, $start, $end, 500) as $row) {
+            $rows[] = [
+                $row->product?->name ?? 'Unknown',
+                $row->product?->category?->name ?? '—',
+                $row->sold,
+                number_format((float) ($row->revenue ?? 0), 2, '.', ''),
+            ];
+        }
+
+        return $rows;
+    }
+
+    protected function exportCustomers(int $shopId, $start, $end): array
+    {
+        $rows = [['Customer', 'Phone', 'Orders', 'Revenue', 'Discounts']];
+
+        foreach ($this->analytics->topCustomers($shopId, $start, $end, 500) as $row) {
+            $rows[] = [
+                $row->customer?->name ?? 'Unknown',
+                $row->customer?->phone ?? '—',
+                $row->orders,
+                number_format((float) $row->revenue, 2, '.', ''),
+                number_format((float) $row->discounts, 2, '.', ''),
+            ];
+        }
+
+        return $rows;
+    }
+
+    protected function exportStock(int $shopId): array
+    {
+        $rows = [['SKU / Name', 'Category', 'Stock', 'Alert Qty', 'Cost Value', 'Retail Value', 'Status']];
+
+        Product::where('shop_id', $shopId)
+            ->with('category')
+            ->orderBy('name')
+            ->get()
+            ->each(function ($product) use (&$rows) {
+                $status = $product->stock_quantity <= 0
+                    ? 'Out of Stock'
+                    : ($product->stock_quantity <= $product->alert_quantity ? 'Low Stock' : 'In Stock');
+
+                $rows[] = [
+                    $product->name,
+                    $product->category?->name ?? '—',
+                    $product->stock_quantity,
+                    $product->alert_quantity,
+                    number_format((float) $product->cost_price * $product->stock_quantity, 2, '.', ''),
+                    number_format((float) $product->selling_price * $product->stock_quantity, 2, '.', ''),
+                    $status,
+                ];
+            });
+
+        return $rows;
+    }
+
+    protected function exportTax(int $shopId, $start, $end): array
+    {
+        return [
+            ['Note', 'Tax / VAT is not currently tracked on orders in this system.'],
+            ['Period Start', $start->format('Y-m-d')],
+            ['Period End', $end->format('Y-m-d')],
+            ['Taxable Sales', number_format($this->analytics->revenue($shopId, $start, $end), 2, '.', '')],
+            ['Tax Collected', '0.00'],
+        ];
+    }
+
+    protected function exportDiscounts(int $shopId, $start, $end): array
+    {
+        $rows = [['Invoice', 'Date', 'Customer', 'Order Total', 'Discount']];
+
+        $this->analytics->baseOrderQuery($shopId, $start, $end)
+            ->where('discount_amount', '>', 0)
+            ->with('customer')
+            ->latest()
+            ->limit(2000)
+            ->get()
+            ->each(function ($order) use (&$rows) {
+                $rows[] = [
+                    $order->invoice_no,
+                    $order->created_at->format('Y-m-d H:i'),
+                    $order->customer?->name ?? 'Walk-in',
+                    number_format((float) $order->total_amount, 2, '.', ''),
+                    number_format((float) $order->discount_amount, 2, '.', ''),
+                ];
+            });
+
+        return $rows;
     }
 }

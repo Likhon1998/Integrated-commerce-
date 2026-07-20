@@ -5,6 +5,7 @@
     $showSidebar = !empty($showSidebar) && isset($activeCategory);
 @endphp
 
+<div class="gaget-shop-page">
 <div class="gaget-shop-header">
     <h1 class="gaget-shop-title">{{ $pageTitle ?? ($activeCategory->name ?? ($activeBrand->name ?? 'Shop All Products')) }}</h1>
     <p class="gaget-shop-sub">{{ $pageSubtitle ?? 'Browse our latest electronics and gadgets.' }}</p>
@@ -66,6 +67,7 @@
         </div>
         <div class="mt-8">{{ $products->links() }}</div>
     </div>
+</div>
 </div>
 
 @endsection

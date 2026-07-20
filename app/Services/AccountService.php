@@ -98,6 +98,46 @@ class AccountService
 
         $debits = (float) (clone $query)->where('entry_type', 'debit')->sum('amount');
         $credits = (float) (clone $query)->where('entry_type', 'credit')->sum('amount');
+
+        return $this->resolveBalance($account, $debits, $credits);
+    }
+
+    /**
+     * @param  iterable<Account>  $accounts
+     * @return array<int, float>
+     */
+    public function accountBalances(iterable $accounts, ?Carbon $asOf = null): array
+    {
+        $accounts = collect($accounts);
+
+        if ($accounts->isEmpty()) {
+            return [];
+        }
+
+        $query = AccountEntry::query()
+            ->whereIn('account_id', $accounts->pluck('id'))
+            ->selectRaw('account_id, entry_type, SUM(amount) as total')
+            ->groupBy('account_id', 'entry_type');
+
+        if ($asOf) {
+            $query->whereHas('transaction', fn ($q) => $q->where('transaction_date', '<=', $asOf->toDateString()));
+        }
+
+        $totals = $query->get()->groupBy('account_id');
+        $balances = [];
+
+        foreach ($accounts as $account) {
+            $accountTotals = $totals->get($account->id, collect());
+            $debits = (float) $accountTotals->where('entry_type', 'debit')->sum('total');
+            $credits = (float) $accountTotals->where('entry_type', 'credit')->sum('total');
+            $balances[$account->id] = $this->resolveBalance($account, $debits, $credits);
+        }
+
+        return $balances;
+    }
+
+    protected function resolveBalance(Account $account, float $debits, float $credits): float
+    {
         $opening = (float) $account->opening_balance;
 
         return match ($account->type) {
@@ -111,10 +151,11 @@ class AccountService
     {
         $order->loadMissing('items.product');
 
-        if ($order->counter_id) {
-            $this->postPosSale($order);
-        } else {
+        // Web storefront orders only — POS invoices (even without counter_id) must not post as COD receivable
+        if ($order->isOnlineOrder()) {
             $this->postWebSale($order);
+        } else {
+            $this->postPosSale($order);
         }
     }
 
@@ -218,7 +259,7 @@ class AccountService
 
     public function postOrderRefund(Order $order): void
     {
-        $type = $order->counter_id ? 'refund' : 'web_refund';
+        $type = $order->isOnlineOrder() ? 'web_refund' : 'refund';
 
         if ($this->transactionExists($order->shop_id, $type, Order::class, $order->id)) {
             return;
@@ -227,11 +268,11 @@ class AccountService
         $order->loadMissing('items.product');
         $this->ensureShopAccounts($order->shop_id);
 
-        $paymentAccount = $order->counter_id
-            ? $this->resolvePaymentAccount($order)
-            : ($this->transactionExists($order->shop_id, 'web_settlement', Order::class, $order->id)
+        $paymentAccount = $order->isOnlineOrder()
+            ? ($this->transactionExists($order->shop_id, 'web_settlement', Order::class, $order->id)
                 ? $this->getAccount($order->shop_id, 'WEB-CASH')
-                : $this->getAccount($order->shop_id, 'WEB-COD'));
+                : $this->getAccount($order->shop_id, 'WEB-COD'))
+            : $this->resolvePaymentAccount($order);
 
         $revenue = $this->getAccount($order->shop_id, 'REVENUE');
         $cogs = $this->calculateCogs($order);

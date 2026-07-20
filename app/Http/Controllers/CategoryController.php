@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Support\CategoryFilterConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -36,18 +37,25 @@ class CategoryController extends Controller
                 'max:255',
                 Rule::unique('categories')->where(fn ($query) => $query->where('shop_id', Auth::user()->shop_id)),
             ],
+            'image' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif|max:5120',
         ]);
 
         $filterOptions = $request->has('filter_enabled') || $request->has('filter_groups')
             ? CategoryFilterConfig::fromRequest($request)
             : CategoryFilterConfig::defaults();
 
-        $category = Category::create([
+        $payload = [
             'shop_id' => Auth::user()->shop_id,
             'name' => $request->name,
             'slug' => Str::slug($request->name),
             'filter_options' => $filterOptions,
-        ]);
+        ];
+
+        if ($request->hasFile('image')) {
+            $payload['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
+        $category = Category::create($payload);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -88,13 +96,23 @@ class CategoryController extends Controller
                     ->where(fn ($query) => $query->where('shop_id', Auth::user()->shop_id))
                     ->ignore($category->id),
             ],
+            'image' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif|max:5120',
         ]);
 
-        $category->update([
+        $payload = [
             'name' => $request->name,
             'slug' => Str::slug($request->name),
             'filter_options' => CategoryFilterConfig::fromRequest($request),
-        ]);
+        ];
+
+        if ($request->hasFile('image')) {
+            if ($category->image_path) {
+                Storage::disk('public')->delete($category->image_path);
+            }
+            $payload['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
+        $category->update($payload);
 
         return redirect()->route('categories.index')->with('success', 'Category updated successfully!');
     }
@@ -107,6 +125,10 @@ class CategoryController extends Controller
 
         if ($category->products()->count() > 0) {
             return redirect()->back()->with('error', 'Cannot delete category containing products.');
+        }
+
+        if ($category->image_path) {
+            Storage::disk('public')->delete($category->image_path);
         }
 
         $category->delete();
