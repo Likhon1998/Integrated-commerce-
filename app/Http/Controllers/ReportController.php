@@ -10,6 +10,13 @@ use Carbon\Carbon;
 
 class ReportController extends Controller
 {
+    protected function ensureAdmin(): void
+    {
+        if (! Auth::user()?->isAdminUser()) {
+            abort(403, 'Reports are only available to shop admins.');
+        }
+    }
+
     protected function completedOrdersQuery(int $shopId, $startDate, $endDate)
     {
         return Order::where('shop_id', $shopId)
@@ -23,6 +30,8 @@ class ReportController extends Controller
 
     public function dailySales(Request $request)
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         
         // 🚀 CHECK IF USER CLICKED "ALL TIME"
@@ -84,6 +93,8 @@ class ReportController extends Controller
 
     public function bestSellers(Request $request)
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         
         $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::today()->subDays(30)->startOfDay();
@@ -128,6 +139,8 @@ class ReportController extends Controller
 
     public function staffPerformance(Request $request)
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         
         $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::today()->startOfMonth();
@@ -172,6 +185,8 @@ class ReportController extends Controller
     // Modal API Endpoint
     public function staffDailyDetails(Request $request)
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         $staffId = $request->input('staff_id');
         $date = $request->input('date');

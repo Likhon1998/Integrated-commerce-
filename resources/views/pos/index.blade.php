@@ -51,10 +51,38 @@
 [x-cloak] { display: none !important; }
 
 .pos-shell {
-    height: 100%; width: 100%; overflow: hidden;
+    height: 100%; height: 100dvh; width: 100%; min-width: 0;
+    overflow: hidden;
     display: flex; flex-direction: column;
     background: var(--bg); font-family: var(--font); color: var(--text-1);
 }
+
+/* Counter fullscreen prompt */
+.pos-fs-hint {
+    flex-shrink: 0;
+    background: linear-gradient(90deg, #1d4ed8, #2563eb);
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,.12);
+}
+.pos-fs-hint-inner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 16px; flex-wrap: wrap;
+}
+.pos-fs-hint-inner strong { font-size: 13px; font-weight: 750; margin-right: 8px; }
+.pos-fs-hint-inner span { font-size: 12.5px; opacity: .92; }
+.pos-fs-hint-actions { display: flex; align-items: center; gap: 8px; }
+.pos-fs-btn {
+    border: 0; border-radius: 9px; padding: 7px 14px;
+    background: #fff; color: #1d4ed8;
+    font: inherit; font-size: 12px; font-weight: 750; cursor: pointer;
+}
+.pos-fs-btn:hover { background: #eff6ff; }
+.pos-fs-dismiss {
+    border: 1px solid rgba(255,255,255,.35); border-radius: 9px; padding: 7px 12px;
+    background: transparent; color: #fff;
+    font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
+}
+.pos-fs-dismiss:hover { background: rgba(255,255,255,.1); }
 
 /* ── Top bar ── */
 .pos-chrome {
@@ -108,6 +136,7 @@
     color: #e2e8f0; font-size: 12px; font-weight: 650; cursor: pointer; font-family: var(--font);
 }
 .pos-tool-btn:hover { background: rgba(255,255,255,.06); }
+.pos-tool-btn.is-active { background: rgba(37,99,235,.25); border-color: rgba(96,165,250,.45); color: #93c5fd; }
 .pos-tool-btn svg { width: 15px; height: 15px; }
 .pos-close-day {
     display: inline-flex; align-items: center; gap: 6px;
@@ -179,7 +208,7 @@
     flex: 1 1 0; min-height: 0; min-width: 0;
     padding: 12px;
     display: grid;
-    grid-template-columns: minmax(0, 1.55fr) minmax(340px, .9fr);
+    grid-template-columns: minmax(0, 1.55fr) minmax(360px, .95fr);
     gap: 12px; overflow: hidden;
 }
 
@@ -784,15 +813,35 @@
 .toast.warning .toast-bar { background: var(--amber); }
 .toast.info .toast-bar { background: var(--blue); }
 
-@media (max-width: 1100px) {
-    .pos-body { grid-template-columns: 1fr; }
-    .pos-rail { display: none; }
-    .pos-root { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+/* Counter tills stay full-width side-by-side; never auto-collapse on laptop/tablet. */
+@media (max-width: 960px) {
+    .pos-root {
+        grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr);
+        gap: 8px;
+        padding: 8px;
+    }
+    .pos-chrome-search { max-width: 420px; }
+    .pos-tool-btn span.pos-tool-label { display: none; }
 }
-@media (max-width: 640px) {
+@media (max-width: 720px) {
+    /* Phones only — cart still usable as second pane */
+    .pos-rail { width: 64px; }
+    .pos-rail a span, .pos-rail button span { font-size: 9px; }
+    .pos-body { grid-template-columns: 64px minmax(0, 1fr); }
+    .pos-root {
+        grid-template-columns: minmax(0, 1fr) minmax(260px, .95fr);
+    }
     .pos-user-meta, .pos-brand span:not(.pos-brand-mark) { display: none; }
     .product-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .p-img-wrap { height: 84px; }
+}
+@media (max-width: 480px) {
+    .pos-rail { display: none; }
+    .pos-body { grid-template-columns: 1fr; }
+    .pos-root {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(38vh, 1fr) minmax(48vh, 1.1fr);
+    }
     .cart-actions { grid-template-columns: 1fr; }
 }
 </style>
@@ -825,10 +874,16 @@
         <div class="pos-chrome-right">
             <button type="button" class="pos-tool-btn" @click="$refs.searchInput.focus()" title="Focus barcode / search">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6.5 0a5.5 5.5 0 11-11 0 5.5 5.5 0 0111 0zM4 8V6a2 2 0 012-2h2m8 0h2a2 2 0 012 2v2"/></svg>
-                Scan
+                <span class="pos-tool-label">Scan</span>
             </button>
             <button type="button" class="pos-tool-btn" @click="kbOpen = true" title="Keyboard shortcuts">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </button>
+            <button type="button" class="pos-tool-btn" @click="toggleFullscreen()"
+                    :title="isFullscreen ? 'Exit fullscreen (F11)' : 'Fullscreen (F11)'"
+                    :class="isFullscreen ? 'is-active' : ''">
+                <svg x-show="!isFullscreen" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                <svg x-show="isFullscreen" style="display:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"/></svg>
             </button>
             <button type="button" class="pos-tool-btn" @click="toggleDark()" :title="darkMode ? 'Light' : 'Dark'">
                 <svg x-show="!darkMode" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
@@ -856,6 +911,22 @@
                     <div class="pos-user-name">{{ Auth::user()->name }}</div>
                     <div class="pos-user-role">{{ Auth::user()->counter->name ?? 'Counter' }}</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Counter fullscreen prompt (browser blocks auto-fullscreen without a click) --}}
+    <div x-show="showFullscreenHint && !isFullscreen" x-cloak
+         class="pos-fs-hint"
+         x-transition.opacity>
+        <div class="pos-fs-hint-inner">
+            <div>
+                <strong>Counter mode</strong>
+                <span>Use the full screen so the register never shrinks into a small layout.</span>
+            </div>
+            <div class="pos-fs-hint-actions">
+                <button type="button" class="pos-fs-btn" @click="enterCounterFullscreen()">Enter fullscreen</button>
+                <button type="button" class="pos-fs-dismiss" @click="dismissFullscreenHint()">Not now</button>
             </div>
         </div>
     </div>
@@ -1344,8 +1415,8 @@
             </div>
             <div class="invoice-frame-wrap">
                 <iframe x-ref="receiptFrame" class="invoice-frame"
-                        :src="lastSale?.receipt_html ? 'about:blank' : (lastSale?.receipt_url || 'about:blank')"
-                        :srcdoc="lastSale?.receipt_html || undefined"
+                        :src="lastSale?.receipt_html ? false : (lastSale?.receipt_url || 'about:blank')"
+                        :srcdoc="lastSale?.receipt_html || false"
                         title="POS Invoice"></iframe>
             </div>
             <div class="modal-foot">
@@ -1507,6 +1578,11 @@
                     <span class="kb-desc">Toggle dark / light mode</span>
                     <span class="key">D</span>
                 </div>
+                <div class="kb-row">
+                    <span class="kb-desc">Toggle fullscreen</span>
+                    <span class="key">F11</span>
+                    <span class="key">F</span>
+                </div>
             </div>
         </div>
     </div>
@@ -1534,6 +1610,8 @@ function posSystem() {
         isSyncing: false,
         syncPromptOpen: false,
         darkMode: localStorage.getItem('nexa_dark') === 'true',
+        isFullscreen: !!(document.fullscreenElement || document.webkitFullscreenElement),
+        showFullscreenHint: localStorage.getItem('nexa_pos_fs_hint') !== 'dismissed',
         shopName: @json(Auth::user()->shop->name ?? 'Nexa POS'),
         cashierName: @json(Auth::user()->name),
         offlinePendingTick: 0, // forces UI refresh of pending count
@@ -1600,14 +1678,67 @@ function posSystem() {
             if (this.isOnline && this.pendingOfflineCount() > 0) {
                 this.$nextTick(() => { this.syncPromptOpen = true; });
             }
+            const syncFs = () => {
+                this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                if (this.isFullscreen) this.showFullscreenHint = false;
+            };
+            document.addEventListener('fullscreenchange', syncFs);
+            document.addEventListener('webkitfullscreenchange', syncFs);
+            syncFs();
+
+            // Expand popup/window to fill the monitor when launched for a till
+            try {
+                if (window.name === 'nexa_pos_terminal' || window.opener) {
+                    window.moveTo(0, 0);
+                    window.resizeTo(screen.availWidth, screen.availHeight);
+                }
+            } catch (e) {}
         },
 
-        /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        /* ───────────────────────────────
            DARK MODE
-        â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        ─────────────────────────────── */
         toggleDark() {
             this.darkMode = !this.darkMode;
             localStorage.setItem('nexa_dark', this.darkMode);
+        },
+
+        /* ───────────────────────────────
+           FULLSCREEN
+        ─────────────────────────────── */
+        async toggleFullscreen() {
+            try {
+                const root = document.documentElement;
+                const active = document.fullscreenElement || document.webkitFullscreenElement;
+                if (active) {
+                    if (document.exitFullscreen) await document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                } else {
+                    if (root.requestFullscreen) await root.requestFullscreen();
+                    else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+                    else {
+                        this.showToast('Fullscreen not supported in this browser', 'warning');
+                        return;
+                    }
+                }
+            } catch (e) {
+                this.showToast('Could not toggle fullscreen', 'error');
+            }
+            this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (this.isFullscreen) this.showFullscreenHint = false;
+        },
+
+        async enterCounterFullscreen() {
+            await this.toggleFullscreen();
+            if (this.isFullscreen) {
+                localStorage.setItem('nexa_pos_fs_hint', 'dismissed');
+                this.showFullscreenHint = false;
+            }
+        },
+
+        dismissFullscreenHint() {
+            localStorage.setItem('nexa_pos_fs_hint', 'dismissed');
+            this.showFullscreenHint = false;
         },
 
         /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1675,9 +1806,14 @@ function posSystem() {
             }
             // Global
             if (e.key === 'F2')    { e.preventDefault(); if (this.canProceedToCheckout()) this.openCheckout(); }
+            if (e.key === 'F11')   { e.preventDefault(); this.toggleFullscreen(); }
             if (e.key === 'Escape'){ this.search = ''; this.$refs.searchInput.focus(); }
             if (e.key === '?')     { e.preventDefault(); this.kbOpen = true; }
             if ((e.key === 'd' || e.key === 'D') && document.activeElement.tagName !== 'INPUT') this.toggleDark();
+            if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey && document.activeElement.tagName !== 'INPUT') {
+                e.preventDefault();
+                this.toggleFullscreen();
+            }
             // Enter on search is handled by @keydown.enter on the input
         },
 
@@ -2057,6 +2193,9 @@ openCheckout() {
                 coupon_code:             this.appliedCoupon?.code || null,
                 payment_method:          this.getPaymentMethodString(),
                 paid_amount:             this.getPaidAmount(),
+                cash_paid:               Number(this.payCash) || 0,
+                card_paid:               Number(this.payCard) || 0,
+                mobile_paid:             Number(this.payBkash) || 0,
                 customer_name:           this.customerName,
                 customer_phone:          this.customerPhone,
                 created_at:              new Date().toISOString(),
@@ -2192,89 +2331,143 @@ openCheckout() {
             const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             const money = (n) => this.formatNumber(n);
             const when = new Date(data.createdAt || Date.now());
-            const dateStr = when.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const fmt = { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' };
+            const fmtTime = { timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', hour12: true };
+            const dateStr = when.toLocaleDateString('en-GB', fmt);
+            const timeStr = when.toLocaleTimeString('en-GB', fmtTime);
+            const printed = new Date().toLocaleString('en-GB', {
+                timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true,
+            });
             const rows = (data.items || []).map(i => `
                 <tr>
-                    <td class="text-left">${esc((i.name || '').slice(0, 18))}</td>
+                    <td class="item-name">${esc(i.name || 'Product')}</td>
                     <td class="text-center">${Number(i.qty) || 0}</td>
-                    <td class="text-right">৳${money(i.price)}</td>
-                    <td class="text-right">৳${money((Number(i.price) || 0) * (Number(i.qty) || 0))}</td>
+                    <td class="text-right">${money(i.price)}</td>
+                    <td class="text-right">${money((Number(i.price) || 0) * (Number(i.qty) || 0))}</td>
                 </tr>`).join('');
 
-            return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt - ${esc(data.invoiceNo)}</title>
+            return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice ${esc(data.invoiceNo)}</title>
 <style>
-body{font-family:'Courier New',Courier,monospace;font-size:12px;color:#000;margin:0;padding:0;background:#fff}
-.ticket{width:80mm;max-width:80mm;margin:0 auto;padding:10px}
-.text-center{text-align:center}.text-right{text-align:right}.text-left{text-align:left}
-.bold{font-weight:bold}.divider{border-top:1px dashed #000;margin:10px 0}
-table{width:100%;border-collapse:collapse}th,td{padding:4px 0;vertical-align:top}
+*{box-sizing:border-box}
+body{font-family:Segoe UI,Tahoma,sans-serif;font-size:12px;color:#0f172a;margin:0;padding:0;background:#fff}
+.sheet{width:80mm;max-width:80mm;margin:0 auto;padding:12px}
+.brand{text-align:center;border-bottom:2px solid #0f172a;padding-bottom:8px;margin-bottom:8px}
+.brand .doc{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#64748b}
+.brand h1{margin:4px 0 0;font-size:16px;font-weight:800}
+.meta{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px}
+.meta td{padding:2px 0}.meta .lbl{color:#64748b;font-weight:600}.meta .val{text-align:right;font-weight:700}
+.party{background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;padding:8px;margin-bottom:8px}
+.party .eyebrow{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b}
+.party .name{font-weight:800;margin:2px 0}
+.section{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b;border-bottom:1px solid #cbd5e1;padding-bottom:3px;margin:6px 0 4px}
+table.items{width:100%;border-collapse:collapse}
+table.items th{font-size:9px;font-weight:800;text-transform:uppercase;color:#64748b;border-bottom:1.5px solid #0f172a;padding:4px 0}
+table.items td{padding:5px 0;border-bottom:1px dotted #e2e8f0;vertical-align:top;font-size:11px}
+.item-name{font-weight:700}.text-center{text-align:center}.text-right{text-align:right}
+.totals{width:100%;border-collapse:collapse;border-top:1.5px solid #0f172a;margin-top:4px}
+.totals td{padding:3px 0;font-size:11px}.totals .lbl{color:#64748b}
+.totals .grand td{padding-top:7px;font-size:13px;font-weight:800;border-top:1px dashed #0f172a}
+.pay{margin-top:8px;border:1px solid #cbd5e1;border-radius:6px;padding:7px 9px;background:#f8fafc}
+.pay table{width:100%}.pay td{padding:2px 0;font-size:11px}
+.footer{text-align:center;margin-top:12px;padding-top:10px;border-top:2px solid #0f172a}
+.footer .thanks{font-weight:800;margin:0 0 4px}.footer .note{margin:0;font-size:10px;color:#64748b}
+.footer .stamp{margin-top:8px;font-size:9px;color:#64748b;font-family:ui-monospace,Consolas,monospace}
+.badge{text-align:center;font-weight:800;border:2px dashed #b45309;color:#b45309;padding:5px;margin-bottom:8px;font-size:11px;letter-spacing:.06em}
 </style></head><body>
-<div class="ticket">
-<div class="text-center">
-<h2 style="margin:0;font-size:18px">${esc(this.shopName)}</h2>
-<p style="margin:2px 0">Invoice: ${esc(data.invoiceNo)}</p>
-<p style="margin:2px 0">Date: ${esc(dateStr)}</p>
-<p style="margin:2px 0">Cashier: ${esc(this.cashierName)}</p>
-<p style="margin:2px 0" class="bold">*** OFFLINE BILL ***</p>
-</div>
-<div class="divider"></div>
-<div class="text-left">
-<p style="margin:2px 0"><span class="bold">Customer:</span> ${esc(data.customer)}</p>
-${data.phone ? `<p style="margin:2px 0"><span class="bold">Phone:</span> ${esc(data.phone)}</p>` : ''}
-</div>
-<div class="divider"></div>
-<table>
-<thead><tr>
-<th class="text-left" style="border-bottom:1px solid #000">Item</th>
-<th class="text-center" style="border-bottom:1px solid #000">Qty</th>
-<th class="text-right" style="border-bottom:1px solid #000">Price</th>
-<th class="text-right" style="border-bottom:1px solid #000">Total</th>
-</tr></thead>
+<div class="sheet">
+<div class="brand"><div class="doc">Sales Invoice / POS Receipt</div><h1>${esc(this.shopName)}</h1></div>
+<div class="badge">*** OFFLINE BILL ***</div>
+<table class="meta">
+<tr><td class="lbl">Invoice No</td><td class="val">${esc(data.invoiceNo)}</td></tr>
+<tr><td class="lbl">Date</td><td class="val">${esc(dateStr)}</td></tr>
+<tr><td class="lbl">Time</td><td class="val">${esc(timeStr)} (BST)</td></tr>
+<tr><td class="lbl">Cashier</td><td class="val">${esc(this.cashierName)}</td></tr>
+<tr><td class="lbl">Status</td><td class="val">PENDING SYNC</td></tr>
+</table>
+<div class="party"><div class="eyebrow">Bill To</div><p class="name">${esc(data.customer || 'Walk-in Customer')}</p>
+${data.phone ? `<p>Phone: ${esc(data.phone)}</p>` : ''}</div>
+<div class="section">Items</div>
+<table class="items">
+<thead><tr><th class="text-left">Description</th><th class="text-center">Qty</th><th class="text-right">Rate</th><th class="text-right">Amount</th></tr></thead>
 <tbody>${rows}</tbody>
 </table>
-<div class="divider"></div>
-<table>
-<tr><td>Items Total:</td><td class="text-right">৳${money(data.total)}</td></tr>
-${(data.discount || 0) > 0 ? `<tr><td>Less / Discount:</td><td class="text-right">- ৳${money(data.discount)}</td></tr>` : ''}
-<tr><td class="bold">GRAND TOTAL:</td><td class="text-right bold" style="font-size:14px">৳${money(data.payable)}</td></tr>
-<tr><td style="padding-top:6px">Paid (${esc(String(data.method || 'cash').toUpperCase())}):</td><td class="text-right" style="padding-top:6px">৳${money(data.paid)}</td></tr>
-${(data.change || 0) > 0 ? `<tr><td class="bold">Change Due:</td><td class="text-right bold">৳${money(data.change)}</td></tr>` : ''}
+<table class="totals">
+<tr><td class="lbl">Subtotal</td><td class="text-right">৳${money(data.total)}</td></tr>
+${(data.discount || 0) > 0 ? `<tr><td class="lbl">Discount</td><td class="text-right">- ৳${money(data.discount)}</td></tr>` : ''}
+<tr class="grand"><td>Grand total</td><td class="text-right">৳${money(data.payable)}</td></tr>
 </table>
-<div class="divider"></div>
-<div class="text-center"><p style="margin-top:10px;font-weight:bold">Thank you for your business!</p>
-<p style="font-size:10px;margin-top:4px">Will sync when network is available</p></div>
+<div class="pay"><table>
+<tr><td class="lbl">Payment method</td><td class="text-right" style="font-weight:700">${esc(String(data.method || 'cash').toUpperCase())}</td></tr>
+<tr><td class="lbl">Amount paid</td><td class="text-right" style="font-weight:700">৳${money(data.paid)}</td></tr>
+${(data.change || 0) > 0 ? `<tr><td class="lbl">Change due</td><td class="text-right" style="font-weight:800">৳${money(data.change)}</td></tr>` : ''}
+</table></div>
+<div class="footer">
+<p class="thanks">Thank you for your business</p>
+<p class="note">Will sync when network is available. Please retain this invoice.</p>
+<p class="stamp">Printed: ${esc(printed)} · Asia/Dhaka</p>
+</div>
 </div></body></html>`;
         },
 
         printLastReceipt() {
             if (this.lastSale?.receipt_html) {
-                try {
-                    const frame = this.$refs.receiptFrame;
-                    if (frame && frame.contentWindow) {
-                        frame.contentWindow.focus();
-                        frame.contentWindow.print();
-                        return;
-                    }
-                } catch (e) {}
-                const w = window.open('', '_blank', 'noopener,noreferrer,width=420,height=640');
-                if (w) {
-                    w.document.open();
-                    w.document.write(this.lastSale.receipt_html);
-                    w.document.close();
-                    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 250);
+                this.printHtmlDocument(this.lastSale.receipt_html);
+                return;
+            }
+            if (!this.lastSale?.receipt_url) {
+                this.showToast('No receipt available to print', 'error');
+                return;
+            }
+            // Prefer a dedicated print window — iframe.contentWindow.print() often
+            // prints the blank POS shell (title "POS Terminal") in Chromium.
+            this.printReceiptUrl(this.lastSale.receipt_url);
+        },
+
+        printReceiptUrl(url) {
+            const printUrl = url + (url.includes('?') ? '&' : '?') + 'print=1';
+            const w = window.open(printUrl, 'nexa_pos_receipt', 'width=440,height=720');
+            if (!w) {
+                this.showToast('Allow pop-ups to print receipts', 'error');
+                // Last resort: navigate iframe then try after load
+                const frame = this.$refs.receiptFrame;
+                if (frame) {
+                    frame.onload = () => {
+                        try {
+                            frame.contentWindow?.focus();
+                            frame.contentWindow?.print();
+                        } catch (e) {}
+                    };
+                    frame.src = printUrl;
                 }
                 return;
             }
-            if (!this.lastSale?.receipt_url) return;
-            try {
-                const frame = this.$refs.receiptFrame;
-                if (frame && frame.contentWindow) {
-                    frame.contentWindow.focus();
-                    frame.contentWindow.print();
-                    return;
-                }
-            } catch (e) {}
-            window.open(this.lastSale.receipt_url + (this.lastSale.receipt_url.includes('?') ? '&' : '?') + 'print=1', '_blank');
+            // Receipt view auto-prints when ?print=1; also retry after load for stubborn browsers
+            const tryPrint = () => {
+                try { w.focus(); w.print(); } catch (e) {}
+            };
+            w.addEventListener?.('load', () => setTimeout(tryPrint, 150));
+            setTimeout(tryPrint, 600);
+        },
+
+        printHtmlDocument(html) {
+            const w = window.open('', 'nexa_pos_receipt', 'width=440,height=720');
+            if (!w) {
+                this.showToast('Allow pop-ups to print receipts', 'error');
+                return;
+            }
+            w.document.open();
+            w.document.write(html);
+            w.document.close();
+            const tryPrint = () => {
+                try { w.focus(); w.print(); } catch (e) {}
+            };
+            if (w.document.readyState === 'complete') {
+                setTimeout(tryPrint, 150);
+            } else {
+                w.addEventListener('load', () => setTimeout(tryPrint, 150));
+                setTimeout(tryPrint, 600);
+            }
         },
 
         closeInvoiceModal() {

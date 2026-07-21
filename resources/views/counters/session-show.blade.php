@@ -44,18 +44,24 @@
         </div>
 
         <div class="bg-white rounded-xl border p-4 text-sm space-y-2">
-            <div class="flex justify-between"><span class="text-gray-500">Cash sales</span><span class="font-semibold">৳{{ number_format($session->cash_sales, 2) }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Card sales</span><span class="font-semibold">৳{{ number_format($session->card_sales, 2) }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Mobile / bKash</span><span class="font-semibold">৳{{ number_format($session->mobile_sales, 2) }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Cash refunds</span><span class="font-semibold text-red-600">৳{{ number_format($session->cash_refunds, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Cash sales</span><span class="font-semibold">৳{{ number_format($stats['cash_sales'] ?? $session->cash_sales, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Card sales</span><span class="font-semibold">৳{{ number_format($stats['card_sales'] ?? $session->card_sales, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Mobile / bKash</span><span class="font-semibold">৳{{ number_format($stats['mobile_sales'] ?? $session->mobile_sales, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Transfers in</span><span class="font-semibold text-emerald-700">৳{{ number_format($stats['transfers_in'] ?? 0, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Transfers out</span><span class="font-semibold text-amber-700">৳{{ number_format($stats['transfers_out'] ?? 0, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Cash purchases</span><span class="font-semibold text-red-600">৳{{ number_format($stats['cash_purchases'] ?? 0, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Cash refunds</span><span class="font-semibold text-red-600">৳{{ number_format($stats['cash_refunds'] ?? $session->cash_refunds, 2) }}</span></div>
             @if($session->notes)
                 <div class="pt-3 border-t text-xs text-gray-600 whitespace-pre-line">{{ $session->notes }}</div>
             @endif
         </div>
 
+        @include('counters.partials.transfer-log', ['transferLog' => $transferLog ?? []])
+
         @if($session->status === 'open')
-            <div class="mt-5">
+            <div class="mt-5 flex flex-wrap gap-2">
                 <a href="{{ route('counters.sessions.close-form', $session) }}" class="inline-flex bg-slate-900 text-white text-sm font-bold px-4 py-2 rounded-lg">Close session</a>
+                <a href="{{ route('counters.sessions.index') }}" class="inline-flex border border-indigo-200 text-indigo-700 text-sm font-bold px-4 py-2 rounded-lg hover:bg-indigo-50">Transfer cash</a>
             </div>
         @endif
     </div>

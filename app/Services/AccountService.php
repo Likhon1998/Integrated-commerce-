@@ -6,12 +6,14 @@ use App\Models\Account;
 use App\Models\AccountEntry;
 use App\Models\AccountTransaction;
 use App\Models\Counter;
+use App\Models\CounterSession;
 use App\Models\Order;
 use App\Models\StockMovement;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AccountService
 {
@@ -166,19 +168,60 @@ class AccountService
         }
 
         $this->ensureShopAccounts($order->shop_id);
+        $order->loadMissing('counter');
         if ($order->counter_id) {
             $this->ensureCounterCashAccount($order->counter);
         }
 
-        $paymentAccount = $this->resolvePaymentAccount($order);
         $revenue = $this->getAccount($order->shop_id, 'REVENUE');
         $cogs = $this->calculateCogs($order);
         $netAmount = $order->netPayable();
 
-        $lines = [
-            ['account' => $paymentAccount, 'debit' => $netAmount, 'credit' => 0, 'counter_id' => $order->counter_id],
-            ['account' => $revenue, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => $order->counter_id],
-        ];
+        $cash = max(0, (float) ($order->cash_paid ?? 0));
+        $card = max(0, (float) ($order->card_paid ?? 0));
+        $mobile = max(0, (float) ($order->mobile_paid ?? 0));
+        $hasBreakdown = $order->cash_paid !== null || $order->card_paid !== null || $order->mobile_paid !== null;
+
+        $lines = [];
+
+        if ($hasBreakdown) {
+            $allocated = round($cash + $card + $mobile, 2);
+            // If tender breakdown is short/long vs net, keep cash as residual for till accuracy
+            if ($allocated <= 0 && $netAmount > 0) {
+                $cash = $netAmount;
+            } elseif (abs($allocated - $netAmount) > 0.05 && $cash > 0) {
+                $cash = max(0, round($netAmount - $card - $mobile, 2));
+            } elseif (abs($allocated - $netAmount) > 0.05) {
+                $cash = max(0, round($netAmount - $card - $mobile, 2));
+            }
+
+            if ($cash > 0) {
+                $cashAccount = $order->counter_id
+                    ? $this->ensureCounterCashAccount($order->counter)
+                    : $this->getAccount($order->shop_id, 'WEB-CASH');
+                $lines[] = ['account' => $cashAccount, 'debit' => $cash, 'credit' => 0, 'counter_id' => $order->counter_id];
+            }
+            if ($card > 0) {
+                $lines[] = ['account' => $this->getAccount($order->shop_id, 'CARD'), 'debit' => $card, 'credit' => 0, 'counter_id' => $order->counter_id];
+            }
+            if ($mobile > 0) {
+                $lines[] = ['account' => $this->getAccount($order->shop_id, 'BKASH'), 'debit' => $mobile, 'credit' => 0, 'counter_id' => $order->counter_id];
+            }
+
+            $debited = round($cash + $card + $mobile, 2);
+            if ($debited + 0.009 < $netAmount) {
+                $gap = round($netAmount - $debited, 2);
+                $cashAccount = $order->counter_id
+                    ? $this->ensureCounterCashAccount($order->counter)
+                    : $this->getAccount($order->shop_id, 'WEB-CASH');
+                $lines[] = ['account' => $cashAccount, 'debit' => $gap, 'credit' => 0, 'counter_id' => $order->counter_id];
+            }
+        } else {
+            $paymentAccount = $this->resolvePaymentAccount($order);
+            $lines[] = ['account' => $paymentAccount, 'debit' => $netAmount, 'credit' => 0, 'counter_id' => $order->counter_id];
+        }
+
+        $lines[] = ['account' => $revenue, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => $order->counter_id];
 
         if ($cogs > 0) {
             $lines[] = ['account' => $this->getAccount($order->shop_id, 'COGS'), 'debit' => $cogs, 'credit' => 0, 'counter_id' => $order->counter_id];
@@ -265,14 +308,8 @@ class AccountService
             return;
         }
 
-        $order->loadMissing('items.product');
+        $order->loadMissing(['items.product', 'counter']);
         $this->ensureShopAccounts($order->shop_id);
-
-        $paymentAccount = $order->isOnlineOrder()
-            ? ($this->transactionExists($order->shop_id, 'web_settlement', Order::class, $order->id)
-                ? $this->getAccount($order->shop_id, 'WEB-CASH')
-                : $this->getAccount($order->shop_id, 'WEB-COD'))
-            : $this->resolvePaymentAccount($order);
 
         $revenue = $this->getAccount($order->shop_id, 'REVENUE');
         $cogs = $this->calculateCogs($order);
@@ -280,8 +317,45 @@ class AccountService
 
         $lines = [
             ['account' => $revenue, 'debit' => $netAmount, 'credit' => 0, 'counter_id' => $order->counter_id],
-            ['account' => $paymentAccount, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => $order->counter_id],
         ];
+
+        if ($order->isOnlineOrder()) {
+            $paymentAccount = $this->transactionExists($order->shop_id, 'web_settlement', Order::class, $order->id)
+                ? $this->getAccount($order->shop_id, 'WEB-CASH')
+                : $this->getAccount($order->shop_id, 'WEB-COD');
+            $lines[] = ['account' => $paymentAccount, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => null];
+        } else {
+            $cash = max(0, (float) ($order->cash_paid ?? 0));
+            $card = max(0, (float) ($order->card_paid ?? 0));
+            $mobile = max(0, (float) ($order->mobile_paid ?? 0));
+            $hasBreakdown = $order->cash_paid !== null || $order->card_paid !== null || $order->mobile_paid !== null;
+
+            if ($hasBreakdown && ($cash + $card + $mobile) > 0) {
+                if ($cash > 0) {
+                    $cashAccount = $order->counter_id
+                        ? $this->ensureCounterCashAccount($order->counter)
+                        : $this->getAccount($order->shop_id, 'WEB-CASH');
+                    $lines[] = ['account' => $cashAccount, 'debit' => 0, 'credit' => $cash, 'counter_id' => $order->counter_id];
+                }
+                if ($card > 0) {
+                    $lines[] = ['account' => $this->getAccount($order->shop_id, 'CARD'), 'debit' => 0, 'credit' => $card, 'counter_id' => $order->counter_id];
+                }
+                if ($mobile > 0) {
+                    $lines[] = ['account' => $this->getAccount($order->shop_id, 'BKASH'), 'debit' => 0, 'credit' => $mobile, 'counter_id' => $order->counter_id];
+                }
+                $credited = round($cash + $card + $mobile, 2);
+                if ($credited + 0.009 < $netAmount) {
+                    $gap = round($netAmount - $credited, 2);
+                    $cashAccount = $order->counter_id
+                        ? $this->ensureCounterCashAccount($order->counter)
+                        : $this->getAccount($order->shop_id, 'WEB-CASH');
+                    $lines[] = ['account' => $cashAccount, 'debit' => 0, 'credit' => $gap, 'counter_id' => $order->counter_id];
+                }
+            } else {
+                $paymentAccount = $this->resolvePaymentAccount($order);
+                $lines[] = ['account' => $paymentAccount, 'debit' => 0, 'credit' => $netAmount, 'counter_id' => $order->counter_id];
+            }
+        }
 
         if ($cogs > 0) {
             $lines[] = ['account' => $this->getAccount($order->shop_id, 'INVENTORY'), 'debit' => $cogs, 'credit' => 0, 'counter_id' => $order->counter_id];
@@ -315,6 +389,223 @@ class AccountService
             ],
             userId: Auth::id(),
         );
+    }
+
+    /**
+     * Move cash from one counter till to another with a clear justification trail.
+     * Debits destination counter cash / credits source counter cash.
+     */
+    public function postCounterCashTransfer(
+        Counter $fromCounter,
+        Counter $toCounter,
+        float $amount,
+        string $reason,
+        ?int $userId = null,
+    ): AccountTransaction {
+        if ($fromCounter->id === $toCounter->id) {
+            throw new \InvalidArgumentException('Choose two different counters.');
+        }
+
+        if ($fromCounter->shop_id !== $toCounter->shop_id) {
+            throw new \InvalidArgumentException('Counters must belong to the same shop.');
+        }
+
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Transfer amount must be greater than zero.');
+        }
+
+        $fromAccount = $this->ensureCounterCashAccount($fromCounter);
+        $toAccount = $this->ensureCounterCashAccount($toCounter);
+        $available = $this->accountBalance($fromAccount);
+
+        if ($amount > $available + 0.0001) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    'Insufficient cash on %s. Available ৳%s, tried ৳%s.',
+                    $fromCounter->name,
+                    number_format($available, 2),
+                    number_format($amount, 2)
+                )
+            );
+        }
+
+        $reason = trim($reason);
+        $description = sprintf(
+            'Counter transfer: %s → %s — %s',
+            $fromCounter->name,
+            $toCounter->name,
+            $reason
+        );
+
+        return $this->createTransaction(
+            shopId: $fromCounter->shop_id,
+            type: 'transfer',
+            referenceType: null,
+            referenceId: null,
+            description: $description,
+            date: now(),
+            lines: [
+                ['account' => $toAccount, 'debit' => $amount, 'credit' => 0, 'counter_id' => $toCounter->id],
+                ['account' => $fromAccount, 'debit' => 0, 'credit' => $amount, 'counter_id' => $fromCounter->id],
+            ],
+            userId: $userId ?? Auth::id(),
+        );
+    }
+
+    /**
+     * Bank counted drawer cash back to Petty and clear shortage/overage so
+     * the next day's opening float does not stack on leftover ledger cash.
+     */
+    public function settleCounterSessionClose(
+        Counter $counter,
+        CounterSession $session,
+        float $closingCash,
+        float $expected,
+        ?int $userId = null,
+    ): void {
+        $this->ensureShopAccounts($counter->shop_id);
+        $cashAccount = $this->ensureCounterCashAccount($counter);
+        $petty = $this->getAccount($counter->shop_id, 'PETTY');
+        $expense = $this->getAccount($counter->shop_id, 'EXPENSE');
+        $equity = $this->getAccount($counter->shop_id, 'EQUITY');
+        $userId ??= Auth::id();
+
+        $closingCash = round(max(0, $closingCash), 2);
+        $expected = round($expected, 2);
+        $variance = round($closingCash - $expected, 2);
+
+        if ($variance < -0.009) {
+            $short = abs($variance);
+            $this->createTransaction(
+                shopId: $counter->shop_id,
+                type: 'counter_shortage',
+                referenceType: CounterSession::class,
+                referenceId: $session->id,
+                description: "Cash shortage — {$counter->name} session #{$session->id}",
+                date: now(),
+                lines: [
+                    ['account' => $expense, 'debit' => $short, 'credit' => 0, 'counter_id' => $counter->id],
+                    ['account' => $cashAccount, 'debit' => 0, 'credit' => $short, 'counter_id' => $counter->id],
+                ],
+                userId: $userId,
+            );
+        } elseif ($variance > 0.009) {
+            $over = $variance;
+            $this->createTransaction(
+                shopId: $counter->shop_id,
+                type: 'counter_overage',
+                referenceType: CounterSession::class,
+                referenceId: $session->id,
+                description: "Cash overage — {$counter->name} session #{$session->id}",
+                date: now(),
+                lines: [
+                    ['account' => $cashAccount, 'debit' => $over, 'credit' => 0, 'counter_id' => $counter->id],
+                    ['account' => $equity, 'debit' => 0, 'credit' => $over, 'counter_id' => $counter->id],
+                ],
+                userId: $userId,
+            );
+        }
+
+        if ($closingCash > 0.009) {
+            $this->createTransaction(
+                shopId: $counter->shop_id,
+                type: 'counter_close',
+                referenceType: CounterSession::class,
+                referenceId: $session->id,
+                description: "Closing deposit — {$counter->name} session #{$session->id}",
+                date: now(),
+                lines: [
+                    ['account' => $petty, 'debit' => $closingCash, 'credit' => 0, 'counter_id' => null],
+                    ['account' => $cashAccount, 'debit' => 0, 'credit' => $closingCash, 'counter_id' => $counter->id],
+                ],
+                userId: $userId,
+            );
+        }
+
+        // Sweep tiny leftovers so till ledger starts clean next open
+        $leftover = round($this->accountBalance($cashAccount), 2);
+        if (abs($leftover) > 0.009 && abs($leftover) < 1.00) {
+            if ($leftover > 0) {
+                $this->createTransaction(
+                    shopId: $counter->shop_id,
+                    type: 'counter_close',
+                    referenceType: CounterSession::class,
+                    referenceId: $session->id,
+                    description: "Closing remainder sweep — {$counter->name} session #{$session->id}",
+                    date: now(),
+                    lines: [
+                        ['account' => $petty, 'debit' => $leftover, 'credit' => 0, 'counter_id' => null],
+                        ['account' => $cashAccount, 'debit' => 0, 'credit' => $leftover, 'counter_id' => $counter->id],
+                    ],
+                    userId: $userId,
+                );
+            }
+        }
+    }
+
+    /**
+     * Individual transfer lines that hit a counter cash account during a window.
+     *
+     * @return list<array{direction:string,amount:float,counterpart:?string,reason:string,by:?string,at:string,txn_no:string}>
+     */
+    public function counterCashTransferLog(Counter $counter, Carbon $from, Carbon $until): array
+    {
+        $account = $this->ensureCounterCashAccount($counter);
+
+        $entries = AccountEntry::query()
+            ->where('account_id', $account->id)
+            ->whereHas('transaction', function ($q) use ($from, $until) {
+                $q->where('type', 'transfer')
+                    ->where('created_at', '>=', $from)
+                    ->where('created_at', '<=', $until);
+            })
+            ->with(['transaction.user', 'transaction.entries.account.counter'])
+            ->get();
+
+        $rows = [];
+
+        foreach ($entries as $entry) {
+            $txn = $entry->transaction;
+            if (! $txn) {
+                continue;
+            }
+
+            $counterpartEntry = $txn->entries->first(
+                fn ($e) => (int) $e->account_id !== (int) $account->id
+            );
+            $counterpart = $counterpartEntry?->account?->counter?->name
+                ?? $counterpartEntry?->account?->name
+                ?? 'Other account';
+
+            $direction = $entry->entry_type === 'debit' ? 'in' : 'out';
+            $reason = (string) $txn->description;
+            // Strip the auto prefix for cleaner UI when present
+            if (str_contains($reason, ' — ')) {
+                $reason = trim(Str::afterLast($reason, ' — '));
+            }
+
+            $rows[] = [
+                'direction' => $direction,
+                'amount' => round((float) $entry->amount, 2),
+                'counterpart' => $counterpart,
+                'reason' => $reason !== '' ? $reason : (string) $txn->description,
+                'by' => $txn->user?->name,
+                'at' => asian_datetime($txn->created_at, 'd M Y, h:i A'),
+                'at_ts' => optional($txn->created_at)->timestamp ?? 0,
+                'txn_no' => (string) $txn->transaction_no,
+            ];
+        }
+
+        return collect($rows)
+            ->sortByDesc('at_ts')
+            ->values()
+            ->map(function (array $row) {
+                unset($row['at_ts']);
+
+                return $row;
+            })
+            ->all();
     }
 
     public function postPettyCash(int $shopId, float $amount, string $description): void
@@ -544,6 +835,7 @@ class AccountService
             $transfersIn = $this->sumEntries($account->id, 'debit', $dayStart, $dayEnd, 'transfer');
             $transfersOut = $this->sumEntries($account->id, 'credit', $dayStart, $dayEnd, 'transfer');
             $refundsOut = $this->sumEntries($account->id, 'credit', $dayStart, $dayEnd, 'refund');
+            $purchasesOut = $this->sumEntries($account->id, 'credit', $dayStart, $dayEnd, 'supplier_payment');
             $closing = $this->accountBalance($account, $dayEnd);
 
             $rows[] = [
@@ -554,11 +846,27 @@ class AccountService
                 'transfers_in' => $transfersIn,
                 'transfers_out' => $transfersOut,
                 'refunds_out' => $refundsOut,
+                'purchases_out' => $purchasesOut,
                 'closing' => $closing,
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Cash movements on a counter till between two timestamps (session window).
+     * Excludes opening float (counter_open) — that is already in session opening_cash.
+     */
+    public function counterCashSessionMovements(Counter $counter, Carbon $from, Carbon $until): array
+    {
+        $account = $this->ensureCounterCashAccount($counter);
+
+        return [
+            'transfers_in' => $this->sumEntriesCreatedBetween($account->id, 'debit', $from, $until, 'transfer'),
+            'transfers_out' => $this->sumEntriesCreatedBetween($account->id, 'credit', $from, $until, 'transfer'),
+            'cash_purchases' => $this->sumEntriesCreatedBetween($account->id, 'credit', $from, $until, 'supplier_payment'),
+        ];
     }
 
     protected function resolvePaymentAccount(Order $order): Account
@@ -663,5 +971,17 @@ class AccountService
             });
 
         return (float) $query->sum('amount');
+    }
+
+    protected function sumEntriesCreatedBetween(int $accountId, string $entryType, Carbon $from, Carbon $until, string $txnType): float
+    {
+        return (float) AccountEntry::where('account_id', $accountId)
+            ->where('entry_type', $entryType)
+            ->whereHas('transaction', function ($q) use ($from, $until, $txnType) {
+                $q->where('type', $txnType)
+                    ->where('created_at', '>=', $from)
+                    ->where('created_at', '<=', $until);
+            })
+            ->sum('amount');
     }
 }

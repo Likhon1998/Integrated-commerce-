@@ -22,25 +22,36 @@ class SalesLedgerController extends Controller
     {
         $user = Auth::user();
         $shopId = $user->shop_id;
-        $channel = $request->input('channel', 'physical') === 'online' ? 'online' : 'physical';
+        $isAdmin = $user->isAdminUser();
+        $canViewOnline = $isAdmin;
+
+        // Counter staff only see their own till. Admins see all POS counters.
+        $channel = ($canViewOnline && $request->input('channel') === 'online')
+            ? 'online'
+            : 'physical';
 
         $physicalQuery = Order::where('shop_id', $shopId)
             ->whereNotNull('counter_id')
             ->with(['customer', 'user', 'counter', 'items.product']);
 
-        if (! $user->isAdminUser() && $user->counter_id) {
+        if (! $isAdmin && $user->counter_id) {
             $physicalQuery->where('counter_id', $user->counter_id);
         }
 
-        $onlineQuery = Order::where('shop_id', $shopId)
-            ->whereNull('counter_id')
-            ->with(['customer', 'user', 'items.product']);
-
         $physicalOrders = $physicalQuery->latest()->limit(250)->get();
-        $onlineOrders = $onlineQuery->latest()->limit(250)->get();
-
         $physicalPayload = $physicalOrders->map(fn (Order $order) => $this->physicalRow($order))->values();
-        $onlinePayload = $onlineOrders->map(fn (Order $order) => $this->onlineRow($order))->values();
+
+        $onlineOrders = collect();
+        $onlinePayload = collect();
+
+        if ($canViewOnline) {
+            $onlineQuery = Order::where('shop_id', $shopId)
+                ->whereNull('counter_id')
+                ->with(['customer', 'user', 'items.product']);
+
+            $onlineOrders = $onlineQuery->latest()->limit(250)->get();
+            $onlinePayload = $onlineOrders->map(fn (Order $order) => $this->onlineRow($order))->values();
+        }
 
         $physicalStats = [
             'cancelled' => $physicalOrders->where('status', 'cancelled')->count(),
@@ -61,6 +72,7 @@ class SalesLedgerController extends Controller
 
         return view('sales.index', [
             'channel' => $channel,
+            'canViewOnline' => $canViewOnline,
             'physicalPayload' => $physicalPayload,
             'onlinePayload' => $onlinePayload,
             'physicalStats' => $physicalStats,
@@ -80,7 +92,7 @@ class SalesLedgerController extends Controller
         return [
             'id' => $order->id,
             'invoice' => $order->invoice_no,
-            'created_at' => $order->created_at->format('d M y, h:i A'),
+            'created_at' => asian_datetime($order->created_at, 'd M y, h:i A'),
             'status' => $order->status,
             'payment_method' => (string) $order->payment_method,
             'product_revenue' => number_format($productRevenue, 2),
@@ -128,7 +140,7 @@ class SalesLedgerController extends Controller
         return [
             'id' => $order->id,
             'invoice' => $order->invoice_no,
-            'created_at' => $order->created_at->format('d M y, h:i A'),
+            'created_at' => asian_datetime($order->created_at, 'd M y, h:i A'),
             'status' => $order->status,
             'payment_method' => str_replace('_', ' ', (string) $order->payment_method),
             'is_cod' => $isCod,
@@ -191,6 +203,10 @@ class SalesLedgerController extends Controller
         }
 
         $isOnline = $order->counter_id === null;
+
+        if ($isOnline && ! $user->isAdminUser()) {
+            abort(403, 'Only admins can refund online orders.');
+        }
 
         if (! $isOnline && ! $user->isAdminUser() && $user->counter_id && (int) $order->counter_id !== (int) $user->counter_id) {
             abort(403, 'You can only refund sales from your counter.');
@@ -272,6 +288,10 @@ class SalesLedgerController extends Controller
     public function markReturned(Order $order)
     {
         $user = Auth::user();
+
+        if (! $user->isAdminUser()) {
+            abort(403, 'Only admins can process online order returns.');
+        }
 
         if ($order->shop_id !== $user->shop_id || $order->counter_id !== null) {
             abort(403, 'Unauthorized action.');

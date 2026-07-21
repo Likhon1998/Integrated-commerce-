@@ -47,6 +47,6 @@ class EnsureStaffOpeningBalance
 
         return redirect()
             ->route('counters.sessions.open-today')
-            ->with('error', 'Enter your opening cash for today before using the system.');
+            ->with('error', 'Open your counter cash session before using the system.');
     }
 }

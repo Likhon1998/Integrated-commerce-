@@ -18,6 +18,16 @@
         setInterval(function () {
             fetch('/refresh-session', { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(function () {});
         }, 15 * 60 * 1000);
+
+        // Keep counter window as large as the OS allows
+        (function expandPosWindow() {
+            try {
+                if (window.name === 'nexa_pos_terminal') {
+                    window.moveTo(0, 0);
+                    window.resizeTo(screen.availWidth || screen.width, screen.availHeight || screen.height);
+                }
+            } catch (e) {}
+        })();
     </script>
 </body>
 </html>

@@ -108,10 +108,17 @@ class PosController extends Controller
             ], 403);
         }
 
-        if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
+        if (! $user->counter_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Enter today\'s opening cash before making sales.',
+                'message' => 'Assign a counter to this user before taking till sales. Admin POS without a counter is blocked.',
+            ], 403);
+        }
+
+        if ($user->requiresDailyOpeningBalance() && ! $user->hasOpenCounterSession()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Open your cash session before making sales.',
                 'redirect' => route('counters.sessions.open-today'),
             ], 403);
         }
@@ -122,6 +129,9 @@ class PosController extends Controller
             'cart.*.qty' => 'required|integer|min:1',
             'payment_method' => 'required|string',
             'paid_amount' => 'required|numeric|min:0',
+            'cash_paid' => 'nullable|numeric|min:0',
+            'card_paid' => 'nullable|numeric|min:0',
+            'mobile_paid' => 'nullable|numeric|min:0',
             'customer_phone' => 'nullable|string',
             'customer_name' => 'nullable|string',
         ]);
@@ -186,22 +196,26 @@ class PosController extends Controller
                 }
             }
 
-            // 3. 🚀 FIX: Generate Invoice Number (SaaS Safe)
-            $lastOrder = Order::where('shop_id', $shopId)->latest('id')->first();
-            $nextId = $lastOrder ? $lastOrder->id + 1 : 1;
-            // Includes Shop ID in the prefix to prevent 1062 Duplicate Entry errors
-            $invoiceNo = 'INV-' . $shopId . '-' . date('Y') . '-' . str_pad($nextId, 5, '0', STR_PAD_LEFT);
+            // 3. Unique invoice inside the open transaction (locked)
+            $invoiceNo = Order::nextPosInvoiceNo($shopId, 'INV');
+
+            $cashPaid = $request->has('cash_paid') ? max(0, (float) $request->cash_paid) : null;
+            $cardPaid = $request->has('card_paid') ? max(0, (float) $request->card_paid) : null;
+            $mobilePaid = $request->has('mobile_paid') ? max(0, (float) $request->mobile_paid) : null;
 
             // 4. Create the Main Order
             $order = Order::create([
                 'shop_id' => $shopId,
                 'user_id' => $user->id, 
-                'counter_id' => $user->counter_id, // If Admin has no counter, this will safely be null
+                'counter_id' => $user->counter_id,
                 'customer_id' => $customerId, 
                 'invoice_no' => $invoiceNo,
                 'total_amount' => $totalAmount,
                 'discount_amount' => $discountAmount,
                 'paid_amount' => $paidAmount,
+                'cash_paid' => $cashPaid,
+                'card_paid' => $cardPaid,
+                'mobile_paid' => $mobilePaid,
                 'change_amount' => $changeAmount,
                 'payment_method' => $request->payment_method,
                 'status' => 'completed',
@@ -290,7 +304,7 @@ class PosController extends Controller
             abort(403, 'Unauthorized Access');
         }
         
-        $order->load('items.product', 'user', 'customer');
+        $order->load('items.product', 'user', 'customer', 'shop', 'counter');
         
         // 🚀 FETCH THE EXACT RETURNED PRODUCT FOR THE RECEIPT
         $returnProduct = null;
@@ -331,12 +345,12 @@ class PosController extends Controller
     {
         $user = Auth::user();
         
-        if (!$user->canAccessPos()) {
+        if (!$user->canAccessPos() || ! $user->counter_id) {
             return response()->json(['success' => false, 'message' => 'No counter assigned. Sync blocked.'], 403);
         }
 
-        if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
-            return response()->json(['success' => false, 'message' => 'Enter today\'s opening cash before syncing sales.'], 403);
+        if ($user->requiresDailyOpeningBalance() && ! $user->hasOpenCounterSession()) {
+            return response()->json(['success' => false, 'message' => 'Open your cash session before syncing sales.'], 403);
         }
 
         $shopId = $user->shop_id;
@@ -369,11 +383,8 @@ class PosController extends Controller
                     }
                 }
 
-                // 2. 🚀 FIX: Generate Invoice Number (SaaS Safe)
-                $lastOrder = Order::where('shop_id', $shopId)->latest('id')->first();
-                $nextId = $lastOrder ? $lastOrder->id + 1 : 1;
-                // Includes Shop ID in the prefix
-                $invoiceNo = 'OFF-' . $shopId . '-' . date('Y') . '-' . str_pad($nextId, 5, '0', STR_PAD_LEFT);
+                // 2. Unique offline invoice (locked inside outer transaction)
+                $invoiceNo = Order::nextPosInvoiceNo($shopId, 'OFF');
 
                 // 3. Create Order
                 $gross = (float) ($offlineOrder['total_amount'] ?? 0);
@@ -386,15 +397,22 @@ class PosController extends Controller
                     $payable = $paid;
                 }
 
+                $cashPaid = array_key_exists('cash_paid', $offlineOrder) ? max(0, (float) $offlineOrder['cash_paid']) : null;
+                $cardPaid = array_key_exists('card_paid', $offlineOrder) ? max(0, (float) $offlineOrder['card_paid']) : null;
+                $mobilePaid = array_key_exists('mobile_paid', $offlineOrder) ? max(0, (float) $offlineOrder['mobile_paid']) : null;
+
                 $order = Order::create([
                     'shop_id' => $shopId,
                     'user_id' => $userId,
-                    'counter_id' => $user->counter_id, // If Admin has no counter, this will safely be null
+                    'counter_id' => $user->counter_id,
                     'customer_id' => $customerId,
                     'invoice_no' => $invoiceNo,
                     'total_amount' => $gross,
                     'discount_amount' => $discount,
                     'paid_amount' => $paid,
+                    'cash_paid' => $cashPaid,
+                    'card_paid' => $cardPaid,
+                    'mobile_paid' => $mobilePaid,
                     'change_amount' => max(0, $paid - $payable),
                     'payment_method' => $offlineOrder['payment_method'],
                     'status' => 'completed',

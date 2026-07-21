@@ -65,7 +65,19 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Asia/Dhaka'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Used for invoices, receipts, and customer-facing timestamps.
+    | Defaults to Bangladesh Standard Time (Asia/Dhaka).
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', env('APP_TIMEZONE', 'Asia/Dhaka')),
 
     /*
     |--------------------------------------------------------------------------

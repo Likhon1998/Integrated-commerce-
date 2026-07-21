@@ -52,18 +52,28 @@
                             </div>
                         </div>
 
-                        <form method="POST" action="{{ route('counters.sessions.close', $staleSession) }}" class="space-y-3">
+                        <form method="POST" action="{{ route('counters.sessions.close', $staleSession) }}" class="space-y-3"
+                              onsubmit="return confirm('Confirm you counted the drawer. Enter the real amount — expected is only a guide.');">
                             @csrf
+                            <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                                Count the cash yourself. Expected ৳{{ number_format($expected, 2) }} is a guide only.
+                            </div>
+                            @include('counters.partials.transfer-log', ['transferLog' => $transferLog ?? [], 'class' => ''])
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 mb-1.5">Counted cash in drawer (৳) *</label>
-                                <input type="number" name="closing_cash" step="0.01" min="0" required value="{{ old('closing_cash', $expected) }}"
+                                <input type="number" name="closing_cash" step="0.01" min="0" required value="{{ old('closing_cash') }}"
+                                       placeholder="Enter counted amount" autocomplete="off"
                                        class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3 font-bold">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-slate-500 mb-1.5">Notes</label>
-                                <input type="text" name="notes" value="{{ old('notes') }}" placeholder="Optional"
+                                <input type="text" name="notes" value="{{ old('notes') }}" placeholder="Required if amount ≠ expected"
                                        class="w-full rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-sm py-2.5 px-3">
                             </div>
+                            <label class="flex items-start gap-2 text-xs text-slate-600">
+                                <input type="checkbox" name="counted_confirm" value="1" required class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span>I physically counted the drawer.</span>
+                            </label>
                             <button type="submit" class="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold py-3 transition">
                                 Close previous session
                             </button>

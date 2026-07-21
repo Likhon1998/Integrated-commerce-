@@ -3,178 +3,436 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt - {{ $order->invoice_no }}</title>
+    <title>Invoice {{ $order->invoice_no }}</title>
+    @php
+        $tz = config('app.display_timezone', config('app.timezone', 'Asia/Dhaka'));
+        $issuedAt = $order->created_at?->copy()->timezone($tz);
+        $printedAt = now()->timezone($tz);
+        $shop = $order->shop ?? Auth::user()->shop ?? null;
+        $shopName = $shop->name ?? 'Nexa POS';
+        $isOnline = $order->isOnlineOrder();
+        $isVoid = in_array($order->status, ['refunded', 'cancelled', 'returned'], true);
+        $channel = $isOnline
+            ? 'Online Store'
+            : ($order->counter->name ?? ($order->user->name ?? 'POS'));
+        $cashier = $order->user->name ?? '—';
+        $paymentLabel = strtoupper(str_replace('_', ' ', (string) ($order->payment_method ?? 'cash')));
+        $itemsSubtotal = (float) $order->items->sum('subtotal');
+        if ($itemsSubtotal <= 0) {
+            $itemsSubtotal = max(0, (float) $order->total_amount - (float) ($order->delivery_charge ?? 0));
+        }
+    @endphp
     <style>
-        body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; margin: 0; padding: 0; background-color: #fff; }
-        .ticket { width: 80mm; max-width: 80mm; margin: 0 auto; padding: 10px; }
-        .text-center { text-align: center; } .text-right { text-align: right; } .text-left { text-align: left; }
-        .bold { font-weight: bold; }
-        .divider { border-top: 1px dashed #000; margin: 10px 0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 4px 0; vertical-align: top; }
-        .section-title { text-align: center; font-weight: bold; font-size: 13px; margin: 8px 0 4px 0; border-bottom: 1px solid #000; display: inline-block; padding: 0 4px; }
-        .warning-box { border: 2px solid #000; padding: 10px; text-align: center; margin-top: 15px; margin-bottom: 15px; border-radius: 4px; }
-        .address-box { margin: 4px 0; padding: 4px; border: 1px dashed #ccc; border-radius: 2px; }
+        :root {
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: #cbd5e1;
+            --soft: #f8fafc;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            color: var(--ink);
+            margin: 0;
+            padding: 0;
+            background: #e2e8f0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .sheet {
+            width: 80mm;
+            max-width: 80mm;
+            margin: 12px auto;
+            padding: 14px 12px 16px;
+            background: #fff;
+            border: 1px solid var(--line);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+        }
+        .brand {
+            text-align: center;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .brand .doc-type {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+        .brand h1 {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: .02em;
+            line-height: 1.2;
+        }
+        .brand .tagline {
+            margin: 4px 0 0;
+            font-size: 10px;
+            color: var(--muted);
+        }
+        .meta {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+        .meta td {
+            padding: 2px 0;
+            vertical-align: top;
+        }
+        .meta .lbl {
+            color: var(--muted);
+            width: 38%;
+            font-weight: 600;
+        }
+        .meta .val {
+            font-weight: 700;
+            text-align: right;
+            word-break: break-word;
+        }
+        .party {
+            background: var(--soft);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 8px 9px;
+            margin-bottom: 10px;
+        }
+        .party .eyebrow {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+        .party .name { font-weight: 800; font-size: 12px; margin: 0 0 2px; }
+        .party p { margin: 1px 0; color: var(--ink); line-height: 1.35; }
+        .badge {
+            display: block;
+            text-align: center;
+            font-weight: 800;
+            font-size: 12px;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            border: 2px dashed var(--ink);
+            padding: 6px;
+            margin: 0 0 10px;
+        }
+        .badge.void { color: #b91c1c; border-color: #b91c1c; }
+        .badge.exchange { color: #1d4ed8; border-color: #1d4ed8; }
+        .section-label {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 8px 0 4px;
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 3px;
+        }
+        table.items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+        }
+        table.items th {
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border-bottom: 1.5px solid var(--ink);
+            padding: 4px 0;
+        }
+        table.items td {
+            padding: 5px 0;
+            border-bottom: 1px dotted #e2e8f0;
+            vertical-align: top;
+            font-size: 11px;
+        }
+        table.items tr:last-child td { border-bottom: 0; }
+        .text-left { text-align: left; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .item-name { font-weight: 700; line-height: 1.25; }
+        .totals {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+            border-top: 1.5px solid var(--ink);
+            padding-top: 4px;
+        }
+        .totals td {
+            padding: 3px 0;
+            font-size: 11px;
+        }
+        .totals .lbl { color: var(--muted); }
+        .totals .grand td {
+            padding-top: 7px;
+            font-size: 13px;
+            font-weight: 800;
+            border-top: 1px dashed var(--ink);
+        }
+        .pay-box {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 7px 9px;
+            background: var(--soft);
+        }
+        .pay-box table { width: 100%; border-collapse: collapse; }
+        .pay-box td { padding: 2px 0; font-size: 11px; }
+        .footer {
+            text-align: center;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 2px solid var(--ink);
+        }
+        .footer .thanks {
+            font-weight: 800;
+            font-size: 12px;
+            margin: 0 0 4px;
+        }
+        .footer .note {
+            margin: 0;
+            font-size: 10px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+        .footer .stamp {
+            margin-top: 8px;
+            font-size: 9px;
+            color: var(--muted);
+            font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+        }
+        .warning-box {
+            border: 2px solid var(--ink);
+            padding: 8px;
+            text-align: center;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .no-print { text-align: center; margin: 14px 0 8px; }
+        .no-print button {
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 9px 18px;
+            border-radius: 8px;
+            border: 0;
+            background: #2563eb;
+            color: #fff;
+            cursor: pointer;
+        }
+        @media print {
+            body { background: #fff !important; }
+            .sheet {
+                width: 80mm;
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                border: 0;
+                box-shadow: none;
+            }
+            .no-print { display: none !important; }
+            @page { margin: 4mm; size: auto; }
+        }
     </style>
 </head>
-<body @if(request()->boolean('print')) onload="window.print()" @endif>
-    <div class="ticket">
-        
-        <div class="text-center">
-            <h2 style="margin: 0; font-size: 18px;">{{ Auth::user()->shop->name ?? 'Nexa POS' }}</h2>
-            <p style="margin: 2px 0;">Invoice: {{ $order->invoice_no }}</p>
-            <p style="margin: 2px 0;">Date: {{ $order->created_at->format('d M Y, h:i A') }}</p>
-            <p style="margin: 2px 0;">Sales Channel: {{ $order->counter_id ? ($order->user->name ?? 'Cashier') : 'Online Web Store' }}</p>
-            
-            @if($order->customer)
-                <div class="divider"></div>
-                <div class="text-left">
-                    <p style="margin: 2px 0;"><span class="bold">Customer:</span> {{ $order->customer->name }}</p>
-                    <p style="margin: 2px 0;"><span class="bold">Phone:</span> {{ $order->customer->phone }}</p>
-                    @if($order->customer->address)
-                        <div class="address-box">
-                            <span class="bold">Delivery Address:</span><br>
-                            <span style="word-wrap: break-word;">{{ $order->customer->address }}</span>
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-        
-        <div class="divider"></div>
+<body @if(request()->boolean('print')) onload="setTimeout(function(){ window.focus(); window.print(); }, 200)" @endif>
+    <div class="no-print">
+        <button type="button" onclick="window.print()">Print invoice</button>
+    </div>
 
-        @if(in_array($order->status, ['refunded', 'cancelled', 'returned']))
-            <div class="text-center bold" style="font-size: 16px; text-transform: uppercase; border: 2px dashed #000; padding: 5px; margin-bottom: 10px;">
-                *** VOID / {{ strtoupper($order->status) }} ***
-            </div>
+    <div class="sheet">
+        <header class="brand">
+            <div class="doc-type">{{ $isOnline ? 'Tax Invoice / Online Order' : 'Sales Invoice / POS Receipt' }}</div>
+            <h1>{{ $shopName }}</h1>
+            <p class="tagline">{{ $isOnline ? 'Online order confirmation' : 'Point of sale receipt' }}</p>
+        </header>
+
+        <table class="meta">
+            <tr>
+                <td class="lbl">Invoice No</td>
+                <td class="val">{{ $order->invoice_no }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Date</td>
+                <td class="val">{{ $issuedAt?->format('d M Y') ?? '—' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Time</td>
+                <td class="val">{{ $issuedAt?->format('h:i A') ?? '—' }} (BST)</td>
+            </tr>
+            <tr>
+                <td class="lbl">Channel</td>
+                <td class="val">{{ $channel }}</td>
+            </tr>
+            @unless($isOnline)
+            <tr>
+                <td class="lbl">Cashier</td>
+                <td class="val">{{ $cashier }}</td>
+            </tr>
+            @endunless
+            <tr>
+                <td class="lbl">Status</td>
+                <td class="val">{{ strtoupper($order->status) }}</td>
+            </tr>
+        </table>
+
+        @if($order->customer)
+            <section class="party">
+                <div class="eyebrow">Bill To</div>
+                <p class="name">{{ $order->customer->name }}</p>
+                @if($order->customer->phone)
+                    <p>Phone: {{ $order->customer->phone }}</p>
+                @endif
+                @if($order->customer->address)
+                    <p>Address: {{ $order->customer->address }}</p>
+                @endif
+            </section>
+        @else
+            <section class="party">
+                <div class="eyebrow">Bill To</div>
+                <p class="name">Walk-in Customer</p>
+            </section>
+        @endif
+
+        @if($isVoid)
+            <div class="badge void">*** VOID / {{ strtoupper($order->status) }} ***</div>
         @endif
 
         @if($order->is_exchange_receipt)
-            <div class="text-center bold" style="font-size: 15px; text-transform: uppercase;">*** EXCHANGE RECEIPT ***</div>
-            <div class="divider"></div>
-            <div class="text-center"><span class="section-title">[ RETURNED ITEMS ]</span></div>
-            <table>
-                <tr>
-                    <td class="text-left bold">{{ $returnProduct ? Str::limit($returnProduct->name, 18) : 'Unknown Item' }}</td>
-                    <td class="text-center bold">x{{ $order->return_qty }}</td>
-                    <td class="text-right bold">- ৳{{ number_format($order->exchange_credit, 2) }}</td>
-                </tr>
+            <div class="badge exchange">*** Exchange Receipt ***</div>
+            <div class="section-label">Returned Items</div>
+            <table class="items">
+                <thead>
+                    <tr>
+                        <th class="text-left">Item</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-right">Credit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="item-name">{{ $returnProduct->name ?? 'Returned item' }}</td>
+                        <td class="text-center">{{ $order->return_qty }}</td>
+                        <td class="text-right">- ৳{{ number_format((float) $order->exchange_credit, 2) }}</td>
+                    </tr>
+                </tbody>
             </table>
-            <div class="divider"></div>
-            <div class="text-center"><span class="section-title">[ NEW ITEMS ]</span></div>
+            <div class="section-label">New Items</div>
+        @else
+            <div class="section-label">Items</div>
         @endif
-        
-        <table>
+
+        <table class="items">
             <thead>
                 <tr>
-                    <th class="text-left border-bottom" style="border-bottom: 1px solid #000;">Item</th>
-                    <th class="text-center border-bottom" style="border-bottom: 1px solid #000;">Qty</th>
-                    <th class="text-right border-bottom" style="border-bottom: 1px solid #000;">Price</th>
-                    <th class="text-right border-bottom" style="border-bottom: 1px solid #000;">Total</th>
+                    <th class="text-left">Description</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-right">Rate</th>
+                    <th class="text-right">Amount</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($order->items as $item)
-                <tr>
-                    <td class="text-left">{{ Str::limit($item->product->name, 14) }}</td>
-                    <td class="text-center">{{ $item->quantity }}</td>
-                    <td class="text-right">{{ number_format($item->unit_price, 2) }}</td>
-                    <td class="text-right">{{ number_format($item->subtotal, 2) }}</td>
-                </tr>
+                    <tr>
+                        <td class="item-name">{{ $item->product->name ?? 'Product' }}</td>
+                        <td class="text-center">{{ $item->quantity }}</td>
+                        <td class="text-right">{{ number_format((float) $item->unit_price, 2) }}</td>
+                        <td class="text-right">{{ number_format((float) $item->subtotal, 2) }}</td>
+                    </tr>
                 @endforeach
             </tbody>
         </table>
-        
-        <div class="divider"></div>
-        
-        <table>
+
+        <table class="totals">
             @if($order->is_exchange_receipt)
                 <tr>
-                    <td>Items Total:</td>
-                    <td class="text-right">৳{{ number_format($order->total_amount, 2) }}</td>
+                    <td class="lbl">Items total</td>
+                    <td class="text-right">৳{{ number_format((float) $order->total_amount, 2) }}</td>
                 </tr>
                 <tr>
-                    <td style="padding-bottom: 6px; border-bottom: 1px dashed #000;">Return Credit:</td>
-                    <td class="text-right" style="padding-bottom: 6px; border-bottom: 1px dashed #000;">- ৳{{ number_format($order->exchange_credit, 2) }}</td>
+                    <td class="lbl">Return credit</td>
+                    <td class="text-right">- ৳{{ number_format((float) $order->exchange_credit, 2) }}</td>
                 </tr>
                 @if(($order->discount_amount ?? 0) > 0)
-                <tr>
-                    <td>Less / Discount:</td>
-                    <td class="text-right">- ৳{{ number_format($order->discount_amount, 2) }}</td>
-                </tr>
+                    <tr>
+                        <td class="lbl">Discount</td>
+                        <td class="text-right">- ৳{{ number_format((float) $order->discount_amount, 2) }}</td>
+                    </tr>
                 @endif
-                <tr>
-                    <td class="bold" style="padding-top: 6px;">Net Payable:</td>
-                    <td class="text-right bold" style="padding-top: 6px;">৳{{ number_format($order->netPayable(), 2) }}</td>
+                <tr class="grand">
+                    <td>Net payable</td>
+                    <td class="text-right">৳{{ number_format($order->netPayable(), 2) }}</td>
                 </tr>
             @else
+                <tr>
+                    <td class="lbl">Subtotal</td>
+                    <td class="text-right">৳{{ number_format($itemsSubtotal, 2) }}</td>
+                </tr>
                 @if(($order->delivery_charge ?? 0) > 0)
                     <tr>
-                        <td class="bold">Subtotal (Items):</td>
-                        <td class="text-right bold">৳{{ number_format($order->total_amount - $order->delivery_charge, 2) }}</td>
-                    </tr>
-                    <tr>
-                        <td class="bold">Delivery Charge:</td>
-                        <td class="text-right bold">+ ৳{{ number_format($order->delivery_charge, 2) }}</td>
-                    </tr>
-                    @if(($order->discount_amount ?? 0) > 0)
-                    <tr>
-                        <td class="bold">Less / Discount:</td>
-                        <td class="text-right bold">- ৳{{ number_format($order->discount_amount, 2) }}</td>
-                    </tr>
-                    @endif
-                    <tr>
-                        <td class="bold border-top" style="border-top: 1px dashed #000; padding-top:4px;">GRAND TOTAL:</td>
-                        <td class="text-right bold border-top" style="border-top: 1px dashed #000; padding-top:4px; font-size: 14px;">৳{{ number_format($order->netPayable(), 2) }}</td>
-                    </tr>
-                @else
-                    <tr>
-                        <td>Items Total:</td>
-                        <td class="text-right">৳{{ number_format($order->total_amount, 2) }}</td>
-                    </tr>
-                    @if(($order->discount_amount ?? 0) > 0)
-                    <tr>
-                        <td>Less / Discount:</td>
-                        <td class="text-right">- ৳{{ number_format($order->discount_amount, 2) }}</td>
-                    </tr>
-                    @endif
-                    <tr>
-                        <td class="bold">GRAND TOTAL:</td>
-                        <td class="text-right bold" style="font-size: 14px;">৳{{ number_format($order->netPayable(), 2) }}</td>
+                        <td class="lbl">Delivery</td>
+                        <td class="text-right">+ ৳{{ number_format((float) $order->delivery_charge, 2) }}</td>
                     </tr>
                 @endif
-            @endif
-
-            <tr>
-                <td style="padding-top: 6px;">Paid ({{ strtoupper(str_replace('_', ' ', $order->payment_method)) }}):</td>
-                
-                <td class="text-right" style="padding-top: 6px;">৳{{ number_format(in_array($order->status, ['refunded', 'cancelled', 'returned']) ? 0 : $order->paid_amount, 2) }}</td>
-            </tr>
-            @if(($order->change_amount ?? 0) > 0)
-            <tr>
-                <td class="bold">Change Due:</td>
-                <td class="text-right bold">৳{{ number_format($order->change_amount, 2) }}</td>
-            </tr>
+                @if(($order->discount_amount ?? 0) > 0)
+                    <tr>
+                        <td class="lbl">Discount</td>
+                        <td class="text-right">- ৳{{ number_format((float) $order->discount_amount, 2) }}</td>
+                    </tr>
+                @endif
+                <tr class="grand">
+                    <td>Grand total</td>
+                    <td class="text-right">৳{{ number_format($order->netPayable(), 2) }}</td>
+                </tr>
             @endif
         </table>
-        
+
+        <div class="pay-box">
+            <table>
+                <tr>
+                    <td class="lbl">Payment method</td>
+                    <td class="text-right" style="font-weight:700">{{ $paymentLabel }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">Amount paid</td>
+                    <td class="text-right" style="font-weight:700">
+                        ৳{{ number_format($isVoid ? 0 : (float) $order->paid_amount, 2) }}
+                    </td>
+                </tr>
+                @if(($order->change_amount ?? 0) > 0 && ! $isVoid)
+                    <tr>
+                        <td class="lbl">Change due</td>
+                        <td class="text-right" style="font-weight:800">৳{{ number_format((float) $order->change_amount, 2) }}</td>
+                    </tr>
+                @endif
+            </table>
+        </div>
+
         @if($order->is_exchange_receipt)
-        <div class="warning-box">
-            <div class="bold" style="font-size: 15px; margin-bottom: 5px;">*** FINAL SALE ***</div>
-            <div style="font-size: 11px; line-height: 1.4;">
-                This transaction includes exchanged items.<br>
-                The items listed above are strictly<br>
-                <span class="bold" style="font-size: 13px; text-decoration: underline;">NON-RETURNABLE</span>
+            <div class="warning-box">
+                <div style="font-weight:800;font-size:13px;margin-bottom:4px">*** FINAL SALE ***</div>
+                <div style="font-size:10px;line-height:1.4">
+                    This transaction includes exchanged items.<br>
+                    Items listed above are <strong>non-returnable</strong>.
+                </div>
             </div>
-        </div>
         @endif
-        
-        <div class="divider"></div>
-        
-        <div class="text-center">
-            <p style="margin-top: 10px; font-weight: bold;">Thank you for your business!</p>
-        </div>
-        
+
+        <footer class="footer">
+            <p class="thanks">Thank you for your business</p>
+            <p class="note">Please retain this invoice for your records.</p>
+            <p class="stamp">Printed: {{ $printedAt->format('d M Y, h:i A') }} · Asia/Dhaka</p>
+        </footer>
     </div>
 </body>
 </html>

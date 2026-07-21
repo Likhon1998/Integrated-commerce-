@@ -13,8 +13,8 @@
             $order->id => [
                 'id' => $order->id,
                 'invoice' => $order->invoice_no,
-                'date' => $order->created_at->format('M j, Y'),
-                'datetime' => $order->created_at->format('M j, Y g:i A'),
+                'date' => asian_date($order->created_at, 'M j, Y'),
+                'datetime' => asian_datetime($order->created_at, 'M j, Y g:i A'),
                 'status' => $order->status,
                 'status_label' => $track['status_label'] ?? ucfirst($order->status),
                 'total' => number_format((float) $order->total_amount, 2),
@@ -174,6 +174,7 @@
                                 <div class="flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                         <p class="text-[13px] font-bold text-slate-900" x-text="current.invoice"></p>
+                                        <p class="text-[11px] text-slate-500" x-show="current.id" x-text="'Order ID · Ref #' + current.id"></p>
                                         <p class="text-[11px] text-slate-500" x-text="'Placed on ' + current.date"></p>
                                     </div>
                                     <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold"
@@ -286,8 +287,11 @@
                                 @foreach($recentOrders as $order)
                                     @php $track = $orderTracking[$order->id] ?? null; @endphp
                                     <tr>
-                                        <td class="px-2 py-3 font-semibold text-slate-900">{{ $order->invoice_no }}</td>
-                                        <td class="px-2 py-3 text-slate-600">{{ $order->created_at->format('M j, Y') }}</td>
+                                        <td class="px-2 py-3 font-semibold text-slate-900">
+                                            <span class="block">{{ $order->invoice_no }}</span>
+                                            <span class="text-[10px] font-medium text-slate-400">#{{ $order->id }}</span>
+                                        </td>
+                                        <td class="px-2 py-3 text-slate-600">{{ asian_date($order->created_at, 'M j, Y') }}</td>
                                         <td class="px-2 py-3">
                                             <div class="flex items-center gap-2.5">
                                                 <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-base">📦</div>
@@ -407,8 +411,9 @@
                 <div>
                     <div class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4">
                         <div class="min-w-0">
-                            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Order details</p>
+                            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Order ID</p>
                             <h3 class="mt-0.5 truncate text-[18px] font-extrabold text-slate-900" x-text="detail.invoice"></h3>
+                            <p class="text-[11px] text-slate-500" x-show="detail.id" x-text="'Ref #' + detail.id"></p>
                             <p class="mt-0.5 text-[12px] text-slate-500" x-text="'Placed ' + detail.datetime"></p>
                         </div>
                         <button type="button" @click="closeDetail()" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">

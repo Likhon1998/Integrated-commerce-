@@ -132,7 +132,28 @@ class User extends Authenticatable
         return $this->requiresCounter() && $this->counter_id !== null;
     }
 
+    /**
+     * Floor staff may keep selling on an open till even past midnight
+     * until they close it. Calendar "open today" is separate for morning reopen.
+     */
     public function hasTodayOpenSession(): bool
+    {
+        return $this->hasOpenCounterSession();
+    }
+
+    public function hasOpenCounterSession(): bool
+    {
+        if (! $this->counter_id) {
+            return true;
+        }
+
+        return \App\Models\CounterSession::where('counter_id', $this->counter_id)
+            ->where('status', 'open')
+            ->exists();
+    }
+
+    /** True when this counter has an open session started on today's date. */
+    public function hasCalendarDayOpenSession(): bool
     {
         if (! $this->counter_id) {
             return true;

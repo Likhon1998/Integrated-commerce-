@@ -120,6 +120,7 @@
             Sales Ledger
         </a>
 
+        @if(Auth::user()->isAdminUser())
         @php
             $pendingWebOrders = \App\Models\Order::where('shop_id', Auth::user()->shop_id)
                                 ->whereNull('counter_id')
@@ -137,7 +138,9 @@
                 <span class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">{{ $pendingWebOrders }}</span>
             @endif
         </a>
+        @endif
 
+        @if(Auth::user()->isAdminUser())
         <a href="{{ route('accounts.opening-balance') }}"
            class="{{ request()->routeIs('accounts.*') ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'hover:bg-white/5 hover:text-white' }} flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm mt-1.5">
             <svg class="w-5 h-5 mr-3 {{ request()->routeIs('accounts.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
@@ -149,6 +152,7 @@
             <svg class="w-5 h-5 mr-3 {{ request()->routeIs('analytics.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
             Reports
         </a>
+        @endif
 
         <div class="pt-2 border-t border-white/5 mt-2">
             <a href="{{ route('customers.index') }}" 
@@ -232,18 +236,12 @@
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
 
-    <form action="{{ route('products.index') }}" method="GET" class="hidden md:flex flex-1 max-w-xl mx-auto">
-        <label class="relative w-full">
-            <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <input type="search" name="q" value="{{ request('q') }}" placeholder="Search products, orders, customers…"
-                   class="w-full rounded-xl border-slate-200 bg-slate-50/80 py-2.5 pl-10 pr-16 text-[13px] text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-blue-100">
-            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">⌘/</span>
-        </label>
-    </form>
+    @include('components.command-palette')
 
     <div class="flex items-center gap-2 ml-auto">
         @can('process pos sales')
-            <a href="{{ route('pos.index') }}" target="_blank" rel="noopener"
+            <a href="{{ route('pos.index') }}"
+               onclick="return window.launchPosTerminal(this.href)"
                class="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
                 POS Terminal
             </a>
@@ -257,6 +255,7 @@
         @endif
 
         @can('view sales ledger')
+            @if(Auth::user()->isAdminUser())
             <div class="relative"
                  x-data="onlineOrderBell(@js(route('online-orders.notifications')), @js(route('online-orders.notifications.seen')))"
                  @keydown.escape.window="if (panelOpen) closePanel()"
@@ -313,6 +312,7 @@
                     </a>
                 </div>
             </div>
+            @endif
         @endcan
 
         <div class="hidden sm:flex sm:items-center pl-1">

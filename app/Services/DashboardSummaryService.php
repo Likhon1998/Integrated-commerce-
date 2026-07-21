@@ -153,6 +153,7 @@ class DashboardSummaryService
         $transfersIn = 0.0;
         $transfersOut = 0.0;
         $refundsOut = 0.0;
+        $purchasesOut = 0.0;
         $closingLedger = 0.0;
 
         foreach ($ledgerRows as $row) {
@@ -161,6 +162,7 @@ class DashboardSummaryService
             $transfersIn += (float) $row['transfers_in'];
             $transfersOut += (float) $row['transfers_out'];
             $refundsOut += (float) $row['refunds_out'];
+            $purchasesOut += (float) ($row['purchases_out'] ?? 0);
             $closingLedger += (float) $row['closing'];
         }
 
@@ -193,14 +195,19 @@ class DashboardSummaryService
             if ($session->status === 'closed' && $session->closing_cash !== null) {
                 $closingSession += (float) $session->closing_cash;
                 $ordersCount += (int) ($session->order_count ?: 0);
-                $sessionCashIn += (float) ($session->cash_sales ?: 0);
-                $sessionCashOut += (float) ($session->cash_refunds ?: 0);
+                $stats = $this->sessions->statsAsOf($session, $session->closed_at);
+                $sessionCashIn += (float) ($stats['cash_sales'] ?? 0) + (float) ($stats['transfers_in'] ?? 0);
+                $sessionCashOut += (float) ($stats['cash_refunds'] ?? 0)
+                    + (float) ($stats['transfers_out'] ?? 0)
+                    + (float) ($stats['cash_purchases'] ?? 0);
             } else {
                 $live = $this->sessions->liveStats($session);
                 $closingSession += $this->sessions->expectedCash($session, $live);
                 $ordersCount += (int) ($live['order_count'] ?? 0);
-                $sessionCashIn += (float) ($live['cash_sales'] ?? 0);
-                $sessionCashOut += (float) ($live['cash_refunds'] ?? 0);
+                $sessionCashIn += (float) ($live['cash_sales'] ?? 0) + (float) ($live['transfers_in'] ?? 0);
+                $sessionCashOut += (float) ($live['cash_refunds'] ?? 0)
+                    + (float) ($live['transfers_out'] ?? 0)
+                    + (float) ($live['cash_purchases'] ?? 0);
             }
         }
 
@@ -208,14 +215,11 @@ class DashboardSummaryService
         $opening = $hasSession ? $openingSession : $openingLedger;
         $closing = $hasSession ? $closingSession : $closingLedger;
 
-        // Session-based cash in/out keeps overnight tills consistent with expected drawer cash.
-        // Still include today's ledger transfers (not tracked on the session itself).
-        $cashIn = $hasSession
-            ? ($sessionCashIn + $transfersIn)
-            : ($salesIn + $transfersIn);
+        // Session stats already include transfers and cash purchases on the till.
+        $cashIn = $hasSession ? $sessionCashIn : ($salesIn + $transfersIn);
         $cashOut = $hasSession
-            ? ($sessionCashOut + $transfersOut)
-            : ($transfersOut + $refundsOut);
+            ? $sessionCashOut
+            : ($transfersOut + $refundsOut + $purchasesOut);
 
         $sessionStatus = 'none';
         if ($staleOpen) {

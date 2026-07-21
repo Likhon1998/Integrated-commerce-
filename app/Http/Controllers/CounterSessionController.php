@@ -4,30 +4,47 @@ namespace App\Http\Controllers;
 
 use App\Models\Counter;
 use App\Models\CounterSession;
+use App\Services\AccountService;
 use App\Services\CounterSessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class CounterSessionController extends Controller
 {
-    public function __construct(protected CounterSessionService $sessions) {}
+    public function __construct(
+        protected CounterSessionService $sessions,
+        protected AccountService $accounts,
+    ) {}
 
     public function index()
     {
-        $shopId = Auth::user()->shop_id;
+        $user = Auth::user();
+        $shopId = $user->shop_id;
+        $counterScope = $this->staffCounterId($user);
 
         $counters = Counter::where('shop_id', $shopId)
             ->where('is_active', true)
+            ->when($counterScope !== null, fn ($q) => $q->where('id', $counterScope))
+            ->orderBy('name')
+            ->get();
+
+        // Destinations must already be open so the transfer appears on both session reports
+        $transferTargets = Counter::where('shop_id', $shopId)
+            ->where('is_active', true)
+            ->whereIn('id', CounterSession::where('shop_id', $shopId)->open()->pluck('counter_id'))
+            ->when($counterScope !== null, fn ($q) => $q->where('id', '!=', $counterScope))
             ->orderBy('name')
             ->get();
 
         $openSessions = CounterSession::where('shop_id', $shopId)
             ->open()
+            ->when($counterScope !== null, fn ($q) => $q->where('counter_id', $counterScope))
             ->with(['counter', 'opener'])
             ->get()
             ->keyBy('counter_id');
 
         $recent = CounterSession::where('shop_id', $shopId)
+            ->when($counterScope !== null, fn ($q) => $q->where('counter_id', $counterScope))
             ->with(['counter', 'opener', 'closer'])
             ->latest('opened_at')
             ->paginate(15);
@@ -41,7 +58,77 @@ class CounterSessionController extends Controller
             ];
         }
 
-        return view('counters.sessions', compact('counters', 'openSessions', 'recent', 'live'));
+        $isAdmin = $user->isAdminUser();
+        $canTransfer = $openSessions->isNotEmpty() && $transferTargets->isNotEmpty();
+
+        return view('counters.sessions', compact(
+            'counters',
+            'openSessions',
+            'recent',
+            'live',
+            'isAdmin',
+            'transferTargets',
+            'canTransfer',
+        ));
+    }
+
+    public function transfer(Request $request)
+    {
+        $user = Auth::user();
+        $shopId = $user->shop_id;
+
+        $request->validate([
+            'from_counter_id' => 'required|exists:counters,id',
+            'to_counter_id' => 'required|exists:counters,id|different:from_counter_id',
+            'amount' => 'required|numeric|min:0.01',
+            'reason' => 'required|string|min:3|max:500',
+        ]);
+
+        $from = Counter::where('shop_id', $shopId)->findOrFail($request->from_counter_id);
+        $to = Counter::where('shop_id', $shopId)->findOrFail($request->to_counter_id);
+
+        // Staff may only send from their assigned counter
+        if (! $user->isAdminUser()) {
+            if (! $user->counter_id || (int) $user->counter_id !== (int) $from->id) {
+                abort(403, 'You can only transfer cash from your assigned counter.');
+            }
+        }
+
+        $openFrom = $this->sessions->currentOpen($from);
+        if (! $openFrom) {
+            return back()->with('error', "{$from->name} has no open cash session. Open the till before transferring.");
+        }
+
+        $openTo = $this->sessions->currentOpen($to);
+        if (! $openTo) {
+            return back()->with('error', "{$to->name} must also have an open cash session before receiving a transfer.");
+        }
+
+        $available = $this->sessions->transferableCash($openFrom);
+        if ((float) $request->amount > $available + 0.0001) {
+            return back()
+                ->with('error', "Only ৳" . number_format($available, 2) . " is transferable from {$from->name} right now (drawer / ledger).")
+                ->withInput();
+        }
+
+        try {
+            $txn = $this->accounts->postCounterCashTransfer(
+                $from,
+                $to,
+                (float) $request->amount,
+                $request->reason,
+                $user->id,
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
+
+        $amount = number_format((float) $request->amount, 2);
+
+        return back()->with(
+            'success',
+            "Transferred ৳{$amount} from {$from->name} → {$to->name}. Ref {$txn->transaction_no}. Both tills will show this on close."
+        );
     }
 
     public function openTodayForm()
@@ -57,20 +144,20 @@ class CounterSessionController extends Controller
                 ->with('error', 'No counter assigned. Ask your admin to assign you a counter.');
         }
 
-        if ($user->hasTodayOpenSession()) {
+        if ($user->hasCalendarDayOpenSession()) {
             return redirect()->route('pos.index');
         }
 
         $counter = Counter::where('shop_id', $user->shop_id)->findOrFail($user->counter_id);
         $staleSession = $this->sessions->currentOpen($counter);
 
-        // Open from a previous day — must close before today's opening cash
         if ($staleSession && ! $staleSession->opened_at->isToday()) {
             $stats = $this->sessions->liveStats($staleSession);
             $expected = $this->sessions->expectedCash($staleSession, $stats);
+            $transferLog = $this->transferLogForSession($staleSession);
             $staleSession->load(['counter', 'opener']);
 
-            return view('counters.open-today', compact('counter', 'staleSession', 'stats', 'expected'));
+            return view('counters.open-today', compact('counter', 'staleSession', 'stats', 'expected', 'transferLog'));
         }
 
         if ($staleSession && $staleSession->opened_at->isToday()) {
@@ -82,6 +169,7 @@ class CounterSessionController extends Controller
             'staleSession' => null,
             'stats' => null,
             'expected' => null,
+            'transferLog' => [],
         ]);
     }
 
@@ -93,7 +181,7 @@ class CounterSessionController extends Controller
             abort(403);
         }
 
-        if ($user->hasTodayOpenSession()) {
+        if ($user->hasCalendarDayOpenSession()) {
             return redirect()->route('pos.index');
         }
 
@@ -121,13 +209,21 @@ class CounterSessionController extends Controller
 
     public function open(Request $request)
     {
+        $user = Auth::user();
+
         $request->validate([
             'counter_id' => 'required|exists:counters,id',
             'opening_cash' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        $counter = Counter::where('shop_id', Auth::user()->shop_id)->findOrFail($request->counter_id);
+        if (! $user->isAdminUser()) {
+            if (! $user->counter_id || (int) $request->counter_id !== (int) $user->counter_id) {
+                abort(403, 'You can only open your assigned counter.');
+            }
+        }
+
+        $counter = Counter::where('shop_id', $user->shop_id)->findOrFail($request->counter_id);
 
         try {
             $this->sessions->openSession($counter, (float) $request->opening_cash, $request->notes);
@@ -148,9 +244,10 @@ class CounterSessionController extends Controller
 
         $stats = $this->sessions->liveStats($session);
         $expected = $this->sessions->expectedCash($session, $stats);
+        $transferLog = $this->transferLogForSession($session);
         $session->load(['counter', 'opener']);
 
-        return view('counters.close-session', compact('session', 'stats', 'expected'));
+        return view('counters.close-session', compact('session', 'stats', 'expected', 'transferLog'));
     }
 
     public function close(Request $request, CounterSession $session)
@@ -160,10 +257,20 @@ class CounterSessionController extends Controller
         $request->validate([
             'closing_cash' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500',
+            'counted_confirm' => 'accepted',
         ]);
 
+        $stats = $this->sessions->liveStats($session);
+        $expected = $this->sessions->expectedCash($session, $stats);
+        $closingCash = (float) $request->closing_cash;
+        if (abs($closingCash - $expected) > 0.009 && blank($request->notes)) {
+            return back()
+                ->withInput()
+                ->with('error', 'Expected ৳' . number_format($expected, 2) . '. Enter a note explaining the variance before closing.');
+        }
+
         try {
-            $closed = $this->sessions->closeSession($session, (float) $request->closing_cash, $request->notes);
+            $closed = $this->sessions->closeSession($session, $closingCash, $request->notes);
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -185,13 +292,50 @@ class CounterSessionController extends Controller
         $this->authorizeSession($session);
         $session->load(['counter', 'opener', 'closer']);
 
-        return view('counters.session-show', compact('session'));
+        $stats = $session->isOpen()
+            ? $this->sessions->liveStats($session)
+            : $this->sessions->statsAsOf($session, $session->closed_at);
+
+        $transferLog = $this->transferLogForSession($session);
+
+        return view('counters.session-show', compact('session', 'stats', 'transferLog'));
+    }
+
+    protected function transferLogForSession(CounterSession $session): array
+    {
+        $session->loadMissing('counter');
+        if (! $session->counter) {
+            return [];
+        }
+
+        $until = $session->isOpen() ? now() : ($session->closed_at ?? now());
+
+        return $this->accounts->counterCashTransferLog($session->counter, $session->opened_at, $until);
     }
 
     protected function authorizeSession(CounterSession $session): void
     {
-        if ($session->shop_id !== Auth::user()->shop_id) {
+        $user = Auth::user();
+
+        if ($session->shop_id !== $user->shop_id) {
             abort(403);
         }
+
+        $counterScope = $this->staffCounterId($user);
+        if ($counterScope !== null && (int) $session->counter_id !== $counterScope) {
+            abort(403, 'You can only view sessions for your assigned counter.');
+        }
+    }
+
+    /**
+     * Non-admin staff are locked to their assigned counter. Admins see all.
+     */
+    protected function staffCounterId($user): ?int
+    {
+        if ($user->isAdminUser()) {
+            return null;
+        }
+
+        return $user->counter_id ? (int) $user->counter_id : -1;
     }
 }

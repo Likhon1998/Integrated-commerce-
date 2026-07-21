@@ -165,7 +165,9 @@
     {{-- Row 2+3: Cash drawer --}}
     <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-400 to-cyan-600 p-4 text-white shadow-md shadow-teal-200/50">
-            <a href="{{ route('accounts.petty-cash') }}" class="absolute inset-0 z-10" aria-label="Petty cash"></a>
+            @if(Auth::user()->isAdminUser())
+                <a href="{{ route('accounts.petty-cash') }}" class="absolute inset-0 z-10" aria-label="Petty cash"></a>
+            @endif
             <div class="flex items-start justify-between gap-2">
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-white/80">Petty Cash</p>
@@ -449,13 +451,15 @@
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         @can('process pos sales')
-        <a href="{{ route('pos.index') }}" target="_blank" rel="noopener" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition">Launch POS Terminal</a>
+        <a href="{{ route('pos.index') }}" onclick="return window.launchPosTerminal(this.href)" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition">Launch POS Terminal</a>
         @endcan
         @can('manage inventory')
             <a href="{{ route('products.index') }}" class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-emerald-700 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition">Manage Products</a>
         @endcan
         <a href="{{ route('counters.sessions.index') }}" class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-amber-800 hover:bg-amber-600 hover:text-white hover:border-amber-600 transition">Cash Sessions</a>
+        @if(Auth::user()->isAdminUser())
         <a href="{{ route('analytics.overview') }}" class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wide text-violet-700 hover:bg-violet-600 hover:text-white hover:border-violet-600 transition">Reports</a>
+        @endif
     </div>
 </div>
 

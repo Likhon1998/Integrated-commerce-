@@ -104,6 +104,8 @@
                 authMessage: '',
                 ordering: false,
                 orderMessage: '',
+                lastOrderId: null,
+                lastOrderInvoice: '',
                 orderSuccess: false,
                 toastMessage: '',
                 toastVisible: false,
@@ -287,10 +289,19 @@
                             return;
                         }
                         if (data.success) {
+                            if (!data.invoice && !data.order_id) {
+                                this.orderSuccess = false;
+                                this.orderMessage = 'Order placed but no Order ID was returned. Please check My Orders or contact support.';
+                                return;
+                            }
                             this.cart = [];
                             this.save();
                             this.orderSuccess = true;
-                            this.orderMessage = 'Invoice: ' + data.invoice;
+                            this.lastOrderId = data.order_id || null;
+                            this.lastOrderInvoice = data.invoice || '';
+                            this.orderMessage = this.lastOrderInvoice
+                                ? ('Order ID: ' + this.lastOrderInvoice)
+                                : ('Order #' + this.lastOrderId);
                             this.checkoutStep = 'success';
                         } else {
                             this.orderSuccess = false;
@@ -418,7 +429,12 @@
         <div x-show="checkoutStep==='success'" x-cloak class="text-center py-4">
             <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-2xl">✓</div>
             <h3 class="text-xl font-bold text-slate-900">Order placed!</h3>
-            <p class="text-sm text-slate-500 mt-2" x-text="orderMessage"></p>
+            <p class="text-sm text-slate-500 mt-2">Save this Order ID for tracking and support.</p>
+            <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p class="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Order ID</p>
+                <p class="mt-1 font-mono text-lg font-extrabold text-emerald-900" x-text="lastOrderInvoice || ('#' + lastOrderId)"></p>
+                <p class="mt-1 text-[11px] text-emerald-700/80" x-show="lastOrderId" x-text="'Ref #' + lastOrderId"></p>
+            </div>
             <div class="mt-6 flex flex-col gap-2">
                 <a href="{{ route('website.account') }}" class="gaget-btn-primary block w-full text-center text-sm py-3">View my orders</a>
                 <button type="button" @click="checkoutOpen=false" class="text-sm font-semibold text-slate-600 hover:text-slate-800">Continue shopping</button>

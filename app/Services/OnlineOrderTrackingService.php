@@ -134,11 +134,12 @@ class OnlineOrderTrackingService
 
         return [
             'success' => true,
+            'order_id' => $order->id,
             'invoice' => $order->invoice_no,
             'status' => $order->status,
             'status_label' => $this->statusLabels()[$order->status] ?? ucfirst($order->status),
             'message' => 'Order found!',
-            'date' => $order->created_at->format('d M Y, h:i A'),
+            'date' => asian_datetime($order->created_at, 'd M Y, h:i A'),
             'total' => number_format((float) $order->total_amount, 2),
             'delivery_address' => $order->customer?->address,
             'customer_name' => $order->customer?->name,

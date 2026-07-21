@@ -13,8 +13,17 @@ class AnalyticsController extends Controller
 {
     public function __construct(private AnalyticsService $analytics) {}
 
+    protected function ensureAdmin(): void
+    {
+        if (! Auth::user()?->isAdminUser()) {
+            abort(403, 'Reports are only available to shop admins.');
+        }
+    }
+
     protected function reportView(Request $request, string $activeTab)
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         [$start, $end] = $this->analytics->dateRange($request);
         [$prevStart, $prevEnd] = $this->analytics->previousRange($start, $end);
@@ -154,6 +163,8 @@ class AnalyticsController extends Controller
 
     public function preview(Request $request)
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         [$start, $end] = $this->analytics->dateRange($request);
         $tab = $request->get('tab', 'sales');
@@ -199,6 +210,8 @@ class AnalyticsController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         [$start, $end] = $this->analytics->dateRange($request);
         $tab = $request->get('tab', 'sales');

@@ -10,6 +10,7 @@ use App\Http\Controllers\CounterSessionController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExchangeController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
@@ -97,6 +98,8 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
         Route::delete('/contact/messages/{message}', [CmsContactController::class, 'destroyMessage'])->name('contact.messages.destroy');
         Route::resource('reviews', CmsReviewController::class)->except(['show']);
     });
+
+    Route::get('/global-search', GlobalSearchController::class)->name('global-search');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -221,6 +224,7 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::get('/opening-balance', [CounterSessionController::class, 'openTodayForm'])->name('counters.sessions.open-today');
     Route::post('/opening-balance', [CounterSessionController::class, 'openTodayStore'])->name('counters.sessions.open-today.store');
     Route::post('/counter-sessions/open', [CounterSessionController::class, 'open'])->name('counters.sessions.open');
+    Route::post('/counter-sessions/transfer', [CounterSessionController::class, 'transfer'])->name('counters.sessions.transfer');
     Route::get('/counter-sessions/{session}', [CounterSessionController::class, 'show'])->name('counters.sessions.show');
     Route::get('/counter-sessions/{session}/close', [CounterSessionController::class, 'closeForm'])->name('counters.sessions.close-form');
     Route::post('/counter-sessions/{session}/close', [CounterSessionController::class, 'close'])->name('counters.sessions.close');

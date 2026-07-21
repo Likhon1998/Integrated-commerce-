@@ -3,9 +3,17 @@
         <div class="mb-6 mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
             <div>
                 <h2 class="text-3xl font-black text-gray-950 tracking-tight">Cash Sessions</h2>
-                <p class="mt-1 text-sm text-gray-500">Open with starting cash · sell on POS · close with counted cash and sales total.</p>
+                <p class="mt-1 text-sm text-gray-500">
+                    @if($isAdmin ?? false)
+                        Open with starting cash · sell on POS · close with counted cash and sales total.
+                    @else
+                        Your counter session — opening cash, sales, transfers, and cash purchases.
+                    @endif
+                </p>
             </div>
-            <a href="{{ route('counters.index') }}" class="text-sm font-semibold text-indigo-600 hover:underline">Manage terminals</a>
+            @if($isAdmin ?? false)
+                <a href="{{ route('counters.index') }}" class="text-sm font-semibold text-indigo-600 hover:underline">Manage terminals</a>
+            @endif
         </div>
 
         @if(session('success'))
@@ -64,7 +72,7 @@
                 <h3 class="text-sm font-bold text-gray-900">Currently open</h3>
                 @forelse($openSessions as $session)
                     @php
-                        $stats = $live[$session->counter_id]['stats'] ?? ['order_count'=>0,'total_sales'=>0,'cash_sales'=>0];
+                        $stats = $live[$session->counter_id]['stats'] ?? ['order_count'=>0,'total_sales'=>0,'cash_sales'=>0,'transfers_in'=>0,'transfers_out'=>0,'cash_purchases'=>0];
                         $expected = $live[$session->counter_id]['expected'] ?? $session->opening_cash;
                     @endphp
                     <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -78,6 +86,15 @@
                                 <span class="font-semibold text-gray-700">Sales: ৳{{ number_format($stats['total_sales'], 2) }}</span>
                                 <span class="text-gray-500">{{ $stats['order_count'] }} orders</span>
                                 <span class="text-gray-500">Cash sales: ৳{{ number_format($stats['cash_sales'], 2) }}</span>
+                                @if(($stats['transfers_in'] ?? 0) > 0)
+                                    <span class="text-emerald-600">Transfers in: ৳{{ number_format($stats['transfers_in'], 2) }}</span>
+                                @endif
+                                @if(($stats['transfers_out'] ?? 0) > 0)
+                                    <span class="text-amber-700">Transfers out: ৳{{ number_format($stats['transfers_out'], 2) }}</span>
+                                @endif
+                                @if(($stats['cash_purchases'] ?? 0) > 0)
+                                    <span class="text-red-600">Cash purchases: ৳{{ number_format($stats['cash_purchases'], 2) }}</span>
+                                @endif
                                 <span class="text-emerald-700 font-semibold">Expected drawer: ৳{{ number_format($expected, 2) }}</span>
                             </div>
                         </div>
@@ -93,6 +110,65 @@
                 @endforelse
             </div>
         </div>
+
+        @if($canTransfer ?? false)
+        <div class="mb-8 bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-indigo-50 bg-indigo-50/50">
+                <h3 class="text-sm font-bold text-slate-900">Transfer cash between counters</h3>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Moves taka from one <strong>open</strong> till to another. Both sessions show the reason. Amount cannot exceed transferable drawer cash.
+                </p>
+            </div>
+            <form method="POST" action="{{ route('counters.sessions.transfer') }}" class="p-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                @csrf
+                <div>
+                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">From counter</label>
+                    <select name="from_counter_id" required class="w-full text-sm rounded-lg border-gray-200 py-1.5">
+                        @foreach($openSessions as $session)
+                            <option value="{{ $session->counter_id }}" @selected(old('from_counter_id') == $session->counter_id)>
+                                {{ $session->counter->name }}
+                                (drawer ≈ ৳{{ number_format($live[$session->counter_id]['expected'] ?? $session->opening_cash, 2) }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">To counter</label>
+                    <select name="to_counter_id" required class="w-full text-sm rounded-lg border-gray-200 py-1.5">
+                        <option value="">Select…</option>
+                        @foreach($transferTargets as $target)
+                            <option value="{{ $target->id }}" @selected(old('to_counter_id') == $target->id)>{{ $target->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Amount (৳)</label>
+                    <input type="number" step="0.01" min="0.01" name="amount" value="{{ old('amount') }}" required
+                           class="w-full text-sm rounded-lg border-gray-200 py-1.5 font-bold" placeholder="0.00">
+                </div>
+                <div class="sm:col-span-2 lg:col-span-1">
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2 rounded-lg">
+                        Transfer
+                    </button>
+                </div>
+                <div class="sm:col-span-2 lg:col-span-4">
+                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Reason / justification *</label>
+                    <input type="text" name="reason" value="{{ old('reason') }}" required maxlength="500"
+                           class="w-full text-sm rounded-lg border-gray-200 py-1.5"
+                           placeholder="e.g. Counter 2 needed float for change — handed by Fahim">
+                    @error('reason')
+                        <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p>
+                    @enderror
+                    @error('amount')
+                        <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p>
+                    @enderror
+                    @error('to_counter_id')
+                        <p class="mt-1 text-xs text-red-600 font-medium">{{ $message }}</p>
+                    @enderror
+                </div>
+            </form>
+        </div>
+        @endif
 
         <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
             <div class="px-5 py-4 border-b bg-slate-50">

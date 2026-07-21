@@ -15,7 +15,10 @@ class Order extends Model
         'invoice_no', 
         'total_amount',
         'discount_amount',
-        'paid_amount', 
+        'paid_amount',
+        'cash_paid',
+        'card_paid',
+        'mobile_paid',
         'change_amount', 
         'payment_method',
         'status',
@@ -35,6 +38,9 @@ class Order extends Model
         'total_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
+        'cash_paid' => 'decimal:2',
+        'card_paid' => 'decimal:2',
+        'mobile_paid' => 'decimal:2',
         'change_amount' => 'decimal:2',
         'delivery_charge' => 'decimal:2',
         'exchange_credit' => 'decimal:2',
@@ -61,6 +67,77 @@ class Order extends Model
     public function isOnlineOrder(): bool
     {
         return $this->counter_id === null && str_starts_with((string) $this->invoice_no, 'WEB-');
+    }
+
+    /**
+     * Unique customer-facing online order ID (stored in invoice_no).
+     * Format: WEB-{shopId}-{year}-{#####}
+     */
+    public static function nextWebInvoiceNo(int $shopId): string
+    {
+        return static::nextInvoiceNo($shopId, 'WEB');
+    }
+
+    /**
+     * Unique POS invoice number. Call inside a DB transaction (uses lockForUpdate).
+     * Format: INV-{shopId}-{year}-{#####} or OFF-... for offline sync.
+     */
+    public static function nextPosInvoiceNo(int $shopId, string $prefix = 'INV'): string
+    {
+        return static::nextInvoiceNo($shopId, $prefix);
+    }
+
+    protected static function nextInvoiceNo(int $shopId, string $kind): string
+    {
+        $year = date('Y');
+        $prefix = strtoupper($kind) . '-' . $shopId . '-' . $year . '-';
+
+        $latest = static::query()
+            ->where('shop_id', $shopId)
+            ->where('invoice_no', 'like', $prefix . '%')
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->value('invoice_no');
+
+        $seq = 1;
+        if (is_string($latest) && preg_match('/(\d+)$/', $latest, $m)) {
+            $seq = ((int) $m[1]) + 1;
+        }
+
+        for ($i = 0; $i < 50; $i++) {
+            $candidate = $prefix . str_pad((string) ($seq + $i), 5, '0', STR_PAD_LEFT);
+            if (! static::where('invoice_no', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
+        return $prefix . str_pad((string) random_int(1, 99999), 5, '0', STR_PAD_LEFT) . '-' . substr(uniqid(), -4);
+    }
+
+    /** Cash portion that actually hit the till (split-tender aware). */
+    public function cashTenderAmount(): float
+    {
+        if ($this->cash_paid !== null) {
+            return max(0, (float) $this->cash_paid);
+        }
+
+        $method = strtolower(trim((string) $this->payment_method));
+        $net = $this->netPayable();
+
+        if ($method === 'cash' || $method === '') {
+            return $net;
+        }
+
+        // Legacy mixed strings without tender breakdown — do not assume all cash
+        if (str_contains($method, 'cash') && (str_contains($method, 'card') || str_contains($method, 'bkash') || str_contains($method, 'nagad') || str_contains($method, 'mobile'))) {
+            return 0.0;
+        }
+
+        if (str_contains($method, 'cash')) {
+            return $net;
+        }
+
+        return 0.0;
     }
 
     // Link the order to the Cashier (User)

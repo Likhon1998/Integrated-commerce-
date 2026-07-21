@@ -14,8 +14,17 @@ class AccountController extends Controller
 {
     public function __construct(protected AccountService $accounts) {}
 
+    protected function ensureAdmin(): void
+    {
+        if (! Auth::user()?->isAdminUser()) {
+            abort(403, 'Accounts are only available to shop admins.');
+        }
+    }
+
     protected function bootstrap(): int
     {
+        $this->ensureAdmin();
+
         $shopId = Auth::user()->shop_id;
         $this->accounts->ensureShopAccounts($shopId);
 
@@ -266,32 +275,52 @@ class AccountController extends Controller
             'from_account_id' => 'required|exists:accounts,id',
             'to_account_id' => 'required|exists:accounts,id|different:from_account_id',
             'amount' => 'required|numeric|min:0.01',
-            'description' => 'required|string|max:500',
-            'counter_id' => 'nullable|exists:counters,id',
+            'description' => 'required|string|min:3|max:500',
         ]);
 
-        $from = Account::where('shop_id', $shopId)->findOrFail($request->from_account_id);
-        $to = Account::where('shop_id', $shopId)->findOrFail($request->to_account_id);
+        $from = Account::where('shop_id', $shopId)->with('counter')->findOrFail($request->from_account_id);
+        $to = Account::where('shop_id', $shopId)->with('counter')->findOrFail($request->to_account_id);
 
-        $fromBalance = $this->accounts->accountBalance($from);
-        if ($request->amount > $fromBalance) {
+        try {
+            // Counter till → counter till: use dedicated transfer so both sessions justify the move
+            if ($from->counter_id && $to->counter_id && $from->counter && $to->counter) {
+                $txn = $this->accounts->postCounterCashTransfer(
+                    $from->counter,
+                    $to->counter,
+                    (float) $request->amount,
+                    $request->description,
+                );
+            } else {
+                $fromBalance = $this->accounts->accountBalance($from);
+                if ($request->amount > $fromBalance) {
+                    return redirect()
+                        ->route('accounts.transfer')
+                        ->with('error', 'Insufficient balance in source account.');
+                }
+
+                $this->accounts->postTransfer(
+                    $shopId,
+                    $from,
+                    $to,
+                    (float) $request->amount,
+                    $request->description,
+                );
+                $txn = null;
+            }
+        } catch (\Throwable $e) {
             return redirect()
                 ->route('accounts.transfer')
-                ->with('error', 'Insufficient balance in source account.');
+                ->with('error', $e->getMessage());
         }
 
-        $this->accounts->postTransfer(
-            $shopId,
-            $from,
-            $to,
-            (float) $request->amount,
-            $request->description,
-            $request->counter_id ? (int) $request->counter_id : null,
-        );
+        $msg = 'Transfer completed successfully.';
+        if ($txn) {
+            $msg .= ' Ref ' . $txn->transaction_no . '. Both counter sessions will show this move.';
+        }
 
         return redirect()
             ->route('accounts.transfer')
-            ->with('success', 'Transfer completed successfully.');
+            ->with('success', $msg);
     }
 
     protected function entryDelta(Account $account, AccountEntry $entry): float

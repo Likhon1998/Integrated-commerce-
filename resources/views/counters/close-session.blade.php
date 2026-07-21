@@ -40,24 +40,48 @@
                 <p class="font-semibold text-red-600">৳{{ number_format($stats['cash_refunds'], 2) }}</p>
             </div>
             <div>
+                <p class="text-[11px] uppercase font-bold text-gray-400">Transfers in</p>
+                <p class="font-semibold text-emerald-700">৳{{ number_format($stats['transfers_in'] ?? 0, 2) }}</p>
+            </div>
+            <div>
+                <p class="text-[11px] uppercase font-bold text-gray-400">Transfers out</p>
+                <p class="font-semibold text-amber-700">৳{{ number_format($stats['transfers_out'] ?? 0, 2) }}</p>
+            </div>
+            <div>
+                <p class="text-[11px] uppercase font-bold text-gray-400">Cash purchases</p>
+                <p class="font-semibold text-red-600">৳{{ number_format($stats['cash_purchases'] ?? 0, 2) }}</p>
+            </div>
+            <div>
                 <p class="text-[11px] uppercase font-bold text-gray-400">Expected in drawer</p>
                 <p class="font-black text-emerald-700 text-lg">৳{{ number_format($expected, 2) }}</p>
-                <p class="text-[10px] text-gray-400 mt-0.5">Start + cash sales − cash refunds</p>
+                <p class="text-[10px] text-gray-400 mt-0.5">Start + cash sales + transfers in − refunds − transfers out − purchases</p>
             </div>
         </div>
 
-        <form method="POST" action="{{ route('counters.sessions.close', $session) }}" class="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        @include('counters.partials.transfer-log', ['transferLog' => $transferLog ?? [], 'class' => 'mb-5'])
+
+        <form method="POST" action="{{ route('counters.sessions.close', $session) }}" class="bg-white rounded-2xl border border-gray-100 p-5 space-y-4"
+              onsubmit="return confirm('Confirm you physically counted the drawer. Expected is only a guide — enter the real counted cash.');">
             @csrf
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                <strong>Count the cash yourself.</strong> Expected ৳{{ number_format($expected, 2) }} is a guide only — do not copy it blindly.
+            </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-500 mb-1">Counted closing cash (৳)</label>
-                <input type="number" step="0.01" min="0" name="closing_cash" value="{{ $expected }}"
+                <input type="number" step="0.01" min="0" name="closing_cash" value="{{ old('closing_cash') }}"
+                       placeholder="Enter counted amount" autocomplete="off"
                        class="w-full text-sm rounded-lg border-gray-200 py-2 font-bold" required>
+                <p class="mt-1 text-[11px] text-gray-400">Reference expected: ৳{{ number_format($expected, 2) }}</p>
             </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-500 mb-1">Closing notes</label>
-                <input type="text" name="notes" placeholder="Optional — shortage reason, etc."
+                <input type="text" name="notes" placeholder="Required if variance — shortage / overage reason"
                        class="w-full text-sm rounded-lg border-gray-200 py-1.5 placeholder:text-gray-400">
             </div>
+            <label class="flex items-start gap-2 text-xs text-slate-600">
+                <input type="checkbox" name="counted_confirm" value="1" required class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                <span>I physically counted the drawer and the amount above is what is in the till.</span>
+            </label>
             <button class="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold py-2.5 rounded-lg">
                 Close counter session
             </button>

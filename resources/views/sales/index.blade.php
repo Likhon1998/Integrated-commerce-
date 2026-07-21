@@ -12,6 +12,7 @@
          id="sales-ledger-root"
          x-data="salesLedger(@js([
              'channel' => $channel ?? 'physical',
+             'canViewOnline' => (bool) ($canViewOnline ?? false),
              'physical' => $physicalPayload ?? [],
              'online' => $onlinePayload ?? [],
              'physicalStats' => $physicalStats ?? ['cancelled' => 0, 'returned' => 0, 'refunded' => 0],
@@ -50,6 +51,7 @@
                           x-text="physicalCount"></span>
                 </button>
                 <button type="button" @click="setChannel('online')"
+                        x-show="canViewOnline"
                         class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition"
                         :class="channel === 'online' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
@@ -364,6 +366,7 @@
         function salesLedger(cfg) {
             return {
                 channel: cfg.channel || 'physical',
+                canViewOnline: !!cfg.canViewOnline,
                 physical: cfg.physical || [],
                 online: cfg.online || [],
                 physicalStats: cfg.physicalStats || {},
@@ -408,6 +411,9 @@
                     });
                 },
                 setChannel(ch) {
+                    if (ch === 'online' && !this.canViewOnline) {
+                        return;
+                    }
                     this.channel = ch;
                     this.search = '';
                     this.status = 'all';
@@ -421,10 +427,10 @@
                 syncHeaderAction() {
                     const slot = document.getElementById('sales-header-actions');
                     if (!slot) return;
-                    if (this.channel === 'online') {
+                    if (this.channel === 'online' && this.canViewOnline) {
                         slot.innerHTML = `<a href="${this.onlineHubUrl}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-4 rounded-lg shadow-sm transition-all inline-flex items-center gap-2">Open Online Orders Hub</a>`;
                     } else {
-                        slot.innerHTML = `<a href="${this.posUrl}" target="_blank" rel="noopener" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-4 rounded-lg shadow-sm transition-all inline-flex items-center gap-2">Open POS Terminal</a>`;
+                        slot.innerHTML = `<a href="${this.posUrl}" onclick="return window.launchPosTerminal(this.href)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-4 rounded-lg shadow-sm transition-all inline-flex items-center gap-2">Open POS Terminal</a>`;
                     }
                 },
                 init() {

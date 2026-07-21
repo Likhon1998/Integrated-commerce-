@@ -115,6 +115,25 @@
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             }).catch(function () {});
         }, 15 * 60 * 1000);
+
+        /** Open POS in a large counter window (not a tiny popup/tab). */
+        window.launchPosTerminal = function (url) {
+            url = url || @json(route('pos.index'));
+            var w = screen.availWidth || screen.width || 1280;
+            var h = screen.availHeight || screen.height || 800;
+            var features = 'popup=yes,width=' + w + ',height=' + h + ',left=0,top=0,resizable=yes,scrollbars=yes';
+            var win = window.open(url, 'nexa_pos_terminal', features);
+            if (!win) {
+                window.location.href = url;
+                return false;
+            }
+            try {
+                win.focus();
+                win.moveTo(0, 0);
+                win.resizeTo(w, h);
+            } catch (e) {}
+            return false;
+        };
     </script>
 </body>
 </html>

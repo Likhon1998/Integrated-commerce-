@@ -535,10 +535,15 @@ class WebsiteController extends Controller
         try {
             DB::beginTransaction();
 
+            $invoiceNo = Order::nextWebInvoiceNo($shopId);
+            if ($invoiceNo === '') {
+                throw new \RuntimeException('Could not generate an order ID. Please try again.');
+            }
+
             $order = Order::create([
                 'shop_id' => $shopId,
                 'user_id' => $fallbackUserId,
-                'invoice_no' => 'WEB-' . $shopId . '-' . date('Y') . '-' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT),
+                'invoice_no' => $invoiceNo,
                 'customer_id' => $customer->id,
                 'total_amount' => $finalTotal,
                 'delivery_charge' => $deliveryFee,
@@ -547,6 +552,10 @@ class WebsiteController extends Controller
                 'status' => 'pending',
                 'counter_id' => null,
             ]);
+
+            if (! $order->id || blank($order->invoice_no)) {
+                throw new \RuntimeException('Order was created without an order ID. Please try again.');
+            }
 
             foreach ($request->cart as $item) {
                 OrderItem::create([
@@ -577,7 +586,9 @@ class WebsiteController extends Controller
 
             return response()->json([
                 'success' => true,
+                'order_id' => $order->id,
                 'invoice' => $order->invoice_no,
+                'message' => 'Order placed successfully. Your Order ID is ' . $order->invoice_no . '.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

@@ -18,8 +18,16 @@ class OnlineOrderController extends Controller
         protected OnlineOrderTrackingService $tracking,
     ) {}
 
+    protected function ensureAdmin(): void
+    {
+        if (! Auth::user()?->isAdminUser()) {
+            abort(403, 'Online orders are only available to shop admins.');
+        }
+    }
+
     public function index(Request $request)
     {
+        $this->ensureAdmin();
         $shopId = Auth::user()->shop_id;
 
         $filterDate = $request->input('date');
@@ -91,7 +99,7 @@ class OnlineOrderController extends Controller
             'id' => $order->id,
             'invoice' => $order->invoice_no,
             'status' => $order->status,
-            'created_at' => $order->created_at->format('d M Y, h:i A'),
+            'created_at' => asian_datetime($order->created_at, 'd M Y, h:i A'),
             'payment_method' => str_replace('_', ' ', (string) $order->payment_method),
             'product_revenue' => number_format($productRevenue, 2),
             'delivery_charge' => (float) ($order->delivery_charge ?? 0),
@@ -119,6 +127,7 @@ class OnlineOrderController extends Controller
 
     public function show(Order $order)
     {
+        $this->ensureAdmin();
         abort_unless($order->shop_id === Auth::user()->shop_id && $order->counter_id === null, 403);
 
         $order->load([
@@ -136,6 +145,7 @@ class OnlineOrderController extends Controller
 
     public function notifications()
     {
+        $this->ensureAdmin();
         $shopId = Auth::user()->shop_id;
         $seenAt = session('online_orders_seen_at');
 
@@ -175,6 +185,7 @@ class OnlineOrderController extends Controller
 
     public function markNotificationsSeen()
     {
+        $this->ensureAdmin();
         session(['online_orders_seen_at' => now()->toDateTimeString()]);
 
         return response()->json(['ok' => true]);
@@ -182,6 +193,7 @@ class OnlineOrderController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
+        $this->ensureAdmin();
         if ($order->shop_id !== Auth::user()->shop_id || $order->counter_id !== null) {
             abort(403, 'Unauthorized Access');
         }
