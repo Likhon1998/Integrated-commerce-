@@ -4,6 +4,8 @@
         ? round((($product->original_price - $product->selling_price) / $product->original_price) * 100) : 0;
     $img = $ws->productImageUrl($product);
     $catLabel = $product->category?->name ?? $product->brand_name ?? 'Electronics';
+    $isNew = (bool) ($product->is_new_arrival ?? false)
+        || ($product->created_at && $product->created_at->gte(now()->subDays(30)));
     $listItem = [
         'id' => $product->id,
         'name' => $product->name,
@@ -20,41 +22,53 @@
         'image' => $img,
     ];
 @endphp
-<div class="gaget-product-card relative">
+<article class="gaget-product-card gs-card">
     @if($discount > 0)
         <span class="gaget-discount-badge">-{{ $discount }}%</span>
+    @elseif($isNew)
+        <span class="gs-badge-new">New</span>
     @endif
-    <div class="absolute top-2 right-2 z-10 flex flex-col gap-1.5">
-        <button type="button" class="w-8 h-8 rounded-full bg-white/95 border border-slate-100 shadow-sm text-slate-400 hover:text-rose-500 inline-flex items-center justify-center"
-                :class="inWishlist({{ $product->id }}) && '!text-rose-500'"
-                @click.prevent="toggleWishlist(@js($listItem))" title="Wishlist">
-            <svg class="w-4 h-4" :fill="inWishlist({{ $product->id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-        </button>
-    </div>
+
     <a href="{{ route('website.product', $product) }}" class="gaget-product-img">
         <img src="{{ $img }}" alt="{{ $product->name }}" loading="lazy">
     </a>
+
     <div class="gaget-product-body">
         <p class="gaget-product-cat">{{ $catLabel }}</p>
         <a href="{{ route('website.product', $product) }}" class="gaget-product-name">{{ $product->name }}</a>
+
         <div class="gaget-stars">
             @for($i = 1; $i <= 5; $i++)
-                <span class="gaget-star {{ $i > round($product->rating) ? 'gaget-star-empty' : '' }}">★</span>
+                <span class="gaget-star {{ $i > round($product->rating ?? 0) ? 'gaget-star-empty' : '' }}">★</span>
             @endfor
             <span class="gaget-review-count">({{ number_format($product->review_count ?: 0) }})</span>
         </div>
-        <div class="gaget-price-row">
-            <span class="gaget-price-current">{{ $ws->formatPrice($product->selling_price, $settings) }}</span>
-            @if($product->original_price && $product->original_price > $product->selling_price)
-                <span class="gaget-price-old">{{ $ws->formatPrice($product->original_price, $settings) }}</span>
-            @endif
+
+        <div class="gs-card-footer">
+            <div class="gaget-price-row">
+                <span class="gaget-price-current">{{ $ws->formatPrice($product->selling_price, $settings) }}</span>
+                @if($product->original_price && $product->original_price > $product->selling_price)
+                    <span class="gaget-price-old">{{ $ws->formatPrice($product->original_price, $settings) }}</span>
+                @endif
+            </div>
+
+            <div class="gs-card-actions">
+                <button type="button"
+                        class="gs-icon-btn gs-icon-btn--cart"
+                        title="Add to cart"
+                        data-add-to-cart='@json($cartItem)'
+                        data-qty="1"
+                        data-open-cart="1">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 2.3c-.6.6-.2 1.7.7 1.7H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+                </button>
+                <button type="button"
+                        class="gs-icon-btn"
+                        title="Wishlist"
+                        :class="inWishlist({{ $product->id }}) && 'is-wish'"
+                        @click.prevent="toggleWishlist(@js($listItem))">
+                    <svg :fill="inWishlist({{ $product->id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                </button>
+            </div>
         </div>
-        <button type="button"
-                class="mt-3 w-full rounded-xl bg-slate-900 text-white text-sm font-bold py-2.5 hover:bg-indigo-600 transition relative z-10"
-                data-add-to-cart='@json($cartItem)'
-                data-qty="1"
-                data-open-cart="1">
-            Add to cart
-        </button>
     </div>
-</div>
+</article>

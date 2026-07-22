@@ -36,9 +36,21 @@
     @if(!in_array($order->status, ['received', 'cancelled'], true))
         <form method="POST" action="{{ route('supply.purchase-orders.receive', $order) }}" class="bg-white rounded-2xl border overflow-hidden mb-8">
             @csrf
-            <div class="px-5 py-4 border-b bg-slate-50">
-                <h3 class="font-bold text-gray-900">Receive stock</h3>
-                <p class="text-xs text-gray-500 mt-1">Increases sellable stock (POS + web) · Dr Inventory · Cr Accounts Payable</p>
+            <div class="px-5 py-4 border-b bg-slate-50 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div>
+                    <h3 class="font-bold text-gray-900">Receive stock</h3>
+                    <p class="text-xs text-gray-500 mt-1">Store = sellable on POS &amp; web. Warehouse = held until Stock Transfer.</p>
+                </div>
+                <div class="sm:w-64">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Receive into</label>
+                    <select name="receive_location_id" class="w-full rounded-xl border-gray-200 mt-1 text-sm" required>
+                        @foreach($receiveLocations ?? [] as $loc)
+                            <option value="{{ $loc->id }}" @selected((int) old('receive_location_id', $defaultReceiveLocationId) === (int) $loc->id)>
+                                {{ ucfirst($loc->type) }}: {{ $loc->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
             <table class="w-full text-sm">
                 <thead class="bg-slate-900 text-white text-[11px] uppercase tracking-widest">
@@ -53,8 +65,8 @@
                 <tbody class="divide-y divide-gray-50">
                     @foreach($order->items as $i => $item)
                         @php $remaining = max(0, $item->quantity - $item->received_quantity); @endphp
-                        <tr>
-                            <td class="p-4 font-semibold">
+                        <tr class="{{ $remaining < 1 ? 'bg-slate-50/80 text-gray-400' : '' }}">
+                            <td class="p-4 font-semibold {{ $remaining >= 1 ? 'text-gray-900' : '' }}">
                                 {{ $item->product->name }}
                                 <input type="hidden" name="items[{{ $i }}][id]" value="{{ $item->id }}">
                             </td>
@@ -62,13 +74,17 @@
                             <td class="p-4 text-center">{{ $item->quantity }}</td>
                             <td class="p-4 text-center">{{ $item->received_quantity }}</td>
                             <td class="p-4">
-                                <input type="number"
-                                       name="items[{{ $i }}][receive_qty]"
-                                       value="{{ $remaining }}"
-                                       min="0"
-                                       max="{{ $remaining }}"
-                                       @disabled($remaining < 1)
-                                       class="w-24 rounded-lg border-gray-200 mx-auto block text-center">
+                                @if($remaining < 1)
+                                    <input type="hidden" name="items[{{ $i }}][receive_qty]" value="0">
+                                    <span class="block text-center text-xs font-semibold text-emerald-600">Done</span>
+                                @else
+                                    <input type="number"
+                                           name="items[{{ $i }}][receive_qty]"
+                                           value="{{ old('items.'.$i.'.receive_qty', $remaining) }}"
+                                           min="0"
+                                           max="{{ $remaining }}"
+                                           class="w-24 rounded-lg border-gray-200 mx-auto block text-center">
+                                @endif
                             </td>
                         </tr>
                     @endforeach
@@ -89,32 +105,43 @@
     @endif
 
     @if(in_array($order->status, ['partial', 'received'], true) && ($cashAccounts?->count() ?? 0) > 0)
-        <form method="POST" action="{{ route('supply.purchase-orders.pay', $order) }}" class="bg-white rounded-2xl border p-6 mb-8 max-w-2xl space-y-4">
-            @csrf
-            <div>
-                <h3 class="font-bold text-gray-900">Pay supplier</h3>
-                <p class="text-xs text-gray-500 mt-1">Clears Accounts Payable (Dr AP · Cr Cash / Wallet)</p>
-            </div>
-            <div class="grid md:grid-cols-2 gap-4">
+        @php $remainingDue = $order->remainingPayable(); @endphp
+        @if($remainingDue > 0)
+            <form method="POST" action="{{ route('supply.purchase-orders.pay', $order) }}" class="bg-white rounded-2xl border p-6 mb-8 max-w-2xl space-y-4">
+                @csrf
                 <div>
-                    <label class="text-xs font-bold text-gray-500 uppercase">Amount</label>
-                    <input type="number" step="0.01" min="0.01" name="amount" value="{{ $order->total_amount }}" class="w-full rounded-xl border-gray-200 mt-1" required>
+                    <h3 class="font-bold text-gray-900">Pay supplier</h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                        PO total ৳{{ number_format($order->total_amount, 2) }}
+                        · Paid ৳{{ number_format($order->paid_amount, 2) }}
+                        · Remaining ৳{{ number_format($remainingDue, 2) }}
+                    </p>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Amount</label>
+                        <input type="number" step="0.01" min="0.01" max="{{ $remainingDue }}" name="amount" value="{{ old('amount', $remainingDue) }}" class="w-full rounded-xl border-gray-200 mt-1" required>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Pay from</label>
+                        <select name="account_id" class="w-full rounded-xl border-gray-200 mt-1" required>
+                            @foreach($cashAccounts as $account)
+                                <option value="{{ $account->id }}">{{ $account->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
                 <div>
-                    <label class="text-xs font-bold text-gray-500 uppercase">Pay from</label>
-                    <select name="account_id" class="w-full rounded-xl border-gray-200 mt-1" required>
-                        @foreach($cashAccounts as $account)
-                            <option value="{{ $account->id }}">{{ $account->name }}</option>
-                        @endforeach
-                    </select>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Notes</label>
+                    <input type="text" name="notes" class="w-full rounded-xl border-gray-200 mt-1" placeholder="Optional reference">
                 </div>
+                <button class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700">Record Payment</button>
+            </form>
+        @else
+            <div class="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-800 font-semibold mb-8">
+                Fully paid (৳{{ number_format($order->paid_amount, 2) }}).
             </div>
-            <div>
-                <label class="text-xs font-bold text-gray-500 uppercase">Notes</label>
-                <input type="text" name="notes" class="w-full rounded-xl border-gray-200 mt-1" placeholder="Optional reference">
-            </div>
-            <button class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700">Record Payment</button>
-        </form>
+        @endif
     @endif
 
     @if(($ledgerEntries?->count() ?? 0) > 0)

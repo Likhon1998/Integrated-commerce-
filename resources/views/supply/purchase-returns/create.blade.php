@@ -1,4 +1,4 @@
-<x-supply-layout title="New Purchase Return" subtitle="Return goods to a supplier. Stock ↓ on POS/web · Accounts Payable ↓.">
+<x-supply-layout title="New Purchase Return" subtitle="Return goods from store or warehouse. Stock ↓ · Accounts Payable ↓.">
     @php
         $productOptions = $products->map(fn ($p) => [
             'id' => $p->id,
@@ -7,18 +7,31 @@
             'stock' => (int) $p->stock_quantity,
         ])->values();
 
+        $locationOptions = $locations->map(function ($l) use ($warehouseQty) {
+            $qtyMap = [];
+            if ($l->type === 'warehouse') {
+                $qtyMap = ($warehouseQty[$l->id] ?? collect())->toArray();
+            }
+            return [
+                'id' => $l->id,
+                'type' => $l->type,
+                'label' => ucfirst($l->type) . ': ' . $l->name,
+                'warehouse_qty' => $qtyMap,
+            ];
+        })->values();
+
         $poOptions = $purchaseOrders->map(fn ($po) => [
             'id' => $po->id,
             'label' => $po->po_number . ' — ' . ($po->supplier->name ?? ''),
-            'supplier_id' => $po->supplier_id,
+            'supplier_id' => (string) $po->supplier_id,
         ])->values();
     @endphp
 
     <div class="mb-5 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
         <p class="font-semibold text-gray-800 mb-1">How it works</p>
         <ol class="list-decimal list-inside space-y-1 text-xs sm:text-sm">
-            <li>Pick the supplier (and optional linked Purchase Order)</li>
-            <li>Select products you are sending back + qty + cost</li>
+            <li>Pick supplier (linking a PO auto-fills the supplier)</li>
+            <li>Choose return location — store uses sellable stock; warehouse uses warehouse qty</li>
             <li>Stock decreases · Inventory asset ↓ · Accounts Payable ↓</li>
         </ol>
     </div>
@@ -34,16 +47,32 @@
           class="space-y-5"
           x-data="{
               products: @js($productOptions),
+              locations: @js($locationOptions),
+              pos: @js($poOptions),
+              supplierId: '{{ old('supplier_id', '') }}',
+              poId: '{{ old('purchase_order_id', '') }}',
+              locationId: '{{ old('return_location_id', $defaultLocationId) }}',
               rows: [{ key: Date.now(), product_id: '', quantity: 1, unit_cost: 0 }],
+              get location() { return this.locations.find(l => String(l.id) === String(this.locationId)); },
+              onPoChange() {
+                  const po = this.pos.find(p => String(p.id) === String(this.poId));
+                  if (po) this.supplierId = String(po.supplier_id);
+              },
               addRow() { this.rows.push({ key: Date.now()+Math.random(), product_id: '', quantity: 1, unit_cost: 0 }); },
               removeRow(i) { this.rows.length > 1 ? this.rows.splice(i,1) : this.rows=[{ key: Date.now(), product_id: '', quantity: 1, unit_cost: 0 }]; },
               onProduct(row) {
                   const p = this.products.find(x => String(x.id) === String(row.product_id));
                   if (p) row.unit_cost = Number(p.cost) || 0;
               },
-              stock(row) {
+              available(row) {
                   const p = this.products.find(x => String(x.id) === String(row.product_id));
-                  return p ? p.stock : '—';
+                  if (!p) return '—';
+                  const loc = this.location;
+                  if (!loc) return p.stock;
+                  if (loc.type === 'warehouse') {
+                      return Number(loc.warehouse_qty[p.id] || 0);
+                  }
+                  return p.stock;
               },
               line(row) { return (Number(row.quantity)||0) * (Number(row.unit_cost)||0); },
               total() { return this.rows.reduce((s,r)=>s+this.line(r),0); },
@@ -52,10 +81,19 @@
           @if($suppliers->isEmpty() || $products->isEmpty()) onsubmit="return false" @endif>
         @csrf
 
-        <div class="bg-white rounded-xl border border-gray-200 p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div class="bg-white rounded-xl border border-gray-200 p-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Linked PO (optional)</label>
+                <select name="purchase_order_id" x-model="poId" @change="onPoChange()" class="w-full text-sm rounded-lg border-gray-200 py-1.5">
+                    <option value="">—</option>
+                    <template x-for="po in pos" :key="po.id">
+                        <option :value="po.id" x-text="po.label"></option>
+                    </template>
+                </select>
+            </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-500 mb-1">Supplier</label>
-                <select name="supplier_id" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
+                <select name="supplier_id" x-model="supplierId" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
                     <option value="">Select…</option>
                     @foreach($suppliers as $s)
                         <option value="{{ $s->id }}">{{ $s->name }}</option>
@@ -63,17 +101,16 @@
                 </select>
             </div>
             <div>
-                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Linked PO (optional)</label>
-                <select name="purchase_order_id" class="w-full text-sm rounded-lg border-gray-200 py-1.5">
-                    <option value="">—</option>
-                    @foreach($purchaseOrders as $po)
-                        <option value="{{ $po->id }}">{{ $po->po_number }}</option>
-                    @endforeach
+                <label class="block text-[11px] font-semibold text-gray-500 mb-1">Return from</label>
+                <select name="return_location_id" x-model="locationId" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required>
+                    <template x-for="loc in locations" :key="loc.id">
+                        <option :value="loc.id" x-text="loc.label"></option>
+                    </template>
                 </select>
             </div>
             <div>
                 <label class="block text-[11px] font-semibold text-gray-500 mb-1">Notes</label>
-                <input type="text" name="notes" placeholder="Optional" class="w-full text-sm rounded-lg border-gray-200 py-1.5 placeholder:text-gray-400">
+                <input type="text" name="notes" value="{{ old('notes') }}" placeholder="Optional" class="w-full text-sm rounded-lg border-gray-200 py-1.5 placeholder:text-gray-400">
             </div>
         </div>
 
@@ -86,7 +123,7 @@
                 <thead>
                     <tr class="text-[10px] uppercase tracking-wider text-gray-400 border-b">
                         <th class="text-left font-semibold px-4 py-2">Product</th>
-                        <th class="font-semibold px-2 py-2 w-20">Stock</th>
+                        <th class="font-semibold px-2 py-2 w-24">Available</th>
                         <th class="font-semibold px-2 py-2 w-24">Qty</th>
                         <th class="font-semibold px-2 py-2 w-28">Unit cost</th>
                         <th class="text-right font-semibold px-2 py-2 w-28">Total</th>
@@ -104,7 +141,7 @@
                                     </template>
                                 </select>
                             </td>
-                            <td class="px-2 py-2 text-center text-xs text-gray-500" x-text="stock(row)"></td>
+                            <td class="px-2 py-2 text-center text-xs text-gray-500" x-text="available(row)"></td>
                             <td class="px-2 py-2"><input type="number" :name="'items['+index+'][quantity]'" x-model.number="row.quantity" min="1" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required></td>
                             <td class="px-2 py-2"><input type="number" step="0.01" :name="'items['+index+'][unit_cost]'" x-model.number="row.unit_cost" min="0" class="w-full text-sm rounded-lg border-gray-200 py-1.5" required></td>
                             <td class="px-2 py-2 text-right font-semibold" x-text="money(line(row))"></td>

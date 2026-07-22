@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ShopScoped;
 use App\Models\Product;
-use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
 use App\Models\StockLocation;
+use App\Models\WarehouseStock;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class StockTransferController extends Controller
 {
@@ -33,27 +34,43 @@ class StockTransferController extends Controller
     {
         $this->stock->ensureDefaultLocations($this->shopId());
 
-        if (config('store.single_shop_mode', true)) {
-            $locations = StockLocation::where('shop_id', $this->shopId())
-                ->where('is_active', true)
-                ->orderByRaw("CASE type WHEN 'store' THEN 0 ELSE 1 END")
-                ->orderBy('name')
-                ->get();
-        } else {
-            $locations = StockLocation::where('shop_id', $this->shopId())->where('is_active', true)->orderBy('type')->orderBy('name')->get();
-        }
+        $locations = StockLocation::where('shop_id', $this->shopId())
+            ->where('is_active', true)
+            ->orderByRaw("CASE type WHEN 'store' THEN 0 ELSE 1 END")
+            ->orderBy('name')
+            ->get();
+
         $products = Product::where('shop_id', $this->shopId())->orderBy('name')->get();
-        return view('supply.stock-transfers.create', compact('locations', 'products'));
+
+        $warehouseQty = WarehouseStock::whereIn(
+            'location_id',
+            $locations->where('type', 'warehouse')->pluck('id')
+        )
+            ->get()
+            ->groupBy('location_id')
+            ->map(fn ($rows) => $rows->pluck('quantity', 'product_id'));
+
+        return view('supply.stock-transfers.create', compact('locations', 'products', 'warehouseQty'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'from_location_id' => 'required|exists:stock_locations,id',
-            'to_location_id' => 'required|exists:stock_locations,id|different:from_location_id',
+            'from_location_id' => [
+                'required',
+                Rule::exists('stock_locations', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())->where('is_active', true)),
+            ],
+            'to_location_id' => [
+                'required',
+                'different:from_location_id',
+                Rule::exists('stock_locations', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())->where('is_active', true)),
+            ],
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => [
+                'required',
+                Rule::exists('products', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())),
+            ],
             'items.*.quantity' => 'required|integer|min:1',
         ]);
 

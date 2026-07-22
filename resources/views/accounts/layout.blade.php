@@ -20,7 +20,7 @@
 
 <x-app-layout>
     <div
-        class="max-w-[1400px] mx-auto pt-0 pb-12 px-4 sm:px-6 lg:px-8 space-y-6"
+        class="mx-auto pt-0 pb-8 sm:pb-12 px-0 space-y-4 sm:space-y-6 min-w-0"
         x-data="{
             tab: @js($activeTab),
             showAddModal: false,

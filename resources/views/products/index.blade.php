@@ -8,6 +8,14 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
+                <a href="{{ route('supply.opening-inventory.index') }}"
+                   class="inline-flex items-center gap-1.5 bg-white text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                    Opening Stock
+                </a>
+                <a href="{{ route('supply.adjustments.index') }}"
+                   class="inline-flex items-center gap-1.5 bg-white text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
+                    Adjust Stock
+                </a>
                 <a href="{{ route('products.barcodes') }}"
                    class="inline-flex items-center gap-1.5 bg-white text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition">
                     Print Barcodes
@@ -36,6 +44,17 @@
                 <button type="button" @click="show = false" class="text-emerald-600 hover:text-emerald-800">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
+            </div>
+        @endif
+
+        @if(session('import_errors') && count(session('import_errors')))
+            <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p class="font-bold mb-1">Some CSV rows were skipped:</p>
+                <ul class="list-disc pl-5 space-y-0.5 text-xs max-h-40 overflow-y-auto">
+                    @foreach(session('import_errors') as $err)
+                        <li>{{ $err }}</li>
+                    @endforeach
+                </ul>
             </div>
         @endif
 

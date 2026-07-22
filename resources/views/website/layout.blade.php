@@ -97,6 +97,7 @@
                 wishlist: readStorefrontList('gaget_wishlist'),
                 cartOpen: false,
                 checkoutOpen: false,
+                mobileOpen: false,
                 checkoutStep: 'auth',
                 authPurpose: 'account',
                 authTab: 'login',
@@ -327,7 +328,7 @@
     @vite(['resources/css/app.css', 'resources/css/website.css', 'resources/js/app.js'])
     <style>[x-cloak]{display:none!important}</style>
 </head>
-<body class="gaget-store bg-white antialiased" id="storefront-root" x-data="storefrontCart()" @keydown.escape.window="cartOpen=false; checkoutOpen=false">
+<body class="gaget-store bg-white antialiased" id="storefront-root" x-data="storefrontCart()" @keydown.escape.window="cartOpen=false; checkoutOpen=false; mobileOpen=false">
 
 @include('website.partials.header')
 

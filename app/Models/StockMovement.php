@@ -12,6 +12,43 @@ class StockMovement extends Model
         'document_type', 'document_id', 'location_id',
     ];
 
+    /** Stock increased (receive, purchase, stock-in adjustment, restock, transfer in). */
+    public function isStockIn(): bool
+    {
+        return $this->type === 'in';
+    }
+
+    /** Stock decreased (sale, stock-out, damage, transfer out). */
+    public function isStockOut(): bool
+    {
+        return in_array($this->type, ['out', 'sale'], true);
+    }
+
+    /** Signed quantity for display: +5 or -5. Quantity column is always stored positive. */
+    public function signedQuantity(): int
+    {
+        $qty = (int) $this->quantity;
+
+        return $this->isStockIn() ? $qty : -$qty;
+    }
+
+    public function typeLabel(): string
+    {
+        return match ($this->type) {
+            'in' => 'IN (+)',
+            'out' => 'OUT (−)',
+            'sale' => 'SALE (−)',
+            default => strtoupper((string) $this->type),
+        };
+    }
+
+    public function reasonLabel(): string
+    {
+        $reason = str_replace('_', ' ', (string) ($this->reason ?: '—'));
+
+        return $reason === '—' ? '—' : ucwords($reason);
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class);

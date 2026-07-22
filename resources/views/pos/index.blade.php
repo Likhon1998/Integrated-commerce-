@@ -813,36 +813,40 @@
 .toast.warning .toast-bar { background: var(--amber); }
 .toast.info .toast-bar { background: var(--blue); }
 
-/* Counter tills stay full-width side-by-side; never auto-collapse on laptop/tablet. */
+/* Counter tills: keep side-by-side on large screens; stack earlier for tablets/phones. */
 @media (max-width: 960px) {
     .pos-root {
-        grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr);
+        grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr);
         gap: 8px;
         padding: 8px;
     }
     .pos-chrome-search { max-width: 420px; }
     .pos-tool-btn span.pos-tool-label { display: none; }
 }
-@media (max-width: 720px) {
-    /* Phones only — cart still usable as second pane */
+@media (max-width: 768px) {
     .pos-rail { width: 64px; }
     .pos-rail a span, .pos-rail button span { font-size: 9px; }
     .pos-body { grid-template-columns: 64px minmax(0, 1fr); }
     .pos-root {
-        grid-template-columns: minmax(0, 1fr) minmax(260px, .95fr);
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(40vh, 1fr) minmax(46vh, 1.05fr);
+        gap: 6px;
     }
     .pos-user-meta, .pos-brand span:not(.pos-brand-mark) { display: none; }
     .product-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .p-img-wrap { height: 84px; }
+    .cart-actions { grid-template-columns: 1fr; }
+    .modal { width: min(100vw - 16px, 480px) !important; max-height: min(92vh, 720px); }
 }
 @media (max-width: 480px) {
     .pos-rail { display: none; }
     .pos-body { grid-template-columns: 1fr; }
     .pos-root {
         grid-template-columns: 1fr;
-        grid-template-rows: minmax(38vh, 1fr) minmax(48vh, 1.1fr);
+        grid-template-rows: minmax(36vh, 1fr) minmax(50vh, 1.15fr);
+        padding: 6px;
     }
-    .cart-actions { grid-template-columns: 1fr; }
+    .product-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 }
 </style>
 
@@ -909,7 +913,11 @@
                 <div class="pos-user-avatar">{{ strtoupper(substr(Auth::user()->name, 0, 1)) }}</div>
                 <div class="pos-user-meta">
                     <div class="pos-user-name">{{ Auth::user()->name }}</div>
-                    <div class="pos-user-role">{{ Auth::user()->counter->name ?? 'Counter' }}</div>
+                    @if(Auth::user()->isAdminUser())
+                        <div class="pos-user-role" x-text="selectedCounterLabel()"></div>
+                    @else
+                        <div class="pos-user-role">{{ Auth::user()->counter->name ?? 'Counter' }}</div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -1286,6 +1294,20 @@
             </div>
 
             <div class="modal-body">
+                @if(Auth::user()->isAdminUser())
+                    <div class="mb-3" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.2);border-radius:12px;padding:12px">
+                        <label style="display:block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--slate);margin-bottom:6px">Bill on counter</label>
+                        <select x-model="selectedCounterId" style="width:100%;border-radius:10px;border:1px solid rgba(148,163,184,.45);padding:10px 12px;background:var(--panel);color:var(--ink);font-weight:700">
+                            <template x-for="c in posCounters" :key="c.id">
+                                <option :value="String(c.id)" :disabled="!c.has_open_session"
+                                        x-text="c.name + (c.has_open_session ? ' · open' : ' · closed')"></option>
+                            </template>
+                        </select>
+                        <p style="margin:8px 0 0;font-size:11px;color:var(--slate)" x-show="!hasOpenAdminCounter()">
+                            Open a cash session on a counter first (Cash Sessions), then select it here.
+                        </p>
+                    </div>
+                @endif
                 <div class="amount-display">
                     <div class="amount-label">Bill total</div>
                     <div class="amount-value">
@@ -1645,6 +1667,9 @@ function posSystem() {
         payCash: 0,
         payCard: 0,
         payBkash: 0,
+        isAdminPos: {{ Auth::user()->isAdminUser() ? 'true' : 'false' }},
+        posCounters: @json($posCounters ?? []),
+        selectedCounterId: '{{ $defaultPosCounterId ?? '' }}',
 
         /* â”€â”€ UI State â”€â”€ */
         heldCarts: JSON.parse(localStorage.getItem('nexa_held_carts')) || [],
@@ -2203,8 +2228,16 @@ openCheckout() {
                 exchange_for_order_id:   this.exchangeOrderId,
                 return_product_id:       this.returnProductId,
                 return_qty:              this.returnQty,
-                exchange_credit:         this.exchangeCredit
+                exchange_credit:         this.exchangeCredit,
+                counter_id:              this.isAdminPos ? (Number(this.selectedCounterId) || null) : null,
             };
+
+            if (this.isAdminPos && !this.hasOpenAdminCounter()) {
+                this.isProcessing = false;
+                this.playBeep(false);
+                this.showToast('Open a cash session on a counter, then select it before billing.', 'error');
+                return;
+            }
 
             if (this.isOnline) {
                 try {
@@ -2488,6 +2521,16 @@ ${(data.change || 0) > 0 ? `<tr><td class="lbl">Change due</td><td class="text-r
                 return 0;
             }
         },
+        selectedCounterLabel() {
+            const c = (this.posCounters || []).find(x => String(x.id) === String(this.selectedCounterId));
+            if (!c) return 'Select counter';
+            return c.has_open_session ? c.name : (c.name + ' (closed)');
+        },
+        hasOpenAdminCounter() {
+            if (!this.isAdminPos) return true;
+            const c = (this.posCounters || []).find(x => String(x.id) === String(this.selectedCounterId));
+            return !!(c && c.has_open_session);
+        },
         async confirmSyncOffline() {
             this.syncPromptOpen = false;
             await this.syncOfflineOrders();
@@ -2500,7 +2543,10 @@ ${(data.change || 0) > 0 ? `<tr><td class="lbl">Change due</td><td class="text-r
                 const res  = await fetch('{{ route('pos.sync') }}', {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                    body:    JSON.stringify({ orders: offline })
+                    body:    JSON.stringify({
+                        orders: offline,
+                        counter_id: this.isAdminPos ? (Number(this.selectedCounterId) || null) : null,
+                    })
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {

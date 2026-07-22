@@ -39,36 +39,42 @@ class StockService
             throw new InvalidArgumentException('Direction must be in or out.');
         }
 
-        $userId ??= Auth::id();
-        $product = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
-        $previousStock = $product->stock_quantity;
+        return DB::transaction(function () use (
+            $product, $direction, $quantity, $reference, $reason, $userId, $documentType, $documentId, $locationId
+        ) {
+            $userId ??= Auth::id();
+            $product = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $previousStock = $product->stock_quantity;
 
-        if ($direction === 'out' && $quantity > $previousStock) {
-            throw new InvalidArgumentException("Insufficient stock for {$product->name}. Available: {$previousStock}");
-        }
+            if ($direction === 'out' && $quantity > $previousStock) {
+                throw new InvalidArgumentException("Insufficient stock for {$product->name}. Available: {$previousStock}");
+            }
 
-        $currentStock = $direction === 'in'
-            ? $previousStock + $quantity
-            : $previousStock - $quantity;
+            $currentStock = $direction === 'in'
+                ? $previousStock + $quantity
+                : $previousStock - $quantity;
 
-        $movement = StockMovement::create([
-            'shop_id' => $product->shop_id,
-            'product_id' => $product->id,
-            'user_id' => $userId,
-            'type' => $direction,
-            'reason' => $reason,
-            'quantity' => $quantity,
-            'previous_stock' => $previousStock,
-            'current_stock' => $currentStock,
-            'reference' => $reference,
-            'document_type' => $documentType,
-            'document_id' => $documentId,
-            'location_id' => $locationId,
-        ]);
+            $locationId ??= $this->defaultStore($product->shop_id)?->id;
 
-        $product->update(['stock_quantity' => $currentStock]);
+            $movement = StockMovement::create([
+                'shop_id' => $product->shop_id,
+                'product_id' => $product->id,
+                'user_id' => $userId,
+                'type' => $direction,
+                'reason' => $reason,
+                'quantity' => $quantity,
+                'previous_stock' => $previousStock,
+                'current_stock' => $currentStock,
+                'reference' => $reference,
+                'document_type' => $documentType,
+                'document_id' => $documentId,
+                'location_id' => $locationId,
+            ]);
 
-        return $movement;
+            $product->update(['stock_quantity' => $currentStock]);
+
+            return $movement;
+        });
     }
 
     /**
@@ -86,34 +92,36 @@ class StockService
             throw new InvalidArgumentException('Quantity must be at least 1.');
         }
 
-        $userId ??= Auth::id();
-        $product = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
-        $previousStock = $product->stock_quantity;
+        return DB::transaction(function () use ($product, $quantity, $reference, $userId, $documentType, $documentId) {
+            $userId ??= Auth::id();
+            $product = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $previousStock = $product->stock_quantity;
 
-        if ($quantity > $previousStock) {
-            throw new InvalidArgumentException("Insufficient stock for {$product->name}. Available: {$previousStock}");
-        }
+            if ($quantity > $previousStock) {
+                throw new InvalidArgumentException("Insufficient stock for {$product->name}. Available: {$previousStock}");
+            }
 
-        $currentStock = $previousStock - $quantity;
+            $currentStock = $previousStock - $quantity;
 
-        $movement = StockMovement::create([
-            'shop_id' => $product->shop_id,
-            'product_id' => $product->id,
-            'user_id' => $userId,
-            'type' => 'sale',
-            'reason' => 'sale',
-            'quantity' => $quantity,
-            'previous_stock' => $previousStock,
-            'current_stock' => $currentStock,
-            'reference' => $reference,
-            'document_type' => $documentType ?? 'order',
-            'document_id' => $documentId,
-            'location_id' => $this->defaultStore($product->shop_id)?->id,
-        ]);
+            $movement = StockMovement::create([
+                'shop_id' => $product->shop_id,
+                'product_id' => $product->id,
+                'user_id' => $userId,
+                'type' => 'sale',
+                'reason' => 'sale',
+                'quantity' => $quantity,
+                'previous_stock' => $previousStock,
+                'current_stock' => $currentStock,
+                'reference' => $reference,
+                'document_type' => $documentType ?? 'order',
+                'document_id' => $documentId,
+                'location_id' => $this->defaultStore($product->shop_id)?->id,
+            ]);
 
-        $product->update(['stock_quantity' => $currentStock]);
+            $product->update(['stock_quantity' => $currentStock]);
 
-        return $movement;
+            return $movement;
+        });
     }
 
     /**
@@ -200,6 +208,47 @@ class StockService
         $row->update(['quantity' => $newQty]);
     }
 
+    /**
+     * Audit trail for warehouse-only qty changes (sellable stock unchanged).
+     */
+    public function recordWarehouseMovement(
+        Product $product,
+        string $direction,
+        int $quantity,
+        string $reference,
+        string $reason,
+        int $locationId,
+        ?int $userId = null,
+        ?string $documentType = null,
+        ?int $documentId = null,
+    ): StockMovement {
+        if ($quantity < 1) {
+            throw new InvalidArgumentException('Quantity must be at least 1.');
+        }
+
+        if (! in_array($direction, ['in', 'out'], true)) {
+            throw new InvalidArgumentException('Direction must be in or out.');
+        }
+
+        $userId ??= Auth::id();
+        $sellable = (int) $product->stock_quantity;
+
+        return StockMovement::create([
+            'shop_id' => $product->shop_id,
+            'product_id' => $product->id,
+            'user_id' => $userId,
+            'type' => $direction,
+            'reason' => $reason,
+            'quantity' => $quantity,
+            'previous_stock' => $sellable,
+            'current_stock' => $sellable,
+            'reference' => $reference,
+            'document_type' => $documentType,
+            'document_id' => $documentId,
+            'location_id' => $locationId,
+        ]);
+    }
+
     public function transferBetweenLocations(
         StockLocation $from,
         StockLocation $to,
@@ -218,6 +267,10 @@ class StockService
 
         if ($from->type === 'warehouse' && $to->type === 'store') {
             $this->adjustWarehouseStock($from, $product, -$quantity);
+            $this->recordWarehouseMovement(
+                $product, 'out', $quantity, $reference, 'stock_transfer', $from->id,
+                $userId, $documentType, $documentId
+            );
             $this->apply($product, 'in', $quantity, $reference, 'stock_transfer', $userId, $documentType, $documentId, $to->id);
             return;
         }
@@ -225,16 +278,28 @@ class StockService
         if ($from->type === 'store' && $to->type === 'warehouse') {
             $this->apply($product, 'out', $quantity, $reference, 'stock_transfer', $userId, $documentType, $documentId, $from->id);
             $this->adjustWarehouseStock($to, $product, $quantity);
+            $this->recordWarehouseMovement(
+                $product, 'in', $quantity, $reference, 'stock_transfer', $to->id,
+                $userId, $documentType, $documentId
+            );
             return;
         }
 
         if ($from->type === 'warehouse' && $to->type === 'warehouse') {
             $this->adjustWarehouseStock($from, $product, -$quantity);
             $this->adjustWarehouseStock($to, $product, $quantity);
+            $this->recordWarehouseMovement(
+                $product, 'out', $quantity, $reference, 'stock_transfer', $from->id,
+                $userId, $documentType, $documentId
+            );
+            $this->recordWarehouseMovement(
+                $product, 'in', $quantity, $reference, 'stock_transfer', $to->id,
+                $userId, $documentType, $documentId
+            );
             return;
         }
 
-        throw new InvalidArgumentException('Store-to-store transfers are not supported yet.');
+        throw new InvalidArgumentException('Store-to-store transfers are not supported. Move via a warehouse.');
     }
 
     public function ensureDefaultLocations(int $shopId): void
@@ -281,19 +346,113 @@ class StockService
         return $prefix . '-' . $shopId . '-' . now()->format('Ymd') . '-' . strtoupper(substr(uniqid(), -5));
     }
 
-    public function receivePurchaseItem(Product $product, int $quantity, string $poNumber, ?int $userId = null, ?int $documentId = null): StockMovement
-    {
+    /**
+     * Receive PO stock into a store (sellable) or warehouse (held until transfer).
+     */
+    public function receivePurchaseItem(
+        Product $product,
+        int $quantity,
+        string $poNumber,
+        ?int $userId = null,
+        ?int $documentId = null,
+        ?int $locationId = null,
+    ): StockMovement {
+        $location = $locationId
+            ? StockLocation::where('shop_id', $product->shop_id)->where('is_active', true)->findOrFail($locationId)
+            : $this->defaultStore($product->shop_id);
+
+        if (! $location) {
+            throw new InvalidArgumentException('No stock location available to receive into.');
+        }
+
+        $reference = 'PO received: ' . $poNumber;
+
+        if ($location->type === 'warehouse') {
+            $this->adjustWarehouseStock($location, $product, $quantity);
+
+            return $this->recordWarehouseMovement(
+                $product,
+                'in',
+                $quantity,
+                $reference,
+                'purchase_receive',
+                $location->id,
+                $userId,
+                'purchase_order',
+                $documentId,
+            );
+        }
+
         return $this->apply(
             $product,
             'in',
             $quantity,
-            'PO received: ' . $poNumber,
+            $reference,
             'purchase_receive',
             $userId,
             'purchase_order',
             $documentId,
-            $this->defaultStore($product->shop_id)?->id,
+            $location->id,
         );
+    }
+
+    /**
+     * Return stock to supplier from store (sellable) or warehouse.
+     */
+    public function returnPurchaseItem(
+        Product $product,
+        int $quantity,
+        string $reference,
+        ?int $userId = null,
+        ?int $documentId = null,
+        ?int $locationId = null,
+    ): StockMovement {
+        $location = $locationId
+            ? StockLocation::where('shop_id', $product->shop_id)->where('is_active', true)->findOrFail($locationId)
+            : $this->defaultStore($product->shop_id);
+
+        if (! $location) {
+            throw new InvalidArgumentException('No stock location available to return from.');
+        }
+
+        if ($location->type === 'warehouse') {
+            $this->adjustWarehouseStock($location, $product, -$quantity);
+
+            return $this->recordWarehouseMovement(
+                $product,
+                'out',
+                $quantity,
+                $reference,
+                'purchase_return',
+                $location->id,
+                $userId,
+                'purchase_return',
+                $documentId,
+            );
+        }
+
+        return $this->apply(
+            $product,
+            'out',
+            $quantity,
+            $reference,
+            'purchase_return',
+            $userId,
+            'purchase_return',
+            $documentId,
+            $location->id,
+        );
+    }
+
+    public function warehouseQuantity(StockLocation $location, Product $product): int
+    {
+        if ($location->type !== 'warehouse') {
+            return (int) $product->stock_quantity;
+        }
+
+        return (int) (WarehouseStock::where('location_id', $location->id)
+            ->where('product_id', $product->id)
+            ->value('quantity') ?? 0);
     }
 
     public function transaction(callable $callback): mixed

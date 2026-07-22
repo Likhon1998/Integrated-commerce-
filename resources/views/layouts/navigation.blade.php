@@ -1,21 +1,27 @@
-<div x-show="sidebarOpen" 
-     x-transition.opacity 
-     class="fixed inset-0 z-40 bg-gray-900/80 lg:hidden" 
+<div x-show="sidebarOpen"
+     x-cloak
+     x-transition.opacity
+     class="fixed inset-0 z-40 bg-gray-900/80 lg:hidden"
      @click="sidebarOpen = false"></div>
 
 <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-       class="fixed inset-y-0 left-0 z-50 w-[260px] bg-[#0B1220] text-slate-300 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col border-r border-white/5">
+       class="fixed inset-y-0 left-0 z-50 w-[min(260px,88vw)] bg-[#0B1220] text-slate-300 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto lg:w-[260px] flex flex-col border-r border-white/5">
 
     <div class="flex items-center gap-2.5 h-[4.25rem] px-5 shrink-0 border-b border-white/5">
-        <a href="{{ route('dashboard') }}" class="flex items-center gap-2.5 text-white font-bold text-[15px] tracking-tight min-w-0">
+        <a href="{{ route('dashboard') }}" @click="sidebarOpen = false" class="flex items-center gap-2.5 text-white font-bold text-[15px] tracking-tight min-w-0 flex-1">
             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
             </span>
             <span class="truncate">{{ Auth::user()->shop->name ?? config('app.name', 'Nexa POS') }}</span>
         </a>
+        <button type="button" @click="sidebarOpen = false" class="lg:hidden inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Close menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
     </div>
 
-    <nav class="admin-scroll-hide p-3 space-y-0.5 flex-1 overflow-y-auto" x-data="{ inventoryOpen: {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, supplyOpen: {{ request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, cmsOpen: {{ request()->routeIs('cms.*') ? 'true' : 'false' }} }">
+    <nav class="admin-scroll-hide p-3 space-y-0.5 flex-1 overflow-y-auto"
+         @click="if ($event.target.closest('a')) sidebarOpen = false"
+         x-data="{ inventoryOpen: {{ request()->routeIs('brands.*', 'categories.*', 'products.*') && !request()->routeIs('supply.*', 'stock.*') ? 'true' : 'false' }}, supplyOpen: {{ request()->routeIs('supply.*', 'stock.*', 'reports.low_stock') ? 'true' : 'false' }}, cmsOpen: {{ request()->routeIs('cms.*') ? 'true' : 'false' }} }">
 
         @can('view dashboard')
         <a href="{{ route('dashboard') }}"
@@ -54,9 +60,9 @@
 
         <div class="pt-2">
             <button @click="supplyOpen = !supplyOpen" 
-                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('supply.*', 'stock.*') ? 'text-white bg-white/10' : 'hover:bg-white/5 hover:text-white' }}">
-                <div class="flex items-center">
-                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('supply.*', 'stock.*') ? 'text-blue-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all font-medium text-sm {{ request()->routeIs('supply.*', 'stock.*', 'reports.low_stock') ? 'text-white bg-white/10' : 'hover:bg-white/5 hover:text-white' }}">
+                    <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-3 {{ request()->routeIs('supply.*', 'stock.*', 'reports.low_stock') ? 'text-blue-400' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                     <span>Stock & Supply</span>
                 </div>
                 <svg :class="supplyOpen ? 'rotate-180' : ''" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -72,6 +78,7 @@
                 <a href="{{ route('supply.opening-inventory.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.opening-inventory.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Opening Inventory</a>
                 <a href="{{ route('supply.purchase-orders.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.purchase-orders.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Purchase Order</a>
                 <a href="{{ route('supply.reorder-levels.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.reorder-levels.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Reorder Level</a>
+                <a href="{{ route('reports.low_stock') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('reports.low_stock') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Low Stock Report</a>
                 <a href="{{ route('supply.purchase-returns.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.purchase-returns.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Purchase Return</a>
                 <a href="{{ route('supply.adjustments.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.adjustments.*', 'stock.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Stock Adjustment</a>
                 <a href="{{ route('supply.stock-transfers.index') }}" class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('supply.stock-transfers.*') ? 'text-white bg-blue-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5' }}">Stock Transfer</a>
@@ -152,6 +159,11 @@
             <svg class="w-5 h-5 mr-3 {{ request()->routeIs('analytics.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
             Reports
         </a>
+        <a href="{{ route('reports.staff_performance') }}"
+           class="{{ request()->routeIs('reports.staff_performance', 'reports.staff_daily_details') ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'hover:bg-white/5 hover:text-white' }} flex items-center px-3 py-2.5 rounded-lg transition-all font-medium text-sm mt-1">
+            <svg class="w-5 h-5 mr-3 {{ request()->routeIs('reports.staff_performance') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+            Top Sellers
+        </a>
         @endif
 
         <div class="pt-2 border-t border-white/5 mt-2">
@@ -224,9 +236,12 @@
                 <p class="truncate text-[13px] font-semibold text-white">{{ Auth::user()->name }}</p>
                 <p class="truncate text-[11px] text-slate-500">{{ Auth::user()->getRoleNames()->first() ?? 'Staff' }}</p>
             </div>
-            <a href="{{ route('profile.edit') }}" class="text-slate-500 hover:text-white" title="Profile">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-            </a>
+            <form method="POST" action="{{ route('logout') }}" class="shrink-0">
+                @csrf
+                <button type="submit" class="rounded-lg px-2 py-1.5 text-[11px] font-bold text-rose-300 hover:bg-white/10 hover:text-rose-200" title="Log out">
+                    Log out
+                </button>
+            </form>
         </div>
     </div>
 </aside>
@@ -238,19 +253,21 @@
 
     @include('components.command-palette')
 
-    <div class="flex items-center gap-2 ml-auto">
+    <div class="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
         @can('process pos sales')
             <a href="{{ route('pos.index') }}"
                onclick="return window.launchPosTerminal(this.href)"
-               class="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-[12px] font-bold text-white hover:bg-slate-800">
-                POS Terminal
+               class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-2.5 sm:px-3.5 py-2 text-[11px] sm:text-[12px] font-bold text-white hover:bg-slate-800">
+                <span class="sm:hidden">POS</span>
+                <span class="hidden sm:inline">POS Terminal</span>
             </a>
         @endcan
 
         @if(Auth::check())
             <a href="{{ route('home') }}" target="_blank"
-               class="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-[12px] font-bold text-white hover:bg-blue-700">
-                View Store
+               class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-2.5 sm:px-3.5 py-2 text-[11px] sm:text-[12px] font-bold text-white hover:bg-blue-700">
+                <span class="sm:hidden">Store</span>
+                <span class="hidden sm:inline">View Store</span>
             </a>
         @endif
 
@@ -275,7 +292,7 @@
                 <div x-show="panelOpen"
                      x-cloak
                      x-transition.opacity.duration.150ms
-                     class="absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
+                     class="absolute right-0 top-[calc(100%+8px)] z-50 admin-fluid-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
                      style="display: none;">
                     <div class="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5">
                         <p class="text-[13px] font-bold text-slate-900">Online orders</p>
@@ -315,7 +332,7 @@
             @endif
         @endcan
 
-        <div class="hidden sm:flex sm:items-center pl-1">
+        <div class="flex items-center pl-0.5 sm:pl-1">
             <x-dropdown align="right" width="48">
                 <x-slot name="trigger">
                     <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">

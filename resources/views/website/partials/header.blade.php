@@ -1,9 +1,18 @@
 <div class="gaget-sticky-header">
     {{-- Main header --}}
     <div class="gaget-header-main">
-        <div class="max-w-[1280px] mx-auto px-6 py-3.5">
-            <div class="flex items-center gap-5">
-                <a href="{{ route('home') }}" class="flex items-center gap-2.5 shrink-0 no-underline">
+        <div class="max-w-[1280px] mx-auto px-4 sm:px-6 py-3.5">
+            <div class="flex items-center gap-3 sm:gap-5">
+                <button type="button"
+                        class="gaget-mobile-menu-btn md:hidden"
+                        @click="mobileOpen = !mobileOpen"
+                        :aria-expanded="mobileOpen"
+                        aria-label="Menu">
+                    <svg x-show="!mobileOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <svg x-show="mobileOpen" x-cloak class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
+                <a href="{{ route('home') }}" class="flex items-center gap-2.5 shrink-0 no-underline min-w-0">
                     @if($settings->logo_path ?? false)
                         <img src="{{ public_storage_url($settings->logo_path) }}" alt="" class="gaget-logo-icon object-contain p-1">
                     @else
@@ -11,7 +20,7 @@
                             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
                         </div>
                     @endif
-                    <span class="gaget-logo-text">{{ $settings->store_name ?? 'GAGET STORE' }}</span>
+                    <span class="gaget-logo-text truncate">{{ $settings->store_name ?? 'GAGET STORE' }}</span>
                 </a>
 
                 {{-- Live search: suggestions on focus + as you type --}}
@@ -207,6 +216,43 @@
                     @endauth
                 </div>
             </div>
+
+            {{-- Mobile search --}}
+            <form action="{{ route('website.shop') }}" method="GET" class="gaget-mobile-search lg:hidden mt-3">
+                <input type="search" name="search" value="{{ request('search') }}" placeholder="Search products..." class="gaget-mobile-search-input">
+                <button type="submit" aria-label="Search" class="gaget-mobile-search-btn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {{-- Mobile nav drawer --}}
+    <div x-show="mobileOpen" x-cloak class="gaget-mobile-drawer md:hidden" @click.self="mobileOpen = false">
+        <div class="gaget-mobile-drawer-panel" x-show="mobileOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="-translate-x-full">
+            <p class="gaget-mobile-drawer-title">Menu</p>
+            <a href="{{ route('home') }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">Home</a>
+            <a href="{{ route('website.shop') }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">Shop</a>
+            <a href="{{ route('website.shop', ['filter'=>'deals']) }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">Deals</a>
+            <a href="{{ route('website.shop', ['filter'=>'new']) }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">New Arrivals</a>
+            <a href="{{ route('website.blogs') }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">Blog</a>
+            <a href="{{ route('website.faqs') }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">FAQ</a>
+            <a href="{{ route('website.contact') }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">Contact</a>
+            @if(($allCategories ?? collect())->isNotEmpty())
+                <p class="gaget-mobile-drawer-title mt-4">Categories</p>
+                @foreach(($allCategories ?? []) as $cat)
+                    <a href="{{ route('website.category', $cat->slug) }}" class="gaget-mobile-drawer-link" @click="mobileOpen = false">{{ $cat->name }}</a>
+                @endforeach
+            @endif
+            @auth
+                @if(auth()->user()->isStorefrontCustomer())
+                    <a href="{{ route('website.account') }}" class="gaget-mobile-drawer-link mt-4" @click="mobileOpen = false">My Account</a>
+                @else
+                    <a href="{{ route('dashboard') }}" class="gaget-mobile-drawer-link mt-4" @click="mobileOpen = false">Staff dashboard</a>
+                @endif
+            @else
+                <button type="button" class="gaget-mobile-drawer-link mt-4 w-full text-left" @click="mobileOpen = false; openSignIn('login')">Sign in</button>
+            @endauth
         </div>
     </div>
 

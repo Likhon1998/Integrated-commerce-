@@ -7,6 +7,7 @@ use App\Models\AccountTransaction;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\StockLocation;
 use App\Models\Supplier;
 use App\Services\AccountService;
 use App\Services\StockService;
@@ -105,6 +106,7 @@ class PurchaseOrderController extends Controller
     {
         $this->authorizeShop($purchaseOrder);
         $this->accounts->ensureShopAccounts($this->shopId());
+        $this->stock->ensureDefaultLocations($this->shopId());
         $purchaseOrder->load(['supplier', 'items.product', 'user']);
 
         $ledgerEntries = AccountTransaction::where('shop_id', $this->shopId())
@@ -116,12 +118,19 @@ class PurchaseOrderController extends Controller
 
         $cashAccounts = $this->accounts->cashAccounts($this->shopId());
         $apBalance = $this->accounts->accountBalance($this->accounts->getAccount($this->shopId(), 'AP'));
+        $receiveLocations = StockLocation::where('shop_id', $this->shopId())
+            ->where('is_active', true)
+            ->orderByRaw("CASE type WHEN 'store' THEN 0 ELSE 1 END")
+            ->orderBy('name')
+            ->get();
 
         return view('supply.purchase-orders.show', [
             'order' => $purchaseOrder,
             'ledgerEntries' => $ledgerEntries,
             'cashAccounts' => $cashAccounts,
             'apBalance' => $apBalance,
+            'receiveLocations' => $receiveLocations,
+            'defaultReceiveLocationId' => $this->stock->defaultStore($this->shopId())?->id,
         ]);
     }
 
@@ -191,6 +200,10 @@ class PurchaseOrderController extends Controller
             'items' => 'required|array',
             'items.*.id' => 'required|exists:purchase_order_items,id',
             'items.*.receive_qty' => 'required|integer|min:0',
+            'receive_location_id' => [
+                'required',
+                Rule::exists('stock_locations', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())->where('is_active', true)),
+            ],
         ]);
 
         $receivedAny = false;
@@ -199,6 +212,10 @@ class PurchaseOrderController extends Controller
             $this->stock->transaction(function () use ($request, $purchaseOrder, &$receivedAny) {
                 $this->accounts->ensureShopAccounts($this->shopId());
                 $this->stock->ensureDefaultLocations($this->shopId());
+
+                $receiveLocation = StockLocation::where('shop_id', $this->shopId())
+                    ->where('is_active', true)
+                    ->findOrFail($request->receive_location_id);
 
                 foreach ($request->items as $row) {
                     $item = PurchaseOrderItem::where('purchase_order_id', $purchaseOrder->id)
@@ -226,6 +243,7 @@ class PurchaseOrderController extends Controller
                         $purchaseOrder->po_number,
                         Auth::id(),
                         $purchaseOrder->id,
+                        $receiveLocation->id,
                     );
 
                     $this->accounts->postPurchaseReceive(
@@ -254,7 +272,7 @@ class PurchaseOrderController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Stock received. Inventory asset and Accounts Payable updated. POS & web store stock synced.');
+        return back()->with('success', 'Stock received. Inventory asset and Accounts Payable updated.');
     }
 
     public function cancel(PurchaseOrder $purchaseOrder)
@@ -280,8 +298,13 @@ class PurchaseOrderController extends Controller
     {
         $this->authorizeShop($purchaseOrder);
 
+        $remaining = $purchaseOrder->remainingPayable();
+        if ($remaining <= 0) {
+            return back()->with('error', 'This purchase order is already fully paid.');
+        }
+
         $request->validate([
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0.01|max:' . $remaining,
             'account_id' => 'required|exists:accounts,id',
             'notes' => 'nullable|string|max:255',
         ]);
@@ -293,15 +316,21 @@ class PurchaseOrderController extends Controller
             ->firstOrFail();
 
         try {
-            $this->accounts->postSupplierPayment(
-                $this->shopId(),
-                (float) $request->amount,
-                $account,
-                'Supplier payment for ' . $purchaseOrder->po_number
-                    . ($request->notes ? ' — ' . $request->notes : '')
-                    . ' (' . ($purchaseOrder->supplier->name ?? 'supplier') . ')',
-                Auth::id(),
-            );
+            $this->stock->transaction(function () use ($request, $purchaseOrder, $account) {
+                $amount = round((float) $request->amount, 2);
+
+                $this->accounts->postSupplierPayment(
+                    $this->shopId(),
+                    $amount,
+                    $account,
+                    'Supplier payment for ' . $purchaseOrder->po_number
+                        . ($request->notes ? ' — ' . $request->notes : '')
+                        . ' (' . ($purchaseOrder->supplier->name ?? 'supplier') . ')',
+                    Auth::id(),
+                );
+
+                $purchaseOrder->increment('paid_amount', $amount);
+            });
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }

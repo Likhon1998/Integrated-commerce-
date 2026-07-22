@@ -45,3 +45,105 @@
     height: 0;
     display: none;
 }
+
+/* ── Responsive admin helpers ─────────────────────────── */
+@layer components {
+    .admin-scroll-x {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+    }
+
+    .admin-fluid-panel {
+        width: min(340px, calc(100vw - 1.5rem));
+    }
+}
+
+/* Wide tables inside clipped cards → horizontal scroll on phones */
+body.admin-panel main div.overflow-hidden:has(> table),
+body.admin-panel main div.overflow-hidden:has(> form table),
+body.admin-panel main div.overflow-hidden:has(> .overflow-x-auto),
+body.admin-panel main .rounded-2xl.border:has(> table),
+body.admin-panel main .rounded-xl.border:has(> table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Flex children must be allowed to shrink on small screens */
+body.admin-panel .flex-1,
+body.admin-panel main {
+    min-width: 0;
+}
+
+/* Prevent page-level horizontal bounce; tables scroll inside */
+@media (max-width: 640px) {
+    body.admin-panel main {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    body.admin-panel main .text-3xl,
+    body.admin-panel main h1,
+    body.admin-panel main h2 {
+        word-break: break-word;
+    }
+
+    body.admin-panel main .grid.md\:grid-cols-2,
+    body.admin-panel main .grid.md\:grid-cols-3,
+    body.admin-panel main .grid.md\:grid-cols-4,
+    body.admin-panel main .grid.lg\:grid-cols-2,
+    body.admin-panel main .grid.lg\:grid-cols-3,
+    body.admin-panel main .grid.lg\:grid-cols-4 {
+        gap: 0.75rem;
+    }
+}
+
+/* Admin navigation progress bar (top edge) */
+.admin-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 99999;
+    pointer-events: none;
+    overflow: hidden;
+}
+.admin-progress__bar {
+    height: 100%;
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: left center;
+    background: linear-gradient(90deg, #f97316 0%, #fb923c 45%, #fdba74 100%);
+    transition: transform 0.18s ease-out;
+    opacity: 0;
+}
+.admin-progress__bar.is-active {
+    opacity: 1;
+}
+.admin-progress__peg {
+    display: block;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 80px;
+    height: 100%;
+    opacity: 0;
+    transform: translateX(-100%);
+    box-shadow: 0 0 12px #f97316, 0 0 5px #fb923c;
+    background: #fdba74;
+}
+.admin-progress__peg.is-active {
+    opacity: 1;
+    animation: admin-progress-peg 0.9s ease-in-out infinite;
+}
+@keyframes admin-progress-peg {
+    0% { transform: translateX(-120%); opacity: 0; }
+    40% { opacity: 1; }
+    100% { transform: translateX(20vw); opacity: 0; }
+}
+html.admin-progress-busy,
+html.admin-progress-busy body {
+    cursor: progress;
+}
+

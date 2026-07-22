@@ -14,21 +14,28 @@
     <style>[x-cloak]{display:none!important}</style>
 </head>
 <body class="admin-panel font-sans antialiased text-slate-900 bg-[#F4F6FB]">
-    <div x-data="{ sidebarOpen: false }" class="flex h-screen overflow-hidden">
+    <div id="admin-progress" class="admin-progress" aria-hidden="true">
+        <div id="admin-progress-bar" class="admin-progress__bar"></div>
+        <div id="admin-progress-peg" class="admin-progress__peg"></div>
+    </div>
+
+    <div x-data="{ sidebarOpen: false }"
+         @keydown.escape.window="sidebarOpen = false"
+         class="flex h-screen overflow-hidden">
 
         @include('layouts.navigation')
 
-        <div class="admin-scroll-hide relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+        <div class="admin-scroll-hide relative flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
             @isset($header)
                 <header class="bg-white/80 backdrop-blur border-b border-slate-100 mt-16 lg:mt-[4.25rem]">
-                    <div class="max-w-[1400px] mx-auto py-3 px-4 sm:px-6 lg:px-8">
+                    <div class="max-w-[1400px] mx-auto py-3 px-3 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
                 </header>
             @endisset
 
-            <main class="w-full grow p-4 sm:p-6 {{ !isset($header) ? 'mt-16 lg:mt-[4.25rem]' : '' }}">
-                <div class="max-w-[1400px] mx-auto">
+            <main class="w-full grow p-3 sm:p-6 min-w-0 {{ !isset($header) ? 'mt-16 lg:mt-[4.25rem]' : '' }}">
+                <div class="max-w-[1400px] mx-auto min-w-0">
                     {{ $slot }}
                 </div>
             </main>
@@ -109,12 +116,24 @@
             };
         }
 
-        setInterval(function() {
-            fetch('/refresh-session', {
-                method: 'GET',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            }).catch(function () {});
-        }, 15 * 60 * 1000);
+        setInterval(function () {
+            if (typeof window.refreshCsrfToken === 'function') {
+                window.refreshCsrfToken();
+            } else {
+                fetch('/refresh-session', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                }).catch(function () {});
+            }
+        }, 10 * 60 * 1000);
+
+        window.addEventListener('pageshow', function () {
+            if (typeof window.refreshCsrfToken === 'function') {
+                window.refreshCsrfToken();
+            }
+        });
+
 
         /** Open POS in a large counter window (not a tiny popup/tab). */
         window.launchPosTerminal = function (url) {

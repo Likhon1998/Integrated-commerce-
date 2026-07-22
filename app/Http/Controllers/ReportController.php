@@ -142,44 +142,108 @@ class ReportController extends Controller
         $this->ensureAdmin();
 
         $shopId = Auth::user()->shop_id;
-        
-        $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::today()->startOfMonth();
-        $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::today()->endOfDay();
-        $selectedStaffId = $request->input('staff_id');
+        $view = in_array($request->input('view'), ['person', 'counter', 'log'], true)
+            ? $request->input('view')
+            : 'person';
 
-        // Fetch staff list for the dropdown
-        $staffList = \App\Models\User::where('shop_id', $shopId)->get();
-
-        $query = \App\Models\Order::where('shop_id', $shopId)
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', 'completed')
-            ->where(function ($q) {
-                $q->where('is_exchange_receipt', false)
-                    ->orWhereNull('is_exchange_receipt');
-            });
-
-        // Filter by employee if selected
-        if ($selectedStaffId) {
-            $query->where('user_id', $selectedStaffId);
+        if ($request->boolean('all_time')) {
+            $firstOrder = Order::where('shop_id', $shopId)->min('created_at');
+            $startDate = $firstOrder ? Carbon::parse($firstOrder)->startOfDay() : now()->startOfMonth();
+            $endDate = now()->endOfDay();
+        } else {
+            $startDate = $request->input('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : Carbon::today()->startOfMonth();
+            $endDate = $request->input('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : Carbon::today()->endOfDay();
         }
 
-        // NO LEADERBOARD: Group by Date, Employee, and Counter to show exactly who did what, when, and where.
-        $staffPerformance = $query->select(
-                \Illuminate\Support\Facades\DB::raw('DATE(created_at) as sale_date'),
+        $selectedStaffId = $request->input('staff_id');
+        $netExpr = 'GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)';
+
+        $base = $this->completedOrdersQuery($shopId, $startDate, $endDate);
+
+        $personLeaderboard = (clone $base)
+            ->select(
+                'user_id',
+                DB::raw('COUNT(id) as total_orders'),
+                DB::raw("COALESCE(SUM({$netExpr}), 0) as total_revenue"),
+                DB::raw("COALESCE(AVG({$netExpr}), 0) as avg_ticket")
+            )
+            ->groupBy('user_id')
+            ->with('user')
+            ->orderByDesc('total_revenue')
+            ->get()
+            ->values()
+            ->map(function ($row, $index) {
+                $row->rank = $index + 1;
+                return $row;
+            });
+
+        $counterLeaderboard = (clone $base)
+            ->select(
+                'counter_id',
+                DB::raw('COUNT(id) as total_orders'),
+                DB::raw("COALESCE(SUM({$netExpr}), 0) as total_revenue"),
+                DB::raw("COALESCE(AVG({$netExpr}), 0) as avg_ticket"),
+                DB::raw('COUNT(DISTINCT user_id) as staff_count')
+            )
+            ->groupBy('counter_id')
+            ->with('counter')
+            ->orderByDesc('total_revenue')
+            ->get()
+            ->values()
+            ->map(function ($row, $index) {
+                $row->rank = $index + 1;
+                return $row;
+            });
+
+        $periodTotal = (float) $personLeaderboard->sum('total_revenue');
+        $periodOrders = (int) $personLeaderboard->sum('total_orders');
+        $topPerson = $personLeaderboard->first();
+        $topCounter = $counterLeaderboard->first();
+
+        $staffList = \App\Models\User::where('shop_id', $shopId)->orderBy('name')->get();
+
+        $logQuery = $this->completedOrdersQuery($shopId, $startDate, $endDate);
+        if ($selectedStaffId) {
+            $logQuery->where('user_id', $selectedStaffId);
+        }
+
+        $activityLog = $logQuery->select(
+                DB::raw('DATE(created_at) as sale_date'),
                 'user_id',
                 'counter_id',
-                \Illuminate\Support\Facades\DB::raw('COUNT(id) as total_orders'), 
-                \Illuminate\Support\Facades\DB::raw('SUM(GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)) as total_revenue')
+                DB::raw('COUNT(id) as total_orders'),
+                DB::raw("SUM({$netExpr}) as total_revenue")
             )
-            ->groupBy('sale_date', 'user_id', 'counter_id')
-            ->with(['user', 'counter']) // Load relationships
-            ->orderByDesc('sale_date')
+            ->groupBy(DB::raw('DATE(created_at)'), 'user_id', 'counter_id')
+            ->with(['user', 'counter'])
+            ->orderByDesc(DB::raw('DATE(created_at)'))
             ->paginate(15)
-            ->appends($request->all());
+            ->appends($request->query());
 
-        return view('reports.staff-performance', compact(
-            'staffPerformance', 'startDate', 'endDate', 'staffList', 'selectedStaffId'
-        ));
+        $payload = compact(
+            'view',
+            'personLeaderboard',
+            'counterLeaderboard',
+            'activityLog',
+            'periodTotal',
+            'periodOrders',
+            'topPerson',
+            'topCounter',
+            'startDate',
+            'endDate',
+            'staffList',
+            'selectedStaffId',
+        );
+
+        if ($request->ajax()) {
+            return view('reports.partials.staff-performance-live', $payload);
+        }
+
+        return view('reports.staff-performance', $payload);
     }
 
     // Modal API Endpoint

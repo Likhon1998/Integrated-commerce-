@@ -1,73 +1,82 @@
 @extends('website.layout')
-@section('content')
 
+@section('content')
 @php
-    $showSidebar = !empty($showSidebar) && isset($activeCategory);
+    $from = $products->firstItem() ?? 0;
+    $to = $products->lastItem() ?? 0;
+    $total = $products->total();
+    $viewMode = request('view', 'grid');
 @endphp
 
-<div class="gaget-shop-page">
-<div class="gaget-shop-header">
-    <h1 class="gaget-shop-title">{{ $pageTitle ?? ($activeCategory->name ?? ($activeBrand->name ?? 'Shop All Products')) }}</h1>
-    <p class="gaget-shop-sub">{{ $pageSubtitle ?? 'Browse our latest electronics and gadgets.' }}</p>
-</div>
+<div class="gs-shop" x-data="{ view: @js($viewMode) }">
+    <div class="gs-shop-inner">
+        @include('website.partials.shop-sidebar')
 
-<div class="gaget-filter-pills">
-    <a href="{{ route('website.shop') }}" class="gaget-pill {{ !isset($activeCategory) && !isset($activeBrand) && !request('filter') ? 'active' : '' }}">All</a>
-    <a href="{{ route('website.shop', ['filter'=>'deals']) }}" class="gaget-pill {{ request('filter')==='deals' ? 'active' : '' }}">Deals</a>
-    <a href="{{ route('website.shop', ['filter'=>'new']) }}" class="gaget-pill {{ request('filter')==='new' ? 'active' : '' }}">New Arrivals</a>
-    <a href="{{ route('website.shop', ['filter'=>'bestsellers']) }}" class="gaget-pill {{ request('filter')==='bestsellers' ? 'active' : '' }}">Best Sellers</a>
-    @foreach($categories as $cat)
-        <a href="{{ route('website.category', $cat->slug ?? $cat->id) }}" class="gaget-pill {{ (isset($activeCategory) && $activeCategory->id === $cat->id) ? 'active' : '' }}">{{ $cat->name }}</a>
-    @endforeach
-</div>
+        <div class="gs-main">
+            <nav class="gs-breadcrumb" aria-label="Breadcrumb">
+                <a href="{{ route('home') }}">Home</a>
+                <span>›</span>
+                <span class="gs-breadcrumb-current">Shop</span>
+            </nav>
 
-<div class="gaget-shop-layout {{ $showSidebar ? 'gaget-shop-layout--with-sidebar' : '' }}">
-    @if($showSidebar)
-        @include('website.partials.category-filters')
-    @endif
+            <div class="gs-toolbar">
+                <div class="gs-toolbar-left">
+                    <h1 class="gs-title">{{ $pageTitle ?? 'Shop' }}</h1>
+                    <p class="gs-count">
+                        Showing {{ $from }}–{{ $to }} of {{ number_format($total) }} products
+                    </p>
+                </div>
 
-    <div class="gaget-shop-grid-wrap {{ $showSidebar ? 'gaget-shop-grid-wrap--sidebar' : '' }}">
-        <div class="gaget-shop-toolbar">
-            <p class="gaget-shop-count">
-                <strong>{{ $products->total() }}</strong> item{{ $products->total() === 1 ? '' : 's' }} found
-                @isset($activeCategory)
-                    in {{ $activeCategory->name }}
-                @endisset
-            </p>
-            @isset($activeCategory)
-                <form method="GET" class="gaget-shop-sort">
-                    @foreach(request()->except('sort', 'page') as $key => $value)
-                        @if(is_array($value))
-                            @foreach($value as $v)
-                                <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
-                            @endforeach
-                        @else
-                            <input type="hidden" name="{{ $key }}" value="{{ $value }}">
-                        @endif
-                    @endforeach
-                    <label>
-                        Sort by
-                        <select name="sort" onchange="this.form.submit()">
-                            <option value="latest" @selected(request('sort', 'latest') === 'latest')>Latest</option>
-                            <option value="price_asc" @selected(request('sort') === 'price_asc')>Price: Low to High</option>
-                            <option value="price_desc" @selected(request('sort') === 'price_desc')>Price: High to Low</option>
-                            <option value="name" @selected(request('sort') === 'name')>Name</option>
+                <div class="gs-toolbar-right">
+                    <div class="gs-view-toggle" role="group" aria-label="View mode">
+                        <button type="button" class="gs-view-btn" :class="view === 'grid' && 'is-active'" @click="view = 'grid'" title="Grid view">
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>
+                        </button>
+                        <button type="button" class="gs-view-btn" :class="view === 'list' && 'is-active'" @click="view = 'list'" title="List view">
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/></svg>
+                        </button>
+                    </div>
+
+                    <form method="GET" action="{{ route('website.shop') }}" class="gs-sort">
+                        @foreach(request()->except('sort', 'page') as $key => $value)
+                            @if(is_array($value))
+                                @foreach($value as $v)
+                                    <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
+                                @endforeach
+                            @else
+                                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                            @endif
+                        @endforeach
+                        <label for="gs-sort">Sort by:</label>
+                        <select id="gs-sort" name="sort" onchange="this.form.submit()">
+                            <option value="featured" @selected(($sort ?? request('sort', 'featured')) === 'featured')>Featured</option>
+                            <option value="latest" @selected(($sort ?? '') === 'latest')>Latest</option>
+                            <option value="price_asc" @selected(($sort ?? '') === 'price_asc')>Price: Low to High</option>
+                            <option value="price_desc" @selected(($sort ?? '') === 'price_desc')>Price: High to Low</option>
+                            <option value="name" @selected(($sort ?? '') === 'name')>Name</option>
+                            <option value="bestsellers" @selected(($sort ?? '') === 'bestsellers')>Best Sellers</option>
                         </select>
-                    </label>
-                </form>
-            @endisset
-        </div>
+                    </form>
+                </div>
+            </div>
 
-        <div class="gaget-shop-grid {{ $showSidebar ? 'gaget-shop-grid--sidebar' : '' }}">
-            @forelse($products as $product)
-                @include('website.partials.product-card', ['product' => $product])
-            @empty
-                <p class="col-span-5 text-center text-gray-500 py-16" style="grid-column:1/-1">No products found.</p>
-            @endforelse
+            <div class="gs-grid" :class="view === 'list' && 'gs-grid--list'">
+                @forelse($products as $product)
+                    @include('website.partials.product-card', ['product' => $product, 'listMode' => true])
+                @empty
+                    <div class="gs-empty">
+                        <p>No products found.</p>
+                        <a href="{{ route('website.shop') }}">Clear filters</a>
+                    </div>
+                @endforelse
+            </div>
+
+            @if($products->hasPages())
+                <div class="gs-pagination">
+                    {{ $products->onEachSide(2)->links('website.partials.shop-pagination') }}
+                </div>
+            @endif
         </div>
-        <div class="mt-8">{{ $products->links() }}</div>
     </div>
 </div>
-</div>
-
 @endsection

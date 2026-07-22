@@ -77,7 +77,12 @@ Route::get('/wishlist', [WebsiteController::class, 'wishlist'])->name('website.w
 Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::class, \App\Http\Middleware\EnsureStaffOpeningBalance::class])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/refresh-session', function () { return response()->json(['status' => 'Nexa POS Active']); });
+    Route::get('/refresh-session', function () {
+        return response()->json([
+            'status' => 'Nexa POS Active',
+            'csrf_token' => csrf_token(),
+        ]);
+    });
 
     Route::prefix('cms')->name('cms.')->middleware('can:manage website')->group(function () {
         Route::get('/landing', [LandingPageController::class, 'edit'])->name('landing.edit');
@@ -112,17 +117,18 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
     Route::post('/pos/sync-offline', [PosController::class, 'syncOffline'])->name('pos.sync');
 
     Route::resource('customers', CustomerController::class);
-    Route::resource('categories', CategoryController::class);
-    Route::resource('brands', BrandController::class)->except(['show']);
-    Route::resource('products', ProductController::class);
-    Route::get('/products-import/csv', [ProductController::class, 'importForm'])->name('products.import');
-    Route::post('/products-import/csv', [ProductController::class, 'importStore'])->name('products.import.store');
-    Route::get('/products-barcodes', [ProductController::class, 'barcodes'])->name('products.barcodes');
-    Route::get('/products-barcodes/print', [ProductController::class, 'barcodesPrint'])->name('products.barcodes.print');
-    Route::get('/stock-ledger', fn () => redirect()->route('supply.adjustments.index'))->name('stock.index');
-    Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])
-        ->middleware('can:manage inventory')
-        ->name('stock.store');
+
+    Route::middleware('can:manage inventory')->group(function () {
+        Route::resource('categories', CategoryController::class)->except(['show']);
+        Route::resource('brands', BrandController::class)->except(['show']);
+        Route::resource('products', ProductController::class)->except(['show']);
+        Route::get('/products-import/csv', [ProductController::class, 'importForm'])->name('products.import');
+        Route::post('/products-import/csv', [ProductController::class, 'importStore'])->name('products.import.store');
+        Route::get('/products-barcodes', [ProductController::class, 'barcodes'])->name('products.barcodes');
+        Route::get('/products-barcodes/print', [ProductController::class, 'barcodesPrint'])->name('products.barcodes.print');
+        Route::get('/stock-ledger', fn () => redirect()->route('supply.adjustments.index'))->name('stock.index');
+        Route::post('/stock-ledger', [StockAdjustmentController::class, 'store'])->name('stock.store');
+    });
 
     Route::prefix('supply')->name('supply.')->middleware('can:manage inventory')->group(function () {
         Route::get('/opening-inventory', [OpeningInventoryController::class, 'index'])->name('opening-inventory.index');
@@ -195,7 +201,9 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::cl
 
     Route::get('/reports/daily-sales', [ReportController::class, 'dailySales'])->name('reports.daily');
     Route::get('/reports/best-sellers', [ReportController::class, 'bestSellers'])->name('reports.best_sellers');
-    Route::get('/reports/low-stock', [ReportController::class, 'lowStock'])->name('reports.low_stock');
+    Route::get('/reports/low-stock', [ReportController::class, 'lowStock'])
+        ->middleware('can:manage inventory')
+        ->name('reports.low_stock');
     Route::get('/reports/staff-performance', [ReportController::class, 'staffPerformance'])->name('reports.staff_performance');
     Route::get('/reports/staff-daily-details', [ReportController::class, 'staffDailyDetails'])->name('reports.staff_daily_details');
     Route::post('/orders/{order}/exchange', [ExchangeController::class, 'processExchange'])->name('orders.exchange');

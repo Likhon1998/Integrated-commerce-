@@ -7,7 +7,9 @@ use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnItem;
+use App\Models\StockLocation;
 use App\Models\Supplier;
+use App\Models\WarehouseStock;
 use App\Services\AccountService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
@@ -35,6 +37,8 @@ class PurchaseReturnController extends Controller
 
     public function create()
     {
+        $this->stock->ensureDefaultLocations($this->shopId());
+
         $suppliers = Supplier::where('shop_id', $this->shopId())->where('is_active', true)->orderBy('name')->get();
         $products = Product::where('shop_id', $this->shopId())->orderBy('name')->get();
         $purchaseOrders = PurchaseOrder::where('shop_id', $this->shopId())
@@ -42,8 +46,25 @@ class PurchaseReturnController extends Controller
             ->with('supplier')
             ->latest()
             ->get();
+        $locations = StockLocation::where('shop_id', $this->shopId())
+            ->where('is_active', true)
+            ->orderByRaw("CASE type WHEN 'store' THEN 0 ELSE 1 END")
+            ->orderBy('name')
+            ->get();
 
-        return view('supply.purchase-returns.create', compact('suppliers', 'products', 'purchaseOrders'));
+        $warehouseQty = WarehouseStock::whereIn('location_id', $locations->where('type', 'warehouse')->pluck('id'))
+            ->get()
+            ->groupBy('location_id')
+            ->map(fn ($rows) => $rows->pluck('quantity', 'product_id'));
+
+        return view('supply.purchase-returns.create', [
+            'suppliers' => $suppliers,
+            'products' => $products,
+            'purchaseOrders' => $purchaseOrders,
+            'locations' => $locations,
+            'warehouseQty' => $warehouseQty,
+            'defaultLocationId' => $this->stock->defaultStore($this->shopId())?->id,
+        ]);
     }
 
     public function store(Request $request)
@@ -56,6 +77,10 @@ class PurchaseReturnController extends Controller
             'purchase_order_id' => [
                 'nullable',
                 Rule::exists('purchase_orders', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())),
+            ],
+            'return_location_id' => [
+                'required',
+                Rule::exists('stock_locations', 'id')->where(fn ($q) => $q->where('shop_id', $this->shopId())->where('is_active', true)),
             ],
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
@@ -70,6 +95,17 @@ class PurchaseReturnController extends Controller
         try {
             $this->stock->transaction(function () use ($request) {
                 $this->accounts->ensureShopAccounts($this->shopId());
+
+                $location = StockLocation::where('shop_id', $this->shopId())
+                    ->where('is_active', true)
+                    ->findOrFail($request->return_location_id);
+
+                if ($request->filled('purchase_order_id')) {
+                    $po = PurchaseOrder::where('shop_id', $this->shopId())->findOrFail($request->purchase_order_id);
+                    if ((int) $po->supplier_id !== (int) $request->supplier_id) {
+                        throw new \InvalidArgumentException('Linked PO belongs to a different supplier.');
+                    }
+                }
 
                 $total = 0;
                 $return = PurchaseReturn::create([
@@ -94,15 +130,13 @@ class PurchaseReturnController extends Controller
                     ]);
 
                     $product = Product::where('shop_id', $this->shopId())->findOrFail($item['product_id']);
-                    $movement = $this->stock->apply(
+                    $movement = $this->stock->returnPurchaseItem(
                         $product,
-                        'out',
                         (int) $item['quantity'],
                         'Purchase return ' . $return->return_number,
-                        'purchase_return',
                         Auth::id(),
-                        'purchase_return',
                         $return->id,
+                        $location->id,
                     );
 
                     $this->accounts->postPurchaseReturn(

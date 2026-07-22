@@ -41,6 +41,11 @@ class WebsiteController extends Controller
             $query->whereHas('category', fn ($q) => $q->whereSlugOrId($request->category));
         }
 
+        $brandIds = array_values(array_filter(array_map('intval', (array) $request->input('brands', []))));
+        if ($brandIds) {
+            $query->whereIn('brand_id', $brandIds);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -50,23 +55,88 @@ class WebsiteController extends Controller
             });
         }
 
+        if ($request->filled('min_price')) {
+            $query->where('selling_price', '>=', (float) $request->min_price);
+        }
+        if ($request->filled('max_price')) {
+            $query->where('selling_price', '<=', (float) $request->max_price);
+        }
+
         if ($request->filter === 'deals') {
             $query->whereNotNull('original_price')
                 ->whereColumn('original_price', '>', 'selling_price');
         } elseif ($request->filter === 'new') {
             $query->where(function ($q) {
                 $q->where('is_new_arrival', true)->orWhere('created_at', '>=', now()->subDays(30));
-            })->latest();
-        } elseif ($request->filter === 'bestsellers') {
-            $query->orderByDesc('is_best_seller')->orderByDesc('review_count')->latest();
-        } else {
-            $query->latest();
+            });
         }
 
-        $products = $query->paginate(12)->withQueryString();
-        $categories = Category::where('shop_id', $shopId)->orderBy('name')->get();
+        $sort = $request->query('sort', 'featured');
+        match ($sort) {
+            'price_asc' => $query->orderBy('selling_price')->orderBy('id'),
+            'price_desc' => $query->orderByDesc('selling_price')->orderBy('id'),
+            'name' => $query->orderBy('name')->orderBy('id'),
+            'latest' => $query->latest('id'),
+            'bestsellers' => $query->orderByDesc('is_best_seller')->orderByDesc('review_count')->latest('id'),
+            default => $request->filter === 'new'
+                ? $query->latest('id')
+                : $query->orderByDesc('is_best_seller')->orderByDesc('review_count')->latest('id'),
+        };
 
-        return view('website.shop', array_merge($this->website->homepageData(), compact('products', 'categories')));
+        $products = $query->paginate(12)->withQueryString();
+
+        $catalog = $this->website->catalogQuery($shopId);
+
+        $categories = Category::where('shop_id', $shopId)
+            ->orderBy('name')
+            ->withCount(['products as published_count' => function ($q) use ($shopId) {
+                $q->where('shop_id', $shopId)
+                    ->where('stock_quantity', '>', 0)
+                    ->where(function ($qq) {
+                        $qq->where('is_published', true)->orWhereNull('is_published');
+                    });
+            }])
+            ->get();
+
+        $categoryTotal = (clone $catalog)->count();
+
+        $brands = Brand::where('shop_id', $shopId)
+            ->where(function ($q) {
+                $q->where('is_active', true)->orWhereNull('is_active');
+            })
+            ->orderBy('name')
+            ->withCount(['products as published_count' => function ($q) use ($shopId) {
+                $q->where('shop_id', $shopId)
+                    ->where('stock_quantity', '>', 0)
+                    ->where(function ($qq) {
+                        $qq->where('is_published', true)->orWhereNull('is_published');
+                    });
+            }])
+            ->get()
+            ->filter(fn ($b) => (int) $b->published_count > 0)
+            ->values();
+
+        $priceBounds = [
+            'min' => (float) ((clone $catalog)->min('selling_price') ?? 0),
+            'max' => (float) ((clone $catalog)->max('selling_price') ?? 0),
+        ];
+
+        $pageTitle = match ($request->filter) {
+            'deals' => 'Deals',
+            'new' => 'New Arrivals',
+            'bestsellers' => 'Best Sellers',
+            default => 'Shop',
+        };
+
+        return view('website.shop', array_merge($this->website->homepageData(), compact(
+            'products',
+            'categories',
+            'brands',
+            'categoryTotal',
+            'priceBounds',
+            'pageTitle',
+            'sort',
+        )));
     }
 
     public function searchSuggest(Request $request)

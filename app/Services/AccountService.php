@@ -777,6 +777,60 @@ class AccountService
     }
 
     /**
+     * Stock damage / adjustment out: Dr Expense / Cr Inventory.
+     * Adjustment in (found stock): Dr Inventory / Cr Equity.
+     */
+    public function postInventoryAdjustment(StockMovement $movement): void
+    {
+        $typeKey = $movement->reason === 'damage' ? 'stock_damage' : 'stock_adjustment';
+
+        if ($this->transactionExists($movement->shop_id, $typeKey, StockMovement::class, $movement->id)) {
+            return;
+        }
+
+        $movement->loadMissing('product');
+        $product = $movement->product;
+
+        if (! $product) {
+            return;
+        }
+
+        $this->ensureShopAccounts($movement->shop_id);
+
+        $value = round((float) $product->cost_price * $movement->quantity, 2);
+        if ($value <= 0) {
+            return;
+        }
+
+        $inventory = $this->getAccount($movement->shop_id, 'INVENTORY');
+
+        if ($movement->type === 'in') {
+            $lines = [
+                ['account' => $inventory, 'debit' => $value, 'credit' => 0, 'counter_id' => null],
+                ['account' => $this->getAccount($movement->shop_id, 'EQUITY'), 'debit' => 0, 'credit' => $value, 'counter_id' => null],
+            ];
+            $description = 'Stock adjustment in - ' . $product->name;
+        } else {
+            $lines = [
+                ['account' => $this->getAccount($movement->shop_id, 'EXPENSE'), 'debit' => $value, 'credit' => 0, 'counter_id' => null],
+                ['account' => $inventory, 'debit' => 0, 'credit' => $value, 'counter_id' => null],
+            ];
+            $description = ($movement->reason === 'damage' ? 'Damaged stock write-off - ' : 'Stock adjustment out - ') . $product->name;
+        }
+
+        $this->createTransaction(
+            shopId: $movement->shop_id,
+            type: $typeKey,
+            referenceType: StockMovement::class,
+            referenceId: $movement->id,
+            description: $description,
+            date: $movement->created_at,
+            lines: $lines,
+            userId: $movement->user_id,
+        );
+    }
+
+    /**
      * Opening float into a counter cash account (from Petty Cash).
      */
     public function postCounterFloat(int $shopId, Account $counterCash, float $amount, string $description, ?int $userId = null): void

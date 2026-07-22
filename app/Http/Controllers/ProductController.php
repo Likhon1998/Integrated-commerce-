@@ -234,101 +234,242 @@ class ProductController extends Controller
     public function importStore(Request $request)
     {
         $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:5120',
+            'csv_file' => [
+                'required',
+                'file',
+                'max:5120',
+                'mimetypes:text/plain,text/csv,text/tsv,application/csv,application/vnd.ms-excel,application/octet-stream',
+            ],
+        ], [
+            'csv_file.mimetypes' => 'Upload a CSV or TXT file (Excel “Save as CSV” is supported).',
         ]);
 
         $shopId = Auth::user()->shop_id;
-        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
-        $header = array_map('strtolower', array_map('trim', fgetcsv($handle) ?: []));
+        $path = $request->file('csv_file')->getRealPath();
+        $raw = file_get_contents($path);
+        if ($raw === false) {
+            return back()->withErrors(['csv_file' => 'Could not read the uploaded file.']);
+        }
+
+        // Strip UTF-8 BOM (common from Windows Excel)
+        if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+            $raw = substr($raw, 3);
+        }
+
+        $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+        $lines = array_values(array_filter(explode("\n", $raw), fn ($l) => trim($l) !== ''));
+        if (count($lines) < 2) {
+            return back()->withErrors(['csv_file' => 'CSV must include a header row and at least one product row.']);
+        }
+
+        $delimiter = $this->detectCsvDelimiter($lines[0]);
+        $headerCells = str_getcsv($lines[0], $delimiter);
+        $header = array_map(function ($h) {
+            $h = strtolower(trim((string) $h));
+            $h = preg_replace('/^\xEF\xBB\xBF/', '', $h) ?? $h;
+
+            return $h;
+        }, $headerCells);
+
+        // Aliases so Excel users can use common names
+        $aliases = [
+            'product' => 'name',
+            'product_name' => 'name',
+            'item' => 'name',
+            'item_name' => 'name',
+            'barcode_no' => 'barcode',
+            'ean' => 'barcode',
+            'upc' => 'barcode',
+            'cost' => 'cost_price',
+            'buy_price' => 'cost_price',
+            'purchase_price' => 'cost_price',
+            'price' => 'selling_price',
+            'sell_price' => 'selling_price',
+            'sale_price' => 'selling_price',
+            'mrp' => 'selling_price',
+            'qty' => 'stock_quantity',
+            'quantity' => 'stock_quantity',
+            'stock' => 'stock_quantity',
+            'opening_stock' => 'stock_quantity',
+            'reorder' => 'alert_quantity',
+            'alert' => 'alert_quantity',
+            'reorder_level' => 'alert_quantity',
+            'category_name' => 'category',
+            'brand_name' => 'brand',
+        ];
+        $header = array_map(fn ($h) => $aliases[$h] ?? $h, $header);
 
         $required = ['name', 'barcode', 'cost_price', 'selling_price'];
         foreach ($required as $col) {
-            if (!in_array($col, $header)) {
-                fclose($handle);
-                return back()->withErrors(['csv_file' => "Missing required column: {$col}"]);
+            if (! in_array($col, $header, true)) {
+                return back()->withErrors([
+                    'csv_file' => "Missing required column: {$col}. Found: ".implode(', ', $header),
+                ]);
             }
         }
 
         $imported = 0;
         $skipped = 0;
         $stockSet = 0;
-        $row = 1;
+        $errors = [];
 
         $this->stock->ensureDefaultLocations($shopId);
 
-        while (($line = fgetcsv($handle)) !== false) {
-            $row++;
-            if (count(array_filter($line)) === 0) {
+        for ($i = 1; $i < count($lines); $i++) {
+            $rowNum = $i + 1;
+            $cells = str_getcsv($lines[$i], $delimiter);
+
+            if (count(array_filter($cells, fn ($c) => trim((string) $c) !== '')) === 0) {
                 continue;
             }
 
-            $data = array_combine($header, array_pad($line, count($header), null));
-            if (!$data || empty($data['name']) || empty($data['barcode'])) {
+            if (count($cells) < count($header)) {
+                $cells = array_pad($cells, count($header), null);
+            } elseif (count($cells) > count($header)) {
+                $cells = array_slice($cells, 0, count($header));
+            }
+
+            $data = array_combine($header, $cells);
+            if ($data === false) {
                 $skipped++;
+                $errors[] = "Row {$rowNum}: could not parse columns.";
                 continue;
             }
 
-            if (Product::where('barcode', $data['barcode'])->exists()) {
+            $name = trim((string) ($data['name'] ?? ''));
+            $barcode = trim((string) ($data['barcode'] ?? ''));
+            $cost = $this->parseCsvNumber($data['cost_price'] ?? 0);
+            $sell = $this->parseCsvNumber($data['selling_price'] ?? 0);
+            $openingQty = (int) round($this->parseCsvNumber($data['stock_quantity'] ?? 0));
+            $alertQty = (int) round($this->parseCsvNumber($data['alert_quantity'] ?? 5));
+
+            if ($name === '' || $barcode === '') {
                 $skipped++;
+                $errors[] = "Row {$rowNum}: name and barcode are required.";
                 continue;
             }
 
-            $categoryId = null;
-            if (!empty($data['category'])) {
-                $category = Category::firstOrCreate(
-                    ['shop_id' => $shopId, 'slug' => \Illuminate\Support\Str::slug($data['category'])],
-                    ['name' => $data['category']]
-                );
-                $categoryId = $category->id;
+            if ($cost < 0 || $sell < 0) {
+                $skipped++;
+                $errors[] = "Row {$rowNum}: prices cannot be negative.";
+                continue;
             }
 
-            $brandId = null;
-            $brandName = null;
-            if (!empty($data['brand'])) {
-                $brand = Brand::firstOrCreate(
-                    ['shop_id' => $shopId, 'name' => trim($data['brand'])],
-                    ['is_active' => true]
-                );
-                $brandId = $brand->id;
-                $brandName = $brand->name;
+            if (Product::where('barcode', $barcode)->exists()) {
+                $skipped++;
+                $errors[] = "Row {$rowNum}: barcode {$barcode} already exists — skipped.";
+                continue;
             }
 
-            $openingQty = (int) ($data['stock_quantity'] ?? 0);
+            try {
+                DB::transaction(function () use (
+                    $shopId, $data, $name, $barcode, $cost, $sell, $openingQty, $alertQty, &$imported, &$stockSet
+                ) {
+                    $categoryId = null;
+                    $categoryName = trim((string) ($data['category'] ?? ''));
+                    if ($categoryName !== '') {
+                        $slug = \Illuminate\Support\Str::slug($categoryName) ?: ('cat-'.substr(md5($categoryName), 0, 8));
+                        $category = Category::firstOrCreate(
+                            ['shop_id' => $shopId, 'slug' => $slug],
+                            ['name' => $categoryName]
+                        );
+                        $categoryId = $category->id;
+                    }
 
-            DB::transaction(function () use ($shopId, $categoryId, $brandId, $brandName, $data, $openingQty, &$imported, &$stockSet) {
-                $product = Product::create([
-                    'shop_id' => $shopId,
-                    'category_id' => $categoryId,
-                    'brand_id' => $brandId,
-                    'brand_name' => $brandName,
-                    'name' => trim($data['name']),
-                    'barcode' => trim($data['barcode']),
-                    'sku' => $data['sku'] ?? null,
-                    'cost_price' => (float) ($data['cost_price'] ?? 0),
-                    'selling_price' => (float) ($data['selling_price'] ?? 0),
-                    'stock_quantity' => 0,
-                    'alert_quantity' => (int) ($data['alert_quantity'] ?? 5),
-                    'is_published' => true,
-                ]);
+                    $brandId = null;
+                    $brandName = null;
+                    $brandRaw = trim((string) ($data['brand'] ?? ''));
+                    if ($brandRaw !== '') {
+                        $brand = Brand::where('shop_id', $shopId)
+                            ->whereRaw('LOWER(name) = ?', [mb_strtolower($brandRaw)])
+                            ->first();
 
-                if ($openingQty > 0) {
-                    $movement = $this->stock->setOpeningStock($product, $openingQty);
-                    $this->accounts->postOpeningInventory($movement);
-                    $stockSet++;
-                }
+                        if (! $brand) {
+                            $brand = Brand::create([
+                                'shop_id' => $shopId,
+                                'name' => $brandRaw,
+                                'is_active' => true,
+                            ]);
+                        }
 
-                $imported++;
-            });
+                        $brandId = $brand->id;
+                        $brandName = $brand->name;
+                    }
+
+                    $product = Product::create([
+                        'shop_id' => $shopId,
+                        'category_id' => $categoryId,
+                        'brand_id' => $brandId,
+                        'brand_name' => $brandName,
+                        'name' => $name,
+                        'barcode' => $barcode,
+                        'sku' => filled($data['sku'] ?? null) ? trim((string) $data['sku']) : null,
+                        'cost_price' => $cost,
+                        'selling_price' => $sell,
+                        'stock_quantity' => 0,
+                        'alert_quantity' => max(0, $alertQty),
+                        'is_published' => true,
+                    ]);
+
+                    if ($openingQty > 0) {
+                        $movement = $this->stock->setOpeningStock($product, $openingQty);
+                        $this->accounts->postOpeningInventory($movement);
+                        $stockSet++;
+                    }
+
+                    $imported++;
+                });
+            } catch (\Throwable $e) {
+                $skipped++;
+                $errors[] = "Row {$rowNum}: ".$e->getMessage();
+            }
         }
-
-        fclose($handle);
 
         $message = "CSV import complete: {$imported} added, {$skipped} skipped.";
         if ($stockSet > 0) {
             $message .= " Opening stock recorded for {$stockSet} product(s).";
         }
 
-        return redirect()->route('products.index')->with('success', $message);
+        return redirect()
+            ->route('products.index')
+            ->with('success', $message)
+            ->with('import_errors', array_slice($errors, 0, 30));
+    }
+
+    protected function detectCsvDelimiter(string $headerLine): string
+    {
+        $comma = substr_count($headerLine, ',');
+        $semi = substr_count($headerLine, ';');
+        $tab = substr_count($headerLine, "\t");
+
+        if ($semi > $comma && $semi >= $tab) {
+            return ';';
+        }
+        if ($tab > $comma && $tab >= $semi) {
+            return "\t";
+        }
+
+        return ',';
+    }
+
+    protected function parseCsvNumber($value): float
+    {
+        if ($value === null || $value === '') {
+            return 0.0;
+        }
+
+        $raw = trim((string) $value);
+        $raw = str_replace(['৳', 'Tk', 'tk', ' '], '', $raw);
+
+        // European format: 1.234,56 → 1234.56
+        if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $raw) || preg_match('/^\d+,\d+$/', $raw)) {
+            $raw = str_replace('.', '', $raw);
+            $raw = str_replace(',', '.', $raw);
+        } else {
+            $raw = str_replace(',', '', $raw);
+        }
+
+        return (float) $raw;
     }
 
     public function barcodes(Request $request)

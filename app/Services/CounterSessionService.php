@@ -46,15 +46,25 @@ class CounterSessionService
         return $session;
     }
 
-    public function closeSession(CounterSession $session, float $closingCash, ?string $notes = null, ?int $userId = null): CounterSession
-    {
+    public function closeSession(
+        CounterSession $session,
+        float $closingCash,
+        ?string $notes = null,
+        ?int $userId = null,
+        ?Carbon $closedAt = null,
+    ): CounterSession {
         if (! $session->isOpen()) {
             throw new InvalidArgumentException('This cash session is already closed.');
         }
 
-        $userId ??= Auth::id();
+        $closedAt ??= now();
+        // System/auto close may have no Auth user
+        if ($userId === null && Auth::check()) {
+            $userId = Auth::id();
+        }
+
         $closingCash = round(max(0, $closingCash), 2);
-        $stats = $this->sessionStats($session, now());
+        $stats = $this->sessionStats($session, $closedAt);
         $expected = $this->expectedCash($session, $stats);
         $variance = round($closingCash - $expected, 2);
 
@@ -71,7 +81,7 @@ class CounterSessionService
 
         $session->update([
             'closed_by' => $userId,
-            'closed_at' => now(),
+            'closed_at' => $closedAt,
             'closing_cash' => $closingCash,
             'expected_cash' => $expected,
             'variance' => $variance,
@@ -86,6 +96,55 @@ class CounterSessionService
         ]);
 
         return $session->fresh(['counter', 'opener', 'closer']);
+    }
+
+    /**
+     * Close every open till using expected drawer cash (midnight auto-close).
+     *
+     * @return array{closed:int, failed:int, details:list<string>}
+     */
+    public function autoCloseAllOpenSessions(?Carbon $at = null): array
+    {
+        $at ??= now();
+        $closed = 0;
+        $failed = 0;
+        $details = [];
+
+        $sessions = CounterSession::query()
+            ->open()
+            ->with(['counter', 'opener'])
+            ->orderBy('id')
+            ->get();
+
+        foreach ($sessions as $session) {
+            $label = $session->counter->name ?? ('Session #'.$session->id);
+
+            try {
+                $stats = $this->sessionStats($session, $at);
+                $expected = $this->expectedCash($session, $stats);
+                $note = sprintf(
+                    'Auto-closed at midnight (%s) with expected drawer cash ৳%s.',
+                    $at->timezone(config('app.display_timezone', 'Asia/Dhaka'))->format('d M Y, h:i A'),
+                    number_format($expected, 2)
+                );
+
+                $this->closeSession(
+                    $session,
+                    $expected,
+                    $note,
+                    $session->opened_by,
+                    $at,
+                );
+
+                $closed++;
+                $details[] = "{$label}: closed at ৳".number_format($expected, 2);
+            } catch (\Throwable $e) {
+                $failed++;
+                $details[] = "{$label}: FAILED — ".$e->getMessage();
+            }
+        }
+
+        return compact('closed', 'failed', 'details');
     }
 
     public function currentOpen(Counter $counter): ?CounterSession

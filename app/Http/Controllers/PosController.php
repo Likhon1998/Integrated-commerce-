@@ -7,13 +7,17 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Brand;
+use App\Models\Counter;
 use App\Models\Customer;
+use App\Models\User;
 use App\Services\AccountService;
+use App\Services\CounterSessionService;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use InvalidArgumentException;
 
 class PosController extends Controller
 {
@@ -69,11 +73,31 @@ class PosController extends Controller
             ->values();
 
         $openSession = null;
+        $posCounters = collect();
+        $defaultPosCounterId = null;
+
         if ($user->counter_id) {
-            $counter = \App\Models\Counter::find($user->counter_id);
+            $counter = Counter::find($user->counter_id);
             $openSession = $counter
-                ? app(\App\Services\CounterSessionService::class)->currentOpen($counter)
+                ? app(CounterSessionService::class)->currentOpen($counter)
                 : null;
+        } elseif ($user->isAdminUser()) {
+            // Admin is not permanently assigned to a till — bill against an open counter.
+            $posCounters = Counter::where('shop_id', $shopId)
+                ->where('is_active', true)
+                ->with('openSession')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Counter $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'has_open_session' => (bool) $c->openSession,
+                ])
+                ->values();
+
+            $defaultPosCounterId = $posCounters->firstWhere('has_open_session')['id']
+                ?? $posCounters->first()['id']
+                ?? null;
         }
 
         // 🚀 CATCH EXCHANGE PARAMETERS (If redirected from Sales Ledger)
@@ -91,6 +115,8 @@ class PosController extends Controller
             'returnQty',
             'credit',
             'openSession',
+            'posCounters',
+            'defaultPosCounterId',
         ));
     }
 
@@ -108,11 +134,10 @@ class PosController extends Controller
             ], 403);
         }
 
-        if (! $user->counter_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Assign a counter to this user before taking till sales. Admin POS without a counter is blocked.',
-            ], 403);
+        try {
+            $counterId = $this->resolvePosCounterId($user, $request->input('counter_id'));
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 403);
         }
 
         if ($user->requiresDailyOpeningBalance() && ! $user->hasOpenCounterSession()) {
@@ -134,6 +159,7 @@ class PosController extends Controller
             'mobile_paid' => 'nullable|numeric|min:0',
             'customer_phone' => 'nullable|string',
             'customer_name' => 'nullable|string',
+            'counter_id' => 'nullable|integer',
         ]);
 
         $shopId = $user->shop_id;
@@ -207,7 +233,7 @@ class PosController extends Controller
             $order = Order::create([
                 'shop_id' => $shopId,
                 'user_id' => $user->id, 
-                'counter_id' => $user->counter_id,
+                'counter_id' => $counterId,
                 'customer_id' => $customerId, 
                 'invoice_no' => $invoiceNo,
                 'total_amount' => $totalAmount,
@@ -345,8 +371,14 @@ class PosController extends Controller
     {
         $user = Auth::user();
         
-        if (!$user->canAccessPos() || ! $user->counter_id) {
-            return response()->json(['success' => false, 'message' => 'No counter assigned. Sync blocked.'], 403);
+        if (!$user->canAccessPos()) {
+            return response()->json(['success' => false, 'message' => 'POS access denied. Sync blocked.'], 403);
+        }
+
+        try {
+            $fallbackCounterId = $this->resolvePosCounterId($user, $request->input('counter_id'));
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 403);
         }
 
         if ($user->requiresDailyOpeningBalance() && ! $user->hasOpenCounterSession()) {
@@ -383,6 +415,15 @@ class PosController extends Controller
                     }
                 }
 
+                $counterId = $fallbackCounterId;
+                if (! empty($offlineOrder['counter_id'])) {
+                    try {
+                        $counterId = $this->resolvePosCounterId($user, $offlineOrder['counter_id']);
+                    } catch (InvalidArgumentException $e) {
+                        // Keep request-level counter.
+                    }
+                }
+
                 // 2. Unique offline invoice (locked inside outer transaction)
                 $invoiceNo = Order::nextPosInvoiceNo($shopId, 'OFF');
 
@@ -404,7 +445,7 @@ class PosController extends Controller
                 $order = Order::create([
                     'shop_id' => $shopId,
                     'user_id' => $userId,
-                    'counter_id' => $user->counter_id,
+                    'counter_id' => $counterId,
                     'customer_id' => $customerId,
                     'invoice_no' => $invoiceNo,
                     'total_amount' => $gross,
@@ -464,5 +505,41 @@ class PosController extends Controller
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Staff use their assigned till. Admins pick a till with an open cash session.
+     */
+    protected function resolvePosCounterId(User $user, mixed $requestedCounterId = null): int
+    {
+        if ($user->counter_id) {
+            return (int) $user->counter_id;
+        }
+
+        if (! $user->isAdminUser()) {
+            throw new InvalidArgumentException('No counter assigned to your account.');
+        }
+
+        $counterId = (int) $requestedCounterId;
+        if ($counterId < 1) {
+            throw new InvalidArgumentException('Select a counter till before billing as admin.');
+        }
+
+        $counter = Counter::where('shop_id', $user->shop_id)
+            ->where('is_active', true)
+            ->find($counterId);
+
+        if (! $counter) {
+            throw new InvalidArgumentException('Selected counter was not found.');
+        }
+
+        $open = app(CounterSessionService::class)->currentOpen($counter);
+        if (! $open) {
+            throw new InvalidArgumentException(
+                'Open a cash session on "'.$counter->name.'" first, then bill as admin against that till.'
+            );
+        }
+
+        return (int) $counter->id;
     }
 }

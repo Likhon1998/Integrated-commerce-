@@ -19,6 +19,10 @@
                class="inline-flex items-center justify-center text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg">
                 Create PO for low stock
             </a>
+            <a href="{{ route('reports.low_stock') }}"
+               class="inline-flex items-center justify-center text-xs font-bold bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-2 rounded-lg">
+                Low stock report
+            </a>
         </div>
     @endif
 
