@@ -85,41 +85,7 @@ class WebsiteController extends Controller
 
         $products = $query->paginate(12)->withQueryString();
 
-        $catalog = $this->website->catalogQuery($shopId);
-
-        $categories = Category::where('shop_id', $shopId)
-            ->orderBy('name')
-            ->withCount(['products as published_count' => function ($q) use ($shopId) {
-                $q->where('shop_id', $shopId)
-                    ->where('stock_quantity', '>', 0)
-                    ->where(function ($qq) {
-                        $qq->where('is_published', true)->orWhereNull('is_published');
-                    });
-            }])
-            ->get();
-
-        $categoryTotal = (clone $catalog)->count();
-
-        $brands = Brand::where('shop_id', $shopId)
-            ->where(function ($q) {
-                $q->where('is_active', true)->orWhereNull('is_active');
-            })
-            ->orderBy('name')
-            ->withCount(['products as published_count' => function ($q) use ($shopId) {
-                $q->where('shop_id', $shopId)
-                    ->where('stock_quantity', '>', 0)
-                    ->where(function ($qq) {
-                        $qq->where('is_published', true)->orWhereNull('is_published');
-                    });
-            }])
-            ->get()
-            ->filter(fn ($b) => (int) $b->published_count > 0)
-            ->values();
-
-        $priceBounds = [
-            'min' => (float) ((clone $catalog)->min('selling_price') ?? 0),
-            'max' => (float) ((clone $catalog)->max('selling_price') ?? 0),
-        ];
+        $sidebar = $this->shopSidebarData($shopId);
 
         $pageTitle = match ($request->filter) {
             'deals' => 'Deals',
@@ -128,12 +94,8 @@ class WebsiteController extends Controller
             default => 'Shop',
         };
 
-        return view('website.shop', array_merge($this->website->homepageData(), compact(
+        return view('website.shop', array_merge($this->website->homepageData(), $sidebar, compact(
             'products',
-            'categories',
-            'brands',
-            'categoryTotal',
-            'priceBounds',
             'pageTitle',
             'sort',
         )));
@@ -235,22 +197,68 @@ class WebsiteController extends Controller
             ->where('category_id', $category->id)
             ->where(fn ($q) => $q->where('is_published', true)->orWhereNull('is_published'));
 
-        $priceBounds = [
+        $sidebar = $this->shopSidebarData($shopId);
+        // Keep price slider scoped to this category's range.
+        $sidebar['priceBounds'] = [
             'min' => (float) ((clone $priceBoundsQuery)->min('selling_price') ?? 0),
             'max' => (float) ((clone $priceBoundsQuery)->max('selling_price') ?? 0),
         ];
 
-        return view('website.shop', array_merge($this->website->homepageData(), [
+        return view('website.shop', array_merge($this->website->homepageData(), $sidebar, [
             'products' => $products,
-            'categories' => Category::where('shop_id', $shopId)->orderBy('name')->get(),
             'activeCategory' => $category,
             'pageTitle' => $category->name,
             'pageSubtitle' => $category->description ?: 'Browse all products in this category.',
             'showSidebar' => $showSidebar,
             'filterConfig' => $filterConfig,
             'sidebarFacets' => $sidebarFacets,
-            'priceBounds' => $priceBounds,
+            'sort' => $sort,
         ]));
+    }
+
+    /**
+     * Shared category / brand / price data for the shop listing sidebar.
+     */
+    protected function shopSidebarData(int $shopId): array
+    {
+        $catalog = $this->website->catalogQuery($shopId);
+
+        $categories = Category::where('shop_id', $shopId)
+            ->orderBy('name')
+            ->withCount(['products as published_count' => function ($q) use ($shopId) {
+                $q->where('shop_id', $shopId)
+                    ->where('stock_quantity', '>', 0)
+                    ->where(function ($qq) {
+                        $qq->where('is_published', true)->orWhereNull('is_published');
+                    });
+            }])
+            ->get();
+
+        $brands = Brand::where('shop_id', $shopId)
+            ->where(function ($q) {
+                $q->where('is_active', true)->orWhereNull('is_active');
+            })
+            ->orderBy('name')
+            ->withCount(['products as published_count' => function ($q) use ($shopId) {
+                $q->where('shop_id', $shopId)
+                    ->where('stock_quantity', '>', 0)
+                    ->where(function ($qq) {
+                        $qq->where('is_published', true)->orWhereNull('is_published');
+                    });
+            }])
+            ->get()
+            ->filter(fn ($b) => (int) $b->published_count > 0)
+            ->values();
+
+        return [
+            'categories' => $categories,
+            'brands' => $brands,
+            'categoryTotal' => (clone $catalog)->count(),
+            'priceBounds' => [
+                'min' => (float) ((clone $catalog)->min('selling_price') ?? 0),
+                'max' => (float) ((clone $catalog)->max('selling_price') ?? 0),
+            ],
+        ];
     }
 
     protected function applyCategoryFilters($query, Request $request, array $filterConfig, Category $category): void
@@ -404,12 +412,12 @@ class WebsiteController extends Controller
             ->latest()
             ->paginate(12);
 
-        return view('website.shop', array_merge($this->website->homepageData(), [
+        return view('website.shop', array_merge($this->website->homepageData(), $this->shopSidebarData($shopId), [
             'products' => $products,
-            'categories' => Category::where('shop_id', $shopId)->orderBy('name')->get(),
             'activeBrand' => $brand,
             'pageTitle' => $brand->name,
             'pageSubtitle' => 'Shop all products from ' . $brand->name . '.',
+            'sort' => 'latest',
         ]));
     }
 
@@ -582,25 +590,50 @@ class WebsiteController extends Controller
 
         $user->update(['name' => $request->customer_name]);
 
-        $deliveryFee = $request->delivery_fee ?? 0;
-        $subtotal = collect($request->cart)->sum(fn ($item) => $item['price'] * $item['qty']);
-        $finalTotal = $subtotal + $deliveryFee;
+        $deliveryFee = max(0, (float) ($request->delivery_fee ?? 0));
 
         $shopAdmin = \App\Models\User::where('shop_id', $shopId)->whereIn('role', ['admin', 'shop_owner', 'Shop Owner'])->first();
         $fallbackUserId = $shopAdmin?->id ?? $user->id;
 
-        foreach ($request->cart as $item) {
-            $product = Product::where('shop_id', $shopId)->find($item['id']);
+        // Resolve cart against live catalog prices/stock (never trust client prices).
+        $resolvedLines = [];
+        $subtotal = 0.0;
+
+        foreach ((array) $request->cart as $item) {
+            $productId = (int) ($item['id'] ?? 0);
+            $qty = (int) ($item['qty'] ?? 0);
+            if ($productId < 1 || $qty < 1) {
+                return response()->json(['success' => false, 'message' => 'Invalid cart item.']);
+            }
+
+            $product = Product::where('shop_id', $shopId)->find($productId);
             if (! $product || $product->is_published === false) {
                 return response()->json(['success' => false, 'message' => 'A product in your cart is no longer available.']);
             }
-            if ($product->stock_quantity < $item['qty']) {
+            if ($product->stock_quantity < $qty) {
                 return response()->json([
                     'success' => false,
                     'message' => "Not enough stock for {$product->name}. Only {$product->stock_quantity} left.",
                 ]);
             }
+
+            $unitPrice = (float) $product->selling_price;
+            $lineTotal = $unitPrice * $qty;
+            $subtotal += $lineTotal;
+
+            $resolvedLines[] = [
+                'product' => $product,
+                'qty' => $qty,
+                'unit_price' => $unitPrice,
+                'subtotal' => $lineTotal,
+            ];
         }
+
+        if ($resolvedLines === []) {
+            return response()->json(['success' => false, 'message' => 'Cart is empty or store unavailable.']);
+        }
+
+        $finalTotal = $subtotal + $deliveryFee;
 
         try {
             DB::beginTransaction();
@@ -627,21 +660,19 @@ class WebsiteController extends Controller
                 throw new \RuntimeException('Order was created without an order ID. Please try again.');
             }
 
-            foreach ($request->cart as $item) {
+            foreach ($resolvedLines as $line) {
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $item['id'],
-                    'quantity' => $item['qty'],
-                    'unit_price' => $item['price'],
-                    'subtotal' => $item['price'] * $item['qty'],
+                    'product_id' => $line['product']->id,
+                    'quantity' => $line['qty'],
+                    'unit_price' => $line['unit_price'],
+                    'subtotal' => $line['subtotal'],
                 ]);
 
-                $product = Product::where('shop_id', $shopId)->findOrFail($item['id']);
-
                 $this->stock->recordSale(
-                    $product,
-                    (int) $item['qty'],
-                    'Website order - ' . $order->invoice_no,
+                    $line['product'],
+                    (int) $line['qty'],
+                    'Website order - '.$order->invoice_no,
                     $fallbackUserId,
                     'order',
                     $order->id,
@@ -658,11 +689,11 @@ class WebsiteController extends Controller
                 'success' => true,
                 'order_id' => $order->id,
                 'invoice' => $order->invoice_no,
-                'message' => 'Order placed successfully. Your Order ID is ' . $order->invoice_no . '.',
+                'message' => 'Order placed successfully. Your Order ID is '.$order->invoice_no.'.',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Order failed: ' . $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Order failed: '.$e->getMessage()]);
         }
     }
 }

@@ -5,6 +5,7 @@
         : 0;
     $img = $ws->productImageUrl($product);
     $catLabel = $product->category?->name ?? $product->brand_name ?? 'Electronics';
+    $flash = !empty($flash);
 
     $listItem = [
         'id' => $product->id,
@@ -24,17 +25,41 @@
     ];
 @endphp
 
-<div class="tn-product-card">
+<article class="tn-product-card {{ $flash ? 'tn-product-card--flash' : '' }}">
     @if($discount > 0)
         <span class="tn-product-discount">-{{ $discount }}%</span>
     @endif
+
+    <button type="button"
+            class="tn-product-wish"
+            title="Wishlist"
+            :class="inWishlist({{ $product->id }}) && 'is-active'"
+            @click.prevent="toggleWishlist(@js($listItem))"
+            :aria-pressed="inWishlist({{ $product->id }}) ? 'true' : 'false'"
+            aria-label="Toggle wishlist">
+        <svg :fill="inWishlist({{ $product->id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+        </svg>
+    </button>
 
     <a href="{{ route('website.product', $product) }}" class="tn-product-img" aria-label="{{ $product->name }}">
         <img src="{{ $img }}" alt="{{ $product->name }}" loading="lazy">
     </a>
 
     <div class="tn-product-meta">
+        <p class="tn-product-cat">{{ $catLabel }}</p>
         <a href="{{ route('website.product', $product) }}" class="tn-product-name">{{ $product->name }}</a>
+
+        @if(($product->rating ?? 0) > 0)
+            <div class="tn-product-stars" aria-label="Rating {{ $product->rating }}">
+                @for($i = 1; $i <= 5; $i++)
+                    <span class="tn-product-star {{ $i > round($product->rating) ? 'empty' : '' }}">★</span>
+                @endfor
+                @if(($product->review_count ?? 0) > 0)
+                    <span class="tn-product-reviews">({{ number_format($product->review_count) }})</span>
+                @endif
+            </div>
+        @endif
 
         <div class="tn-product-price-row">
             <span class="tn-product-price">{{ $ws->formatPrice($product->selling_price, $settings) }}</span>
@@ -43,21 +68,17 @@
             @endif
         </div>
 
-        @if(($product->rating ?? 0) > 0)
-            <div class="tn-product-stars" aria-label="Rating {{ $product->rating }}">
-                @for($i = 1; $i <= 5; $i++)
-                    <span class="tn-product-star {{ $i > round($product->rating) ? 'empty' : '' }}">★</span>
-                @endfor
-            </div>
-        @endif
-
-        <button type="button"
-                class="tn-product-add"
-                data-add-to-cart='@json($cartItem)'
-                data-qty="1"
-                data-open-cart="1">
-            Add to cart
-        </button>
+        <div class="tn-product-actions">
+            <button type="button"
+                    class="tn-product-add"
+                    data-add-to-cart='@json($cartItem)'
+                    data-qty="1"
+                    data-open-cart="1">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 2.3c-.6.6-.2 1.7.7 1.7H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/>
+                </svg>
+                <span>Add to cart</span>
+            </button>
+        </div>
     </div>
-</div>
-
+</article>

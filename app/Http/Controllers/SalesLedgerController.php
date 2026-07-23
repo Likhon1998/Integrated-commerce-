@@ -46,7 +46,7 @@ class SalesLedgerController extends Controller
 
         if ($canViewOnline) {
             $onlineQuery = Order::where('shop_id', $shopId)
-                ->whereNull('counter_id')
+                ->onlineOrders()
                 ->with(['customer', 'user', 'items.product']);
 
             $onlineOrders = $onlineQuery->latest()->limit(250)->get();
@@ -202,7 +202,7 @@ class SalesLedgerController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $isOnline = $order->counter_id === null;
+        $isOnline = $order->isOnlineOrder();
 
         if ($isOnline && ! $user->isAdminUser()) {
             abort(403, 'Only admins can refund online orders.');
@@ -293,7 +293,7 @@ class SalesLedgerController extends Controller
             abort(403, 'Only admins can process online order returns.');
         }
 
-        if ($order->shop_id !== $user->shop_id || $order->counter_id !== null) {
+        if ($order->shop_id !== $user->shop_id || ! $order->isOnlineOrder()) {
             abort(403, 'Unauthorized action.');
         }
 

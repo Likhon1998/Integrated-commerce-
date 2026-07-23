@@ -36,9 +36,7 @@ class OnlineOrderController extends Controller
 
         session(['online_orders_seen_at' => now()->toDateTimeString()]);
 
-        $statsQuery = Order::where('shop_id', $shopId)
-            ->whereNull('counter_id')
-            ->where('invoice_no', 'like', 'WEB-%');
+        $statsQuery = Order::where('shop_id', $shopId)->onlineOrders();
         if ($filterDate) {
             $statsQuery->whereDate('created_at', $filterDate);
         }
@@ -59,8 +57,7 @@ class OnlineOrderController extends Controller
 
         // Preload recent orders for instant client-side filtering (no page reload).
         $liveQuery = Order::where('shop_id', $shopId)
-            ->whereNull('counter_id')
-            ->where('invoice_no', 'like', 'WEB-%')
+            ->onlineOrders()
             ->with([
                 'customer:id,name,phone,address',
                 'items:id,order_id,product_id,quantity,subtotal',
@@ -128,7 +125,7 @@ class OnlineOrderController extends Controller
     public function show(Order $order)
     {
         $this->ensureAdmin();
-        abort_unless($order->shop_id === Auth::user()->shop_id && $order->counter_id === null, 403);
+        abort_unless($order->shop_id === Auth::user()->shop_id && $order->isOnlineOrder(), 403);
 
         $order->load([
             'customer:id,name,phone,address,email',
@@ -139,8 +136,12 @@ class OnlineOrderController extends Controller
 
         $timeline = $this->tracking->customerTimeline($order);
         $statusLabels = $this->tracking->statusLabels();
+        $allowedNextStatuses = array_values(array_unique(array_merge(
+            [$order->status],
+            self::STATUS_TRANSITIONS[$order->status] ?? [],
+        )));
 
-        return view('online-orders.show', compact('order', 'timeline', 'statusLabels'));
+        return view('online-orders.show', compact('order', 'timeline', 'statusLabels', 'allowedNextStatuses'));
     }
 
     public function notifications()
@@ -150,8 +151,7 @@ class OnlineOrderController extends Controller
         $seenAt = session('online_orders_seen_at');
 
         $orders = Order::where('shop_id', $shopId)
-            ->whereNull('counter_id')
-            ->where('invoice_no', 'like', 'WEB-%')
+            ->onlineOrders()
             ->with('customer:id,name,phone')
             ->latest('created_at')
             ->limit(10)
@@ -160,8 +160,10 @@ class OnlineOrderController extends Controller
         $labels = $this->tracking->statusLabels();
 
         $items = $orders->map(function (Order $order) use ($seenAt, $labels) {
-            $isNew = $order->status === 'pending'
-                || ($seenAt ? $order->created_at->greaterThan($seenAt) : $order->created_at->greaterThan(now()->subDay()));
+            // Unread = unseen by admin (not "still pending").
+            $isNew = $seenAt
+                ? $order->created_at->greaterThan($seenAt)
+                : $order->created_at->greaterThan(now()->subDay());
 
             return [
                 'id' => $order->id,
@@ -191,10 +193,21 @@ class OnlineOrderController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Allowed forward status changes for online orders (terminal states cannot reopen). */
+    private const STATUS_TRANSITIONS = [
+        'pending' => ['processing', 'cancelled'],
+        'processing' => ['shipped', 'cancelled'],
+        'shipped' => ['completed', 'returned', 'cancelled'],
+        'completed' => ['refunded'],
+        'cancelled' => [],
+        'returned' => [],
+        'refunded' => [],
+    ];
+
     public function updateStatus(Request $request, Order $order)
     {
         $this->ensureAdmin();
-        if ($order->shop_id !== Auth::user()->shop_id || $order->counter_id !== null) {
+        if ($order->shop_id !== Auth::user()->shop_id || ! $order->isOnlineOrder()) {
             abort(403, 'Unauthorized Access');
         }
 
@@ -215,6 +228,13 @@ class OnlineOrderController extends Controller
             && ! $request->filled('courier_name')
         ) {
             return back();
+        }
+
+        if ($oldStatus !== $newStatus) {
+            $allowed = self::STATUS_TRANSITIONS[$oldStatus] ?? [];
+            if (! in_array($newStatus, $allowed, true)) {
+                return back()->with('error', "Cannot change status from {$oldStatus} to {$newStatus}.");
+            }
         }
 
         if ($newStatus === 'shipped' && ! $request->filled('courier_name') && blank($order->shipping_courier)) {

@@ -6,6 +6,24 @@
 @php
     $currency = $settings->currency_symbol ?? 'Tk';
     $firstName = explode(' ', trim($customer?->name ?? auth()->user()->name ?? 'Customer'))[0] ?? 'Customer';
+    $justPlacedInvoice = request('order');
+    $justPlacedOid = request('oid');
+    $justPlaced = request()->boolean('placed');
+    $highlightOrderId = null;
+    if ($justPlaced && ($recentOrders ?? collect())->isNotEmpty()) {
+        $match = ($recentOrders ?? collect())->first(function ($order) use ($justPlacedInvoice, $justPlacedOid) {
+            if ($justPlacedInvoice && (string) $order->invoice_no === (string) $justPlacedInvoice) {
+                return true;
+            }
+            if ($justPlacedOid && (int) $order->id === (int) $justPlacedOid) {
+                return true;
+            }
+
+            return false;
+        }) ?? ($recentOrders ?? collect())->first();
+        $highlightOrderId = $match?->id;
+        $justPlacedInvoice = $justPlacedInvoice ?: ($match?->invoice_no);
+    }
     $orderDetailsMap = ($recentOrders ?? collect())->mapWithKeys(function ($order) use ($orderTracking, $customer) {
         $track = $orderTracking[$order->id] ?? null;
 
@@ -34,7 +52,7 @@
 @endphp
 <div class="max-w-[1280px] mx-auto px-4 md:px-5 py-6"
      x-data="{
-        openOrder: {{ $activeOrder?->id ?? 'null' }},
+        openOrder: {{ $highlightOrderId ?? $activeOrder?->id ?? 'null' }},
         detailOpen: false,
         detail: null,
         orders: @js($orderDetailsMap),
@@ -48,13 +66,55 @@
         },
         statusClass(status) {
             if (status === 'completed') return 'bg-emerald-100 text-emerald-700';
-            if (status === 'shipped') return 'bg-blue-100 text-blue-700';
-            if (status === 'processing') return 'bg-indigo-100 text-indigo-700';
+            if (status === 'shipped') return 'bg-sky-100 text-sky-800';
+            if (status === 'processing') return 'bg-amber-100 text-amber-800 ring-1 ring-amber-300';
+            if (status === 'pending') return 'bg-orange-100 text-orange-800';
             if (['cancelled','returned','refunded'].includes(status)) return 'bg-rose-100 text-rose-700';
-            return 'bg-amber-100 text-amber-700';
-        }
+            return 'bg-slate-100 text-slate-700';
+        },
+        flowSteps: [
+            { key: 'pending', label: 'Order received' },
+            { key: 'processing', label: 'Packaging' },
+            { key: 'shipped', label: 'Out for delivery' },
+            { key: 'completed', label: 'Delivered' },
+        ],
+        buildTrack(order) {
+            if (!order) return [];
+            const rankMap = { pending: 0, processing: 1, shipped: 2, completed: 3 };
+            const status = order.status || 'pending';
+            const rank = Object.prototype.hasOwnProperty.call(rankMap, status) ? rankMap[status] : 0;
+            const byKey = {};
+            (order.timeline || []).forEach((s) => { if (s && s.key) byKey[s.key] = s; });
+            return this.flowSteps.map((step, i) => {
+                const log = byKey[step.key] || {};
+                const active = step.key === status;
+                const passed = i < rank || status === 'completed';
+                return {
+                    key: step.key,
+                    label: step.label,
+                    active,
+                    done: passed && !active,
+                    at: log.at || null,
+                    note: log.note || null,
+                };
+            });
+        },
+        progressPct(order) {
+            if (!order) return 0;
+            const rankMap = { pending: 0, processing: 1, shipped: 2, completed: 3 };
+            const rank = rankMap[order.status] ?? 0;
+            return (rank / 3) * 100;
+        },
      }"
-     x-init="setInterval(() => { if (document.visibilityState === 'visible' && !detailOpen) window.location.reload(); }, 30000)"
+     x-init="
+        @if($highlightOrderId)
+            openDetail({{ (int) $highlightOrderId }});
+            setTimeout(() => {
+                document.getElementById('recent-orders')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 120);
+        @endif
+        setInterval(() => { if (document.visibilityState === 'visible' && !detailOpen) window.location.reload(); }, 30000)
+     "
      @keydown.escape.window="closeDetail()">
     <div class="grid gap-4 xl:grid-cols-[250px_minmax(0,1fr)]">
         <div class="space-y-4">
@@ -73,57 +133,75 @@
                 </div>
             @endif
 
+            @if($justPlaced)
+                <div class="gaget-order-placed-banner" role="status">
+                    <div class="gaget-order-placed-banner__icon" aria-hidden="true">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    </div>
+                    <div>
+                        <p class="gaget-order-placed-banner__title">Order placed successfully</p>
+                        <p class="gaget-order-placed-banner__text">
+                            @if($justPlacedInvoice)
+                                Your order <strong>{{ $justPlacedInvoice }}</strong> is confirmed. Track it below — we’ll update status as it moves.
+                            @else
+                                Your order is confirmed. Track it below — we’ll update status as it moves.
+                            @endif
+                        </p>
+                    </div>
+                </div>
+            @endif
+
             <div>
                 <h1 class="text-[31px] font-extrabold tracking-tight text-slate-900">Welcome back, {{ $firstName }}!</h1>
                 <p class="mt-0.5 text-[13px] text-slate-500">Here’s what’s happening with your account today.</p>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Total Orders</p>
-                    <div class="mt-2 flex items-center justify-between">
+            <div class="gaget-account-stats">
+                <div class="gaget-account-stat">
+                    <p class="gaget-account-stat__label">Total Orders</p>
+                    <div class="gaget-account-stat__row">
                         <div>
-                            <p class="text-[28px] font-black leading-none text-slate-900">{{ $totalOrders }}</p>
-                            <p class="mt-1 text-[11px] text-slate-500">View all orders</p>
+                            <p class="gaget-account-stat__value">{{ $totalOrders }}</p>
+                            <p class="gaget-account-stat__hint">All time</p>
                         </div>
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                        <div class="gaget-account-stat__icon gaget-account-stat__icon--blue">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         </div>
                     </div>
                 </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">In Transit</p>
-                    <div class="mt-2 flex items-center justify-between">
+                <div class="gaget-account-stat">
+                    <p class="gaget-account-stat__label">Packaging</p>
+                    <div class="gaget-account-stat__row">
                         <div>
-                            <p class="text-[28px] font-black leading-none text-slate-900">{{ $inTransitOrders }}</p>
-                            <p class="mt-1 text-[11px] text-slate-500">Orders in transit</p>
+                            <p class="gaget-account-stat__value">{{ $packagingOrders }}</p>
+                            <p class="gaget-account-stat__hint">Received / packing</p>
                         </div>
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                        <div class="gaget-account-stat__icon gaget-account-stat__icon--amber">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="gaget-account-stat">
+                    <p class="gaget-account-stat__label">In Transit</p>
+                    <div class="gaget-account-stat__row">
+                        <div>
+                            <p class="gaget-account-stat__value">{{ $inTransitOrders }}</p>
+                            <p class="gaget-account-stat__hint">Out for delivery</p>
+                        </div>
+                        <div class="gaget-account-stat__icon gaget-account-stat__icon--green">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17h6m-8 0H5a2 2 0 01-2-2V7a2 2 0 012-2h9a2 2 0 012 2v2m0 8h1a2 2 0 002-2v-3m-3 5a2 2 0 11-4 0m4 0a2 2 0 104 0m-4 0H9m10-8l-2-3h-3"/></svg>
                         </div>
                     </div>
                 </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Delivered</p>
-                    <div class="mt-2 flex items-center justify-between">
+                <div class="gaget-account-stat">
+                    <p class="gaget-account-stat__label">Delivered</p>
+                    <div class="gaget-account-stat__row">
                         <div>
-                            <p class="text-[28px] font-black leading-none text-slate-900">{{ $deliveredOrders }}</p>
-                            <p class="mt-1 text-[11px] text-slate-500">View order history</p>
+                            <p class="gaget-account-stat__value">{{ $deliveredOrders }}</p>
+                            <p class="gaget-account-stat__hint">Completed</p>
                         </div>
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-lime-50 text-lime-600">
+                        <div class="gaget-account-stat__icon gaget-account-stat__icon--lime">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 13l4 4L19 7"/></svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Refunds</p>
-                    <div class="mt-2 flex items-center justify-between">
-                        <div>
-                            <p class="text-[28px] font-black leading-none text-slate-900">{{ $refundOrders }}</p>
-                            <p class="mt-1 text-[11px] text-slate-500">View details</p>
-                        </div>
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 4v6h6M20 20v-6h-6M5 14a7 7 0 0012 2M19 10A7 7 0 007 8"/></svg>
                         </div>
                     </div>
                 </div>
@@ -136,8 +214,43 @@
                             slides: @js($activeOrderSlides ?? []),
                             index: 0,
                             touchStartX: null,
+                            flowSteps: [
+                                { key: 'pending', label: 'Order received' },
+                                { key: 'processing', label: 'Packaging' },
+                                { key: 'shipped', label: 'Out for delivery' },
+                                { key: 'completed', label: 'Delivered' },
+                            ],
                             get current() { return this.slides[this.index] || null; },
                             get count() { return this.slides.length; },
+                            get track() { return this.buildTrack(this.current); },
+                            get fillPct() { return this.progressPct(this.current); },
+                            buildTrack(order) {
+                                if (!order) return [];
+                                const rankMap = { pending: 0, processing: 1, shipped: 2, completed: 3 };
+                                const status = order.status || 'pending';
+                                const rank = Object.prototype.hasOwnProperty.call(rankMap, status) ? rankMap[status] : 0;
+                                const byKey = {};
+                                (order.timeline || []).forEach((s) => { if (s && s.key) byKey[s.key] = s; });
+                                return this.flowSteps.map((step, i) => {
+                                    const log = byKey[step.key] || {};
+                                    const active = step.key === status;
+                                    const passed = i < rank || status === 'completed';
+                                    return {
+                                        key: step.key,
+                                        label: step.label,
+                                        active,
+                                        done: passed && !active,
+                                        at: log.at || null,
+                                        note: log.note || null,
+                                    };
+                                });
+                            },
+                            progressPct(order) {
+                                if (!order) return 0;
+                                const rankMap = { pending: 0, processing: 1, shipped: 2, completed: 3 };
+                                const rank = rankMap[order.status] ?? 0;
+                                return (rank / 3) * 100;
+                            },
                             prev() { if (this.count < 2) return; this.index = (this.index - 1 + this.count) % this.count; },
                             next() { if (this.count < 2) return; this.index = (this.index + 1) % this.count; },
                             go(i) { this.index = i; },
@@ -151,9 +264,11 @@
                             },
                             statusClass(status) {
                                 if (status === 'completed') return 'bg-emerald-100 text-emerald-700';
-                                if (status === 'shipped') return 'bg-blue-100 text-blue-700';
-                                if (status === 'processing') return 'bg-indigo-100 text-indigo-700';
-                                return 'bg-amber-100 text-amber-700';
+                                if (status === 'shipped') return 'bg-sky-100 text-sky-800';
+                                if (status === 'processing') return 'bg-amber-100 text-amber-800 ring-1 ring-amber-300';
+                                if (status === 'pending') return 'bg-orange-100 text-orange-800';
+                                if (status === 'cancelled' || status === 'returned' || status === 'refunded') return 'bg-rose-100 text-rose-700';
+                                return 'bg-slate-100 text-slate-700';
                             }
                          }">
                     <div class="mb-4 flex items-start justify-between gap-4">
@@ -161,7 +276,7 @@
                             <h2 class="text-[15px] font-bold text-slate-900">
                                 Active Order<span x-show="count > 1" x-cloak x-text="'s (' + count + ')'"></span>
                             </h2>
-                            <p class="text-[11px] text-slate-500">See the latest update from our store to your doorstep.</p>
+                            <p class="text-[11px] text-slate-500">Live status from our store to your doorstep.</p>
                         </div>
                         <a href="{{ route('website.account') }}#recent-orders" class="text-[11px] font-bold text-blue-600 hover:text-blue-700">View All Orders →</a>
                     </div>
@@ -177,24 +292,38 @@
                                         <p class="text-[11px] text-slate-500" x-show="current.id" x-text="'Order ID · Ref #' + current.id"></p>
                                         <p class="text-[11px] text-slate-500" x-text="'Placed on ' + current.date"></p>
                                     </div>
-                                    <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold"
-                                          :class="statusClass(current.status)"
-                                          x-text="current.status_label"></span>
+                                    <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-extrabold"
+                                          :class="statusClass(current.status)">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse" x-show="['pending','processing','shipped'].includes(current.status)"></span>
+                                        <span x-text="current.status_label"></span>
+                                    </span>
                                 </div>
 
-                                <div class="mt-5 grid gap-2"
-                                     :style="'grid-template-columns: repeat(' + Math.max(1, (current.timeline || []).length) + ', minmax(0, 1fr))'">
-                                    <template x-for="(step, sIdx) in (current.timeline || [])" :key="current.id + '-' + (step.key || sIdx)">
-                                        <div class="relative">
-                                            <div class="flex flex-col items-center text-center">
-                                                <div class="flex h-8 w-8 items-center justify-center rounded-full border-2 text-[11px] font-bold"
-                                                     :class="step.done ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-400'"
-                                                     x-text="step.done ? '✓' : '•'"></div>
-                                                <p class="mt-2 text-[11px] font-bold text-slate-800" x-text="step.label"></p>
-                                                <p class="mt-1 text-[11px] text-slate-500" x-text="step.at || 'Waiting'"></p>
+                                {{-- Connected 4-step progress line --}}
+                                <div class="gaget-progress mt-6" aria-label="Order progress">
+                                    <div class="gaget-progress__rail" aria-hidden="true">
+                                        <div class="gaget-progress__fill" :style="'width:' + fillPct + '%'"></div>
+                                    </div>
+                                    <div class="gaget-progress__steps">
+                                        <template x-for="(step, sIdx) in track" :key="current.id + '-track-' + step.key">
+                                            <div class="gaget-progress__step"
+                                                 :class="{
+                                                    'is-done': step.done,
+                                                    'is-active': step.active,
+                                                    'is-waiting': !step.done && !step.active
+                                                 }">
+                                                <div class="gaget-progress__dot" x-text="step.done || (step.active && current.status === 'completed') ? '✓' : (sIdx + 1)"></div>
+                                                <p class="gaget-progress__label" x-text="step.label"></p>
+                                                <p class="gaget-progress__meta" x-text="step.active ? (step.at || 'In progress') : (step.at || 'Waiting')"></p>
                                             </div>
-                                        </div>
-                                    </template>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-left"
+                                     x-show="current.where">
+                                    <p class="text-[10px] font-bold uppercase tracking-wide text-amber-700">Where is my order?</p>
+                                    <p class="mt-1 text-[13px] font-semibold text-amber-950" x-text="current.where"></p>
                                 </div>
 
                                 <div class="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
@@ -206,7 +335,6 @@
                                                 <span x-show="current.extra_items > 0" x-text="' +' + current.extra_items + ' more'"></span>
                                             </p>
                                             <p class="mt-0.5 text-[11px] text-slate-500" x-text="'Qty: ' + current.qty"></p>
-                                            <p class="mt-1 text-[11px] font-medium text-blue-700" x-text="current.where"></p>
                                         </div>
                                     </div>
                                     <a href="{{ route('website.account') }}#recent-orders" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-blue-700 hover:bg-blue-50">View Orders</a>
@@ -286,7 +414,7 @@
                             <tbody class="divide-y divide-slate-50">
                                 @foreach($recentOrders as $order)
                                     @php $track = $orderTracking[$order->id] ?? null; @endphp
-                                    <tr>
+                                    <tr class="{{ $highlightOrderId && (int) $highlightOrderId === (int) $order->id ? 'gaget-order-row-highlight' : '' }}">
                                         <td class="px-2 py-3 font-semibold text-slate-900">
                                             <span class="block">{{ $order->invoice_no }}</span>
                                             <span class="text-[10px] font-medium text-slate-400">#{{ $order->id }}</span>
@@ -303,12 +431,16 @@
                                         </td>
                                         <td class="px-2 py-3 text-right font-bold text-slate-900">{{ $currency }}{{ number_format($order->total_amount, 2) }}</td>
                                         <td class="px-2 py-3">
-                                            <span class="inline-flex rounded-full px-2 py-1 text-[10px] font-bold
+                                            <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold
                                                 @if($order->status === 'completed') bg-emerald-100 text-emerald-700
-                                                @elseif($order->status === 'shipped') bg-blue-100 text-blue-700
-                                                @elseif($order->status === 'processing') bg-indigo-100 text-indigo-700
+                                                @elseif($order->status === 'shipped') bg-sky-100 text-sky-800
+                                                @elseif($order->status === 'processing') bg-amber-100 text-amber-800 ring-1 ring-amber-300
+                                                @elseif($order->status === 'pending') bg-orange-100 text-orange-800
                                                 @elseif(in_array($order->status, ['cancelled', 'returned', 'refunded'])) bg-rose-100 text-rose-700
-                                                @else bg-amber-100 text-amber-700 @endif">
+                                                @else bg-slate-100 text-slate-700 @endif">
+                                                @if(in_array($order->status, ['pending', 'processing', 'shipped'], true))
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse"></span>
+                                                @endif
                                                 {{ $track['status_label'] ?? ucfirst($order->status) }}
                                             </span>
                                         </td>
@@ -429,21 +561,22 @@
 
                         <p class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-[12px] font-medium text-blue-800" x-text="detail.where" x-show="detail.where"></p>
 
-                        <div x-show="detail.timeline && detail.timeline.length" class="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                            <p class="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Tracking</p>
-                            <div class="space-y-2.5">
-                                <template x-for="(step, idx) in detail.timeline" :key="step.key + '-' + idx">
-                                    <div class="flex gap-2.5">
-                                        <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                                              :class="step.active ? 'bg-blue-600 text-white' : (step.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500')"
-                                              x-text="step.done && !step.active ? '✓' : (idx + 1)"></span>
-                                        <div class="min-w-0">
-                                            <p class="text-[12px] font-bold text-slate-800" x-text="step.label"></p>
-                                            <p class="text-[11px] text-slate-500" x-text="step.at || 'Waiting…'"></p>
-                                            <p class="text-[11px] text-slate-600" x-show="step.note" x-text="step.note"></p>
+                        <div class="rounded-xl border border-slate-100 bg-white p-3">
+                            <p class="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">Tracking</p>
+                            <div class="gaget-progress" aria-label="Order progress">
+                                <div class="gaget-progress__rail" aria-hidden="true">
+                                    <div class="gaget-progress__fill" :style="'width:' + progressPct(detail) + '%'"></div>
+                                </div>
+                                <div class="gaget-progress__steps">
+                                    <template x-for="(step, sIdx) in buildTrack(detail)" :key="'detail-' + step.key">
+                                        <div class="gaget-progress__step"
+                                             :class="{ 'is-done': step.done, 'is-active': step.active, 'is-waiting': !step.done && !step.active }">
+                                            <div class="gaget-progress__dot" x-text="step.done || (step.active && detail.status === 'completed') ? '✓' : (sIdx + 1)"></div>
+                                            <p class="gaget-progress__label" x-text="step.label"></p>
+                                            <p class="gaget-progress__meta" x-text="step.active ? (step.at || 'In progress') : (step.at || 'Waiting')"></p>
                                         </div>
-                                    </div>
-                                </template>
+                                    </template>
+                                </div>
                             </div>
                         </div>
 

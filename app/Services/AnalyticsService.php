@@ -96,7 +96,7 @@ class AnalyticsService
 
     public function webOrders(int $shopId, Carbon $start, Carbon $end)
     {
-        return $this->baseOrderQuery($shopId, $start, $end)->whereNull('counter_id');
+        return $this->baseOrderQuery($shopId, $start, $end)->onlineOrders();
     }
 
     public function costOfGoodsSold(int $shopId, Carbon $start, Carbon $end): float

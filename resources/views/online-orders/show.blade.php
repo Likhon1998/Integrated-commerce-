@@ -195,14 +195,29 @@
                     <div>
                         <label class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Status</label>
                         <select name="status" x-model="status" class="mt-1 w-full rounded-xl border-slate-200 text-[13px] font-semibold focus:border-indigo-400 focus:ring-indigo-400">
-                            <option value="pending">Pending — Order received</option>
-                            <option value="processing">Processing — Packing</option>
-                            <option value="shipped">Shipped — Out for delivery</option>
-                            <option value="completed">Completed — Delivered</option>
-                            <option disabled>──────────</option>
-                            <option value="cancelled">Cancelled</option>
-                            <option value="returned">Returned</option>
-                            <option value="refunded">Refunded</option>
+                            @php
+                                $statusOptionLabels = [
+                                    'pending' => 'Pending — Order received',
+                                    'processing' => 'Processing — Packing',
+                                    'shipped' => 'Shipped — Out for delivery',
+                                    'completed' => 'Completed — Delivered',
+                                    'cancelled' => 'Cancelled',
+                                    'returned' => 'Returned',
+                                    'refunded' => 'Refunded',
+                                ];
+                                $forward = array_values(array_filter($allowedNextStatuses ?? [], fn ($s) => $s !== $order->status && ! in_array($s, ['cancelled', 'returned', 'refunded'], true)));
+                                $voids = array_values(array_filter($allowedNextStatuses ?? [], fn ($s) => in_array($s, ['cancelled', 'returned', 'refunded'], true)));
+                            @endphp
+                            <option value="{{ $order->status }}">{{ $statusOptionLabels[$order->status] ?? ucfirst($order->status) }} (current)</option>
+                            @foreach($forward as $s)
+                                <option value="{{ $s }}">{{ $statusOptionLabels[$s] ?? ucfirst($s) }}</option>
+                            @endforeach
+                            @if(count($voids))
+                                <option disabled>──────────</option>
+                                @foreach($voids as $s)
+                                    <option value="{{ $s }}">{{ $statusOptionLabels[$s] ?? ucfirst($s) }}</option>
+                                @endforeach
+                            @endif
                         </select>
                     </div>
 

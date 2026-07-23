@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Support\CategoryFilterConfig;
+use App\Support\CategoryIcons;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -37,25 +38,20 @@ class CategoryController extends Controller
                 'max:255',
                 Rule::unique('categories')->where(fn ($query) => $query->where('shop_id', Auth::user()->shop_id)),
             ],
-            'image' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif|max:5120',
+            'icon' => ['nullable', 'string', 'max:40', Rule::in(CategoryIcons::keys())],
         ]);
 
         $filterOptions = $request->has('filter_enabled') || $request->has('filter_groups')
             ? CategoryFilterConfig::fromRequest($request)
             : CategoryFilterConfig::defaults();
 
-        $payload = [
+        $category = Category::create([
             'shop_id' => Auth::user()->shop_id,
             'name' => $request->name,
             'slug' => Str::slug($request->name),
+            'icon' => CategoryIcons::resolve($request->input('icon') ?: CategoryIcons::suggest($request->name)),
             'filter_options' => $filterOptions,
-        ];
-
-        if ($request->hasFile('image')) {
-            $payload['image_path'] = $request->file('image')->store('categories', 'public');
-        }
-
-        $category = Category::create($payload);
+        ]);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -96,23 +92,15 @@ class CategoryController extends Controller
                     ->where(fn ($query) => $query->where('shop_id', Auth::user()->shop_id))
                     ->ignore($category->id),
             ],
-            'image' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif|max:5120',
+            'icon' => ['nullable', 'string', 'max:40', Rule::in(CategoryIcons::keys())],
         ]);
 
-        $payload = [
+        $category->update([
             'name' => $request->name,
             'slug' => Str::slug($request->name),
+            'icon' => CategoryIcons::resolve($request->input('icon') ?: CategoryIcons::suggest($request->name)),
             'filter_options' => CategoryFilterConfig::fromRequest($request),
-        ];
-
-        if ($request->hasFile('image')) {
-            if ($category->image_path) {
-                Storage::disk('public')->delete($category->image_path);
-            }
-            $payload['image_path'] = $request->file('image')->store('categories', 'public');
-        }
-
-        $category->update($payload);
+        ]);
 
         return redirect()->route('categories.index')->with('success', 'Category updated successfully!');
     }

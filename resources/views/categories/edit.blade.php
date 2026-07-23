@@ -8,7 +8,7 @@
     <div class="py-12">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white p-6 shadow-sm sm:rounded-lg border border-gray-100">
-                <form action="{{ route('categories.update', $category) }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('categories.update', $category) }}" method="POST">
                     @csrf
                     @method('PATCH')
 
@@ -18,15 +18,7 @@
                         <x-input-error class="mt-2" :messages="$errors->get('name')" />
                     </div>
 
-                    <div class="mt-4">
-                        <x-input-label for="image" :value="__('Homepage image (optional)')" />
-                        @if($category->image_path)
-                            <img src="{{ public_storage_url($category->image_path) }}" alt="" class="mt-2 h-20 w-20 rounded-lg object-cover border border-gray-200">
-                        @endif
-                        <input id="image" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="mt-2 block w-full text-sm text-gray-600">
-                        <p class="mt-1 text-xs text-gray-500">Shown on the storefront “Shop By Category” section. If empty, a product image from this category is used.</p>
-                        <x-input-error class="mt-2" :messages="$errors->get('image')" />
-                    </div>
+                    @include('categories.partials.icon-picker', ['category' => $category])
 
                     @include('categories.partials.filter-options', ['filterConfig' => $filterConfig])
 

@@ -10,9 +10,21 @@ class Category extends Model
     use HasFactory;
 
     protected $fillable = [
-        'shop_id', 'name', 'slug', 'image_path', 'description',
+        'shop_id', 'name', 'slug', 'image_path', 'icon', 'description',
         'is_featured', 'product_count_label', 'filter_options',
     ];
+
+    public function iconKey(): string
+    {
+        return \App\Support\CategoryIcons::resolve(
+            $this->icon ?: \App\Support\CategoryIcons::suggest($this->name)
+        );
+    }
+
+    public function iconMeta(): array
+    {
+        return \App\Support\CategoryIcons::meta($this->iconKey());
+    }
 
     protected $casts = [
         'is_featured' => 'boolean',

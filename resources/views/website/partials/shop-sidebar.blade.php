@@ -4,7 +4,11 @@
     $minPrice = request()->filled('min_price') ? (float) request('min_price') : $boundMin;
     $maxPrice = request()->filled('max_price') ? (float) request('max_price') : $boundMax;
     $selectedBrands = array_map('intval', (array) request('brands', []));
-    $activeCat = request('category');
+    $categories = $categories ?? collect();
+    $brands = $brands ?? collect();
+    $categoryTotal = (int) ($categoryTotal ?? $categories->sum('published_count'));
+    $activeCat = request('category')
+        ?: (isset($activeCategory) ? ($activeCategory->slug ?: $activeCategory->id) : null);
     $symbol = $settings->currency_symbol ?? '৳';
     $visibleBrands = 5;
 @endphp
@@ -49,7 +53,7 @@
                         <a href="{{ route('website.shop', array_merge(request()->except('page'), ['category' => $catKey])) }}"
                            class="gs-cat-link {{ (string) $activeCat === (string) $catKey || (string) $activeCat === (string) $cat->id ? 'is-active' : '' }}">
                             <span>{{ $cat->name }}</span>
-                            <span class="gs-cat-count">({{ number_format($cat->published_count) }})</span>
+                            <span class="gs-cat-count">({{ number_format((int) ($cat->published_count ?? 0)) }})</span>
                         </a>
                     </li>
                 @endforeach
@@ -86,7 +90,7 @@
                                        @checked(in_array((int) $brand->id, $selectedBrands, true))
                                        onchange="this.form.submit()">
                                 <span class="gs-check-label">{{ $brand->name }}</span>
-                                <span class="gs-cat-count">({{ number_format($brand->published_count) }})</span>
+                                <span class="gs-cat-count">({{ number_format((int) ($brand->published_count ?? 0)) }})</span>
                             </label>
                         </li>
                     @endforeach

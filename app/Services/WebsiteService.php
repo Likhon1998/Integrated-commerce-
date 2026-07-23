@@ -103,7 +103,7 @@ class WebsiteService
             ->whereHas('products', $visibleProducts)
             ->withCount(['products' => $visibleProducts])
             ->orderBy('name')
-            ->take(8)
+            ->take(10)
             ->get();
 
         $bestSellers = $this->catalogQuery($shopId)

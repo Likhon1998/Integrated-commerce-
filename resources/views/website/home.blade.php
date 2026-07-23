@@ -3,15 +3,15 @@
 
 @section('content')
 
-{{-- Hero posters (CMS → Home Posters) --}}
+{{-- Hero posters (CMS → Home Posters) — 1600×400 full-design art --}}
 <section class="tn-hero" x-data="{ slide: 0, total: {{ max($heroSlides->count(), 1) }} }"
          @if($heroSlides->count() > 1) x-init="setInterval(()=>{ slide=(slide+1)%total }, 6000)" @endif>
     @if($heroSlides->count() > 1)
         <button type="button" @click="slide=(slide-1+total)%total" class="tn-hero-arrow left" aria-label="Previous">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <button type="button" @click="slide=(slide+1)%total" class="tn-hero-arrow right" aria-label="Next">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </button>
     @endif
     @forelse($heroSlides as $i => $slide)
@@ -22,7 +22,15 @@
         <div class="tn-hero-slide" x-show="slide==={{ $i }}" @if($i > 0) x-cloak @endif>
             @if($posterUrl)
                 <a href="{{ $link }}" class="tn-hero-poster" aria-label="{{ $slide->title }}">
-                    <img src="{{ $posterUrl }}" alt="{{ $slide->title }}" class="tn-hero-img">
+                    <img
+                        src="{{ $posterUrl }}"
+                        alt="{{ $slide->title }}"
+                        class="tn-hero-img"
+                        width="1600"
+                        height="400"
+                        decoding="async"
+                        @if($i === 0) fetchpriority="high" @endif
+                    >
                 </a>
             @else
                 <div class="tn-hero-fallback">
@@ -59,9 +67,28 @@
     @endif
 </section>
 
-{{-- Shop by Category --}}
+{{-- Service features — flush under banner, 5 across --}}
+@if($features->isNotEmpty())
+<section class="tn-features">
+    <div class="tn-container">
+        <div class="tn-features-grid" style="grid-template-columns: repeat({{ min($features->count(), 5) }}, 1fr);">
+            @foreach($features as $feature)
+                <div class="tn-feature">
+                    <div class="tn-feature-icon">@include('website.partials.feature-icon', ['icon' => $feature->icon])</div>
+                    <div>
+                        <p class="tn-feature-title">{{ $feature->title }}</p>
+                        @if($feature->subtitle)<p class="tn-feature-sub">{{ $feature->subtitle }}</p>@endif
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+</section>
+@endif
+
+{{-- Shop by Category — colorful icon strip --}}
 @if($categories->isNotEmpty())
-<section class="tn-section">
+<section class="tn-section tn-section-cats">
     <div class="tn-container">
         <div class="tn-section-head">
             <h2 class="tn-section-title">Shop by Category</h2>
@@ -69,14 +96,10 @@
         </div>
         <div class="tn-cat-grid">
             @foreach($categories as $category)
-                @php $catImg = $ws->categoryImageUrl($category); @endphp
+                @php $iconMeta = $category->iconMeta(); @endphp
                 <a href="{{ route('website.category', $category->slug ?? $category->id) }}" class="tn-cat-card">
-                    <div class="tn-cat-img">
-                        @if($catImg)
-                            <img src="{{ $catImg }}" alt="{{ $category->name }}">
-                        @else
-                            <span class="tn-cat-letter">{{ strtoupper(mb_substr($category->name, 0, 1)) }}</span>
-                        @endif
+                    <div class="tn-cat-icon" style="--cat-bg: {{ $iconMeta['bg'] }}; --cat-color: {{ $iconMeta['color'] }};">
+                        @include('website.partials.category-icon-svg', ['icon' => $iconMeta['key']])
                     </div>
                     <span class="tn-cat-name">{{ $category->name }}</span>
                 </a>
@@ -88,26 +111,35 @@
 
 {{-- Flash Sale --}}
 @if($flashSaleProducts->isNotEmpty())
-<section class="tn-section tn-section-muted">
+<section class="tn-flash">
     <div class="tn-container">
-        <div class="tn-section-head">
-            <div class="tn-section-head-left">
-                <h2 class="tn-section-title">Flash Sale</h2>
-                <div class="tn-countdown" x-data="{
+        <div class="tn-flash-head">
+            <div class="tn-flash-head-left">
+                <div class="tn-flash-title-row">
+                    <span class="tn-flash-bolt" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10.5H13L13 2z"/></svg>
+                    </span>
+                    <h2 class="tn-flash-title">Flash Sale</h2>
+                    <span class="tn-flash-live">Live</span>
+                </div>
+                <div class="tn-countdown tn-countdown--flash" x-data="{
                     h:0,m:0,s:0,
                     tick(){ const d=Math.max(0,new Date().setHours(23,59,59,999)-Date.now()); this.h=Math.floor(d/3600000); this.m=Math.floor((d%3600000)/60000); this.s=Math.floor((d%60000)/1000); }
                 }" x-init="tick(); setInterval(()=>tick(),1000)">
                     <span class="tn-countdown-label">Ends in</span>
-                    <span class="tn-countdown-box"><strong x-text="String(h).padStart(2,'0')">00</strong><small>Hours</small></span>
-                    <span class="tn-countdown-box"><strong x-text="String(m).padStart(2,'0')">00</strong><small>Mins</small></span>
-                    <span class="tn-countdown-box"><strong x-text="String(s).padStart(2,'0')">00</strong><small>Secs</small></span>
+                    <span class="tn-countdown-box"><strong x-text="String(h).padStart(2,'0')">00</strong><small>Hrs</small></span>
+                    <span class="tn-countdown-sep">:</span>
+                    <span class="tn-countdown-box"><strong x-text="String(m).padStart(2,'0')">00</strong><small>Min</small></span>
+                    <span class="tn-countdown-sep">:</span>
+                    <span class="tn-countdown-box"><strong x-text="String(s).padStart(2,'0')">00</strong><small>Sec</small></span>
                 </div>
             </div>
-            <a href="{{ route('website.shop', ['filter' => 'deals']) }}" class="tn-section-link">View All Deals &rarr;</a>
+            <a href="{{ route('website.shop', ['filter' => 'deals']) }}" class="tn-flash-link">View All Deals &rarr;</a>
         </div>
-        <div class="tn-product-grid">
+
+        <div class="tn-flash-grid">
             @foreach($flashSaleProducts as $product)
-                @include('website.partials.tn-product-card', ['product' => $product])
+                @include('website.partials.tn-product-card', ['product' => $product, 'flash' => true])
             @endforeach
         </div>
     </div>
@@ -167,25 +199,6 @@
                     @if($banner->image_path)
                         <img src="{{ public_storage_url($banner->image_path) }}" alt="{{ $banner->title }}" class="tn-promo-img">
                     @endif
-                </div>
-            @endforeach
-        </div>
-    </div>
-</section>
-@endif
-
-{{-- Service features (CMS → Landing Page) --}}
-@if($features->isNotEmpty())
-<section class="tn-features">
-    <div class="tn-container">
-        <div class="tn-features-grid" style="grid-template-columns: repeat({{ min($features->count(), 4) }}, 1fr);">
-            @foreach($features as $feature)
-                <div class="tn-feature">
-                    <div class="tn-feature-icon">@include('website.partials.feature-icon', ['icon' => $feature->icon])</div>
-                    <div>
-                        <p class="tn-feature-title">{{ $feature->title }}</p>
-                        @if($feature->subtitle)<p class="tn-feature-sub">{{ $feature->subtitle }}</p>@endif
-                    </div>
                 </div>
             @endforeach
         </div>

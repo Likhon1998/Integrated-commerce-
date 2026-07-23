@@ -10,20 +10,15 @@
             
             <div class="md:col-span-2">
                 <div class="bg-white p-6 shadow-sm sm:rounded-lg border border-gray-100">
-                    <form action="{{ route('categories.store') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('categories.store') }}" method="POST">
                         @csrf
                         <div>
                             <x-input-label for="name" :value="__('Category Name')" />
-                            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name')" required autofocus placeholder="e.g. Electronics" />
+                            <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name')" required autofocus placeholder="e.g. Battery, Smart Phone, Charger" />
                             <x-input-error class="mt-2" :messages="$errors->get('name')" />
                         </div>
 
-                        <div class="mt-4">
-                            <x-input-label for="image" :value="__('Homepage image (optional)')" />
-                            <input id="image" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="mt-1 block w-full text-sm text-gray-600">
-                            <p class="mt-1 text-xs text-gray-500">Shown on the storefront “Shop By Category” section. If empty, a product image from this category is used.</p>
-                            <x-input-error class="mt-2" :messages="$errors->get('image')" />
-                        </div>
+                        @include('categories.partials.icon-picker')
 
                         @include('categories.partials.filter-options', ['filterDefaults' => $filterDefaults])
 

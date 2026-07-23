@@ -204,7 +204,7 @@ class DashboardController extends Controller
         $pendingOnlineOrders = 0;
         if ($isAdmin && $filterCounterId === null) {
             $pendingOnlineOrders = (int) Order::where('shop_id', $shopId)
-                ->whereNull('counter_id')
+                ->onlineOrders()
                 ->where('status', 'pending')
                 ->count();
         }
@@ -246,7 +246,7 @@ class DashboardController extends Controller
                 });
 
             $onlineRow = Order::where('shop_id', $shopId)
-                ->whereNull('counter_id')
+                ->onlineOrders()
                 ->whereDate('created_at', $today)
                 ->where('status', 'completed')
                 ->where(function ($q) {
@@ -257,7 +257,7 @@ class DashboardController extends Controller
                 ->first();
 
             $onlineToday = (object) [
-                'name' => 'Online / no counter',
+                'name' => 'Online store',
                 'sales_total' => (float) ($onlineRow->sales_total ?? 0),
                 'orders_count' => (int) ($onlineRow->orders_count ?? 0),
                 'customers_count' => (int) ($onlineRow->customers_count ?? 0),

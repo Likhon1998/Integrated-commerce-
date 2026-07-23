@@ -53,6 +53,7 @@
                 init() {
                     this.panelOpen = false;
                     this.fetchBadge();
+                    setInterval(() => this.fetchBadge(), 60000);
                 },
                 togglePanel(event) {
                     if (event) {

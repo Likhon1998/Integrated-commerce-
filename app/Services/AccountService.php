@@ -313,7 +313,10 @@ class AccountService
 
         $revenue = $this->getAccount($order->shop_id, 'REVENUE');
         $cogs = $this->calculateCogs($order);
-        $netAmount = $order->netPayable();
+        // Web sale/settlement post total_amount; reverse the same amount for GL balance.
+        $netAmount = $order->isOnlineOrder()
+            ? (float) $order->total_amount
+            : $order->netPayable();
 
         $lines = [
             ['account' => $revenue, 'debit' => $netAmount, 'credit' => 0, 'counter_id' => $order->counter_id],

@@ -92,7 +92,7 @@ class GlobalSearchController extends Controller
                 'key' => 'orders',
                 'label' => 'Orders',
                 'items' => $orders->map(function (Order $order) {
-                    $isOnline = $order->counter_id === null;
+                    $isOnline = $order->isOnlineOrder();
                     $url = $isOnline && Auth::user()->isAdminUser()
                         ? route('online-orders.show', $order)
                         : (Gate::allows('view sales ledger')

@@ -69,6 +69,12 @@ class Order extends Model
         return $this->counter_id === null && str_starts_with((string) $this->invoice_no, 'WEB-');
     }
 
+    /** Admin / reports: online storefront orders only. */
+    public function scopeOnlineOrders($query)
+    {
+        return $query->whereNull('counter_id')->where('invoice_no', 'like', 'WEB-%');
+    }
+
     /**
      * Unique customer-facing online order ID (stored in invoice_no).
      * Format: WEB-{shopId}-{year}-{#####}

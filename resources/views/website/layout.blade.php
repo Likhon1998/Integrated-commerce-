@@ -103,10 +103,13 @@
                 authTab: 'login',
                 authLoading: false,
                 authMessage: '',
+                authMessageOk: false,
                 ordering: false,
                 orderMessage: '',
                 lastOrderId: null,
                 lastOrderInvoice: '',
+                redirectSeconds: 0,
+                _redirectTimer: null,
                 orderSuccess: false,
                 toastMessage: '',
                 toastVisible: false,
@@ -184,6 +187,7 @@
                     this.orderMessage = '';
                     this.orderSuccess = false;
                     this.authMessage = '';
+                    this.authMessageOk = false;
                     if (this.isLoggedIn) {
                         this.checkoutStep = 'order';
                     } else {
@@ -198,21 +202,27 @@
                     this.checkoutStep = 'auth';
                     this.authTab = tab === 'register' ? 'register' : 'login';
                     this.authMessage = '';
+                    this.authMessageOk = false;
                     this.orderMessage = '';
                     this.orderSuccess = false;
                 },
                 afterAuthSuccess(user) {
                     this.isLoggedIn = true;
+                    this.authMessageOk = false;
                     this.prefillCheckout(user);
                     if (this.authPurpose === 'checkout') {
                         this.checkoutStep = 'order';
+                        if (window.GagetLoader) window.GagetLoader.hide();
                         return;
                     }
+                    if (window.GagetLoader) window.GagetLoader.show('Opening your account');
                     window.location.href = @json(route('website.account'));
                 },
                 async submitLogin() {
                     this.authLoading = true;
                     this.authMessage = '';
+                    this.authMessageOk = false;
+                    if (window.GagetLoader) window.GagetLoader.show('Signing you in');
                     try {
                         const res = await fetch(@json(route('website.account.login')), {
                             method: 'POST',
@@ -222,11 +232,13 @@
                         const data = await res.json();
                         if (!res.ok) {
                             this.authMessage = data.message || data.errors?.email?.[0] || 'Sign in failed.';
+                            if (window.GagetLoader) window.GagetLoader.hide();
                             return;
                         }
                         this.afterAuthSuccess(data.user);
                     } catch (e) {
                         this.authMessage = 'Network error. Please try again.';
+                        if (window.GagetLoader) window.GagetLoader.hide();
                     } finally {
                         this.authLoading = false;
                     }
@@ -234,10 +246,13 @@
                 async submitRegister() {
                     if (!this.authRegister.name || !this.authRegister.phone || !this.authRegister.email || !this.authRegister.password) {
                         this.authMessage = 'Please fill name, phone, email, and password.';
+                        this.authMessageOk = false;
                         return;
                     }
                     this.authLoading = true;
                     this.authMessage = '';
+                    this.authMessageOk = false;
+                    if (window.GagetLoader) window.GagetLoader.show('Creating your account');
                     try {
                         const res = await fetch(@json(route('website.account.register')), {
                             method: 'POST',
@@ -250,11 +265,19 @@
                             this.authMessage = err.name?.[0] || err.email?.[0] || err.phone?.[0] || err.password?.[0] || data.message || 'Registration failed.';
                             return;
                         }
-                        this.afterAuthSuccess(data.user);
+                        // Registration only creates the account — user must sign in to order.
+                        this.isLoggedIn = false;
+                        this.authLogin.email = data.email || this.authRegister.email || '';
+                        this.authLogin.password = '';
+                        this.authRegister = { name: '', phone: '', email: '', password: '', address: '' };
+                        this.authTab = 'login';
+                        this.authMessageOk = true;
+                        this.authMessage = data.message || 'Account created. Please sign in to continue.';
                     } catch (e) {
                         this.authMessage = 'Network error. Please try again.';
                     } finally {
                         this.authLoading = false;
+                        if (window.GagetLoader) window.GagetLoader.hide();
                     }
                 },
                 async placeOrder() {
@@ -270,6 +293,7 @@
                     }
                     this.ordering = true;
                     this.orderMessage = '';
+                    if (window.GagetLoader) window.GagetLoader.show('Placing your order');
                     try {
                         const res = await fetch(@json(route('website.checkout')), {
                             method: 'POST',
@@ -300,10 +324,9 @@
                             this.orderSuccess = true;
                             this.lastOrderId = data.order_id || null;
                             this.lastOrderInvoice = data.invoice || '';
-                            this.orderMessage = this.lastOrderInvoice
-                                ? ('Order ID: ' + this.lastOrderInvoice)
-                                : ('Order #' + this.lastOrderId);
+                            this.orderMessage = '';
                             this.checkoutStep = 'success';
+                            this.startAccountRedirect();
                         } else {
                             this.orderSuccess = false;
                             this.orderMessage = data.message || 'Order failed.';
@@ -313,6 +336,34 @@
                         this.orderMessage = 'Network error.';
                     }
                     this.ordering = false;
+                    if (window.GagetLoader) window.GagetLoader.hide();
+                },
+                startAccountRedirect() {
+                    if (this._redirectTimer) clearInterval(this._redirectTimer);
+                    this.redirectSeconds = 3;
+                    const accountUrl = @json(route('website.account'));
+                    const go = () => {
+                        if (this._redirectTimer) clearInterval(this._redirectTimer);
+                        if (window.GagetLoader) window.GagetLoader.show('Opening your orders');
+                        const params = new URLSearchParams({ placed: '1' });
+                        if (this.lastOrderInvoice) params.set('order', this.lastOrderInvoice);
+                        else if (this.lastOrderId) params.set('oid', String(this.lastOrderId));
+                        window.location.href = accountUrl + '?' + params.toString() + '#recent-orders';
+                    };
+                    this._redirectTimer = setInterval(() => {
+                        this.redirectSeconds -= 1;
+                        if (this.redirectSeconds <= 0) go();
+                    }, 1000);
+                },
+                goToAccountNow() {
+                    if (this._redirectTimer) clearInterval(this._redirectTimer);
+                    this.redirectSeconds = 0;
+                    if (window.GagetLoader) window.GagetLoader.show('Opening your orders');
+                    const accountUrl = @json(route('website.account'));
+                    const params = new URLSearchParams({ placed: '1' });
+                    if (this.lastOrderInvoice) params.set('order', this.lastOrderInvoice);
+                    else if (this.lastOrderId) params.set('oid', String(this.lastOrderId));
+                    window.location.href = accountUrl + '?' + params.toString() + '#recent-orders';
                 },
                 jsonHeaders() {
                     return {
@@ -326,9 +377,34 @@
         window.storefrontCart = storefrontCart;
     </script>
     @vite(['resources/css/app.css', 'resources/css/website.css', 'resources/js/app.js'])
-    <style>[x-cloak]{display:none!important}</style>
+    <style>
+        [x-cloak]{display:none!important}
+        /* Critical first-paint loader (before Vite CSS) */
+        .gaget-page-loader{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(248,250,252,.94);transition:opacity .38s ease,visibility .38s ease}
+        .gaget-page-loader.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
+    </style>
 </head>
 <body class="gaget-store bg-white antialiased" id="storefront-root" x-data="storefrontCart()" @keydown.escape.window="cartOpen=false; checkoutOpen=false; mobileOpen=false">
+
+{{-- Joyful full-page loader (shown on first paint + every navigation) --}}
+<div id="gaget-page-loader" class="gaget-page-loader is-active" role="status" aria-live="polite" aria-busy="true" aria-label="Loading">
+    <div class="gaget-page-loader__bar" aria-hidden="true"></div>
+    <div class="gaget-page-loader__inner">
+        <div class="gaget-page-loader__stage" aria-hidden="true">
+            <div class="gaget-page-loader__orbit">
+                <span class="gaget-page-loader__spark"></span>
+                <span class="gaget-page-loader__spark"></span>
+                <span class="gaget-page-loader__spark"></span>
+            </div>
+            <div class="gaget-page-loader__bag"></div>
+        </div>
+        <p class="gaget-page-loader__text">
+            {{ $settings->store_name ?? 'GAGET STORE' }}
+            <span class="gaget-page-loader__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </p>
+        <p class="gaget-page-loader__sub" id="gaget-loader-msg">Getting things ready</p>
+    </div>
+</div>
 
 @include('website.partials.header')
 
@@ -373,18 +449,19 @@
 
 {{-- Checkout: sign in / register / place order (one modal) --}}
 <div x-show="checkoutOpen" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/50" @click="checkoutOpen=false"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
-        <button type="button" @click="checkoutOpen=false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+    <div class="absolute inset-0 bg-black/50" @click="checkoutStep !== 'success' && (checkoutOpen=false)"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6"
+         :class="checkoutStep === 'success' && 'overflow-hidden'">
+        <button type="button" x-show="checkoutStep !== 'success'" @click="checkoutOpen=false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
 
         {{-- Auth step (standalone account OR checkout) --}}
         <div x-show="checkoutStep==='auth'" x-cloak>
             <h3 class="text-xl font-bold text-slate-900 pr-8" x-text="authPurpose === 'checkout' ? 'Sign in to checkout' : (authTab === 'register' ? 'Create your account' : 'Welcome back')"></h3>
-            <p class="text-sm text-slate-500 mt-1 mb-5" x-text="authPurpose === 'checkout' ? 'Sign in or create an account to place your order.' : 'Create an account anytime — no order required.'"></p>
+            <p class="text-sm text-slate-500 mt-1 mb-5" x-text="authPurpose === 'checkout' ? 'Create an account if needed, then sign in to place your order.' : 'Create an account anytime — then sign in to shop and track orders.'"></p>
 
             <div class="flex rounded-xl bg-slate-100 p-1 mb-5">
-                <button type="button" @click="authTab='login'; authMessage=''" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Sign in</button>
-                <button type="button" @click="authTab='register'; authMessage=''" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Create account</button>
+                <button type="button" @click="authTab='login'; authMessage=''; authMessageOk=false" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Sign in</button>
+                <button type="button" @click="authTab='register'; authMessage=''; authMessageOk=false" class="flex-1 rounded-lg py-2 text-sm font-semibold transition" :class="authTab==='register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'">Create account</button>
             </div>
 
             <div x-show="authTab==='login'" class="space-y-3">
@@ -402,11 +479,11 @@
                 <input x-model="authRegister.password" type="password" placeholder="Password (min. 8 characters)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" autocomplete="new-password">
                 <textarea x-model="authRegister.address" placeholder="Address (optional)" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" rows="2"></textarea>
                 <button type="button" @click="submitRegister()" :disabled="authLoading" class="w-full gaget-btn-primary text-center disabled:opacity-50">
-                    <span x-text="authLoading ? 'Creating account...' : (authPurpose === 'checkout' ? 'Create account & continue' : 'Create account')"></span>
+                    <span x-text="authLoading ? 'Creating account...' : 'Create account'"></span>
                 </button>
             </div>
 
-            <p x-show="authMessage" x-text="authMessage" class="mt-3 text-sm text-center text-rose-600"></p>
+            <p x-show="authMessage" x-text="authMessage" class="mt-3 text-sm text-center" :class="authMessageOk ? 'text-emerald-600' : 'text-rose-600'"></p>
         </div>
 
         {{-- Order step --}}
@@ -427,18 +504,30 @@
         </div>
 
         {{-- Success step --}}
-        <div x-show="checkoutStep==='success'" x-cloak class="text-center py-4">
-            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-2xl">✓</div>
-            <h3 class="text-xl font-bold text-slate-900">Order placed!</h3>
-            <p class="text-sm text-slate-500 mt-2">Save this Order ID for tracking and support.</p>
-            <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                <p class="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Order ID</p>
-                <p class="mt-1 font-mono text-lg font-extrabold text-emerald-900" x-text="lastOrderInvoice || ('#' + lastOrderId)"></p>
-                <p class="mt-1 text-[11px] text-emerald-700/80" x-show="lastOrderId" x-text="'Ref #' + lastOrderId"></p>
+        <div x-show="checkoutStep==='success'" x-cloak class="gaget-order-success text-center py-2">
+            <div class="gaget-order-success__burst" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span>
             </div>
-            <div class="mt-6 flex flex-col gap-2">
-                <a href="{{ route('website.account') }}" class="gaget-btn-primary block w-full text-center text-sm py-3">View my orders</a>
-                <button type="button" @click="checkoutOpen=false" class="text-sm font-semibold text-slate-600 hover:text-slate-800">Continue shopping</button>
+            <div class="gaget-order-success__check mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <h3 class="text-xl font-extrabold text-slate-900">Order placed successfully!</h3>
+            <p class="mt-2 text-sm text-slate-500">Thank you — your order is confirmed and cash on delivery.</p>
+            <div class="mt-5 rounded-2xl border border-emerald-200 bg-gradient-to-b from-emerald-50 to-white px-4 py-4 shadow-sm">
+                <p class="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Your Order ID</p>
+                <p class="mt-1.5 font-mono text-[17px] font-extrabold tracking-wide text-emerald-950" x-text="lastOrderInvoice || ('#' + lastOrderId)"></p>
+                <p class="mt-2 text-[12px] text-emerald-800/80">Keep this ID for tracking and support.</p>
+            </div>
+            <p class="mt-4 text-[12px] text-slate-500">
+                Taking you to <span class="font-semibold text-slate-700">My Orders</span>
+                <span x-show="redirectSeconds > 0"> in <span class="font-bold text-blue-600" x-text="redirectSeconds"></span>s…</span>
+            </p>
+            <div class="mt-5 flex flex-col gap-2">
+                <button type="button" @click="goToAccountNow()" class="gaget-btn-primary w-full text-center text-sm py-3">
+                    View my order now
+                </button>
             </div>
         </div>
     </div>
@@ -515,6 +604,136 @@ document.addEventListener('click', function (event) {
         }
     }, 40);
 });
+</script>
+<script>
+(function () {
+    const el = document.getElementById('gaget-page-loader');
+    const msgEl = document.getElementById('gaget-loader-msg');
+    if (!el) return;
+
+    const messages = [
+        'Getting things ready',
+        'Almost there',
+        'Finding great picks',
+        'Packing the goodies',
+        'Just a moment',
+        'Making it snappy',
+    ];
+    let shownAt = Date.now();
+    let msgTimer = null;
+    let msgIndex = 0;
+    let hideTimer = null;
+    const MIN_MS = 420;
+
+    function setMessage(text) {
+        if (msgEl && text) msgEl.textContent = text;
+    }
+
+    function startMessages() {
+        stopMessages();
+        msgIndex = Math.floor(Math.random() * messages.length);
+        setMessage(messages[msgIndex]);
+        msgTimer = setInterval(function () {
+            msgIndex = (msgIndex + 1) % messages.length;
+            setMessage(messages[msgIndex]);
+        }, 1400);
+    }
+
+    function stopMessages() {
+        if (msgTimer) {
+            clearInterval(msgTimer);
+            msgTimer = null;
+        }
+    }
+
+    function show(message) {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
+        shownAt = Date.now();
+        el.classList.add('is-active');
+        el.classList.remove('is-hidden');
+        el.setAttribute('aria-busy', 'true');
+        if (message) setMessage(message);
+        else startMessages();
+    }
+
+    function hide() {
+        const wait = Math.max(0, MIN_MS - (Date.now() - shownAt));
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(function () {
+            stopMessages();
+            el.classList.add('is-hidden');
+            el.classList.remove('is-active');
+            el.setAttribute('aria-busy', 'false');
+            hideTimer = null;
+        }, wait);
+    }
+
+    window.GagetLoader = { show: show, hide: hide };
+
+    // First paint: hide after page is ready
+    function onReady() {
+        if (document.readyState === 'complete') hide();
+        else window.addEventListener('load', hide, { once: true });
+    }
+    onReady();
+
+    // Back/forward cache
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) hide();
+    });
+
+    function shouldInterceptLink(a, event) {
+        if (!a || !a.href) return false;
+        if (a.target && a.target !== '_self') return false;
+        if (a.hasAttribute('download')) return false;
+        if (a.dataset.noLoader !== undefined) return false;
+        if (event.defaultPrevented) return false;
+        if (event.button !== 0) return false;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+
+        let url;
+        try { url = new URL(a.href, window.location.href); }
+        catch (e) { return false; }
+
+        if (url.origin !== window.location.origin) return false;
+        if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return false;
+        // Same URL (no navigation)
+        if (url.href.split('#')[0] === window.location.href.split('#')[0]) return false;
+
+        return true;
+    }
+
+    document.addEventListener('click', function (event) {
+        const a = event.target.closest('a[href]');
+        if (!shouldInterceptLink(a, event)) return;
+        show();
+    }, true);
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.dataset.noLoader !== undefined) return;
+        if (form.target && form.target !== '_self') return;
+        // AJAX forms often preventDefault — skip those
+        // We show anyway; if submit is cancelled shortly after, pageshow won't fire — use short timeout fallback
+        show('Saving your request');
+        setTimeout(function () {
+            // If still on same page after a short wait (AJAX / validation stay), hide
+            if (!el.classList.contains('is-hidden')) hide();
+        }, 3500);
+    }, true);
+
+    // Soft loader for in-page fetch (checkout / auth) via custom events
+    window.addEventListener('gaget:loading', function (e) {
+        show((e && e.detail && e.detail.message) || 'Working on it');
+    });
+    window.addEventListener('gaget:loaded', function () {
+        hide();
+    });
+})();
 </script>
 @stack('scripts')
 </body>

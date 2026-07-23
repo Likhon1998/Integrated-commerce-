@@ -35,7 +35,7 @@ class StorefrontAuthController extends Controller
         $orders = $customer
             ? $customer->orders()
                 ->where('shop_id', $shopId)
-                ->whereNull('counter_id')
+                ->onlineOrders()
                 ->with(['items.product', 'statusLogs'])
                 ->latest()
                 ->take(20)
@@ -48,9 +48,9 @@ class StorefrontAuthController extends Controller
         ]);
 
         $totalOrders = $orders->count();
+        $packagingOrders = $orders->whereIn('status', ['pending', 'processing'])->count();
         $inTransitOrders = $orders->where('status', 'shipped')->count();
         $deliveredOrders = $orders->where('status', 'completed')->count();
-        $refundOrders = $orders->whereIn('status', ['returned', 'refunded'])->count();
         $activeOrders = $orders
             ->filter(fn ($order) => in_array($order->status, ['pending', 'processing', 'shipped'], true))
             ->values();
@@ -83,9 +83,9 @@ class StorefrontAuthController extends Controller
             'orders' => $orders,
             'orderTracking' => $orderTracking,
             'totalOrders' => $totalOrders,
+            'packagingOrders' => $packagingOrders,
             'inTransitOrders' => $inTransitOrders,
             'deliveredOrders' => $deliveredOrders,
-            'refundOrders' => $refundOrders,
             'activeOrder' => $activeOrder,
             'activeTracking' => $activeTracking,
             'activeOrderSlides' => $activeOrderSlides,
@@ -106,7 +106,7 @@ class StorefrontAuthController extends Controller
         $activeOrder = $customer
             ? $customer->orders()
                 ->where('shop_id', $shopId)
-                ->whereNull('counter_id')
+                ->onlineOrders()
                 ->latest()
                 ->first()
             : null;
@@ -338,8 +338,7 @@ class StorefrontAuthController extends Controller
             });
 
             event(new Registered($user));
-            Auth::login($user);
-            $request->session()->regenerate();
+            // Do not auto-login: customer must sign in before ordering or viewing account.
         } catch (\Throwable $e) {
             report($e);
 
@@ -350,7 +349,9 @@ class StorefrontAuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $this->profilePayload($user->fresh()),
+            'requires_login' => true,
+            'email' => $user->email,
+            'message' => 'Account created successfully. Please sign in to continue.',
         ]);
     }
 

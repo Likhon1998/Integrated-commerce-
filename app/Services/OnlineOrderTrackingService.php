@@ -13,7 +13,7 @@ class OnlineOrderTrackingService
     {
         return [
             'pending' => 'Order received',
-            'processing' => 'Packing your order',
+            'processing' => 'Packaging',
             'shipped' => 'Out for delivery',
             'completed' => 'Delivered',
             'cancelled' => 'Cancelled',
@@ -108,21 +108,35 @@ class OnlineOrderTrackingService
 
         foreach (self::FLOW_STATUSES as $index => $step) {
             $stepLog = $this->latestLogForStatus($logs, $step);
+            $isActive = $step === $current;
+            $isDone = $index < $currentRank;
             $timeline[] = [
                 'key' => $step,
                 'label' => $this->statusLabels()[$step],
-                'done' => $index <= $currentRank,
-                'active' => $step === $current,
+                'done' => $isDone || ($isActive && $current === 'completed'),
+                'active' => $isActive,
                 'at' => $stepLog?->created_at?->format('d M Y, h:i A')
-                    ?? (($step === 'pending' && $index <= $currentRank) ? $order->created_at->format('d M Y, h:i A') : null),
+                    ?? (($step === 'pending' && ($isDone || $isActive)) ? $order->created_at->format('d M Y, h:i A') : null),
                 'note' => $stepLog?->note
-                    ?? (($step === 'pending' && $index <= $currentRank) ? 'We received your order. Our team will confirm and start packing soon.' : null),
+                    ?? (($step === 'pending' && ($isDone || $isActive)) ? 'We received your order. Our team will confirm and start packing soon.' : null)
+                    ?? ($isActive ? $this->defaultStatusNote($step) : null),
                 'courier' => $step === 'shipped' ? ($stepLog?->courier_name ?: $order->shipping_courier) : null,
                 'tracking' => $step === 'shipped' ? ($stepLog?->tracking_number ?: $order->shipping_tracking_no) : null,
             ];
         }
 
         return $timeline;
+    }
+
+    protected function defaultStatusNote(string $status): string
+    {
+        return match ($status) {
+            'pending' => 'We received your order and will start packaging soon.',
+            'processing' => 'Your items are being packed right now.',
+            'shipped' => 'Your package is on the way to your address.',
+            'completed' => 'Order delivered successfully.',
+            default => '',
+        };
     }
 
     public function trackingPayload(Order $order): array
@@ -167,7 +181,7 @@ class OnlineOrderTrackingService
     {
         return match ($order->status) {
             'pending' => 'Your order is with our store team waiting to be confirmed.',
-            'processing' => 'Your items are being picked and packed at our warehouse.',
+            'processing' => 'Your order is in packaging — items are being packed at our warehouse.',
             'shipped' => $order->shipping_courier
                 ? "Your package is with {$order->shipping_courier}".($order->shipping_tracking_no ? " (tracking: {$order->shipping_tracking_no})" : '').' and on the way to you.'
                 : 'Your package has left our store and is on the way to your address.',
@@ -175,7 +189,7 @@ class OnlineOrderTrackingService
             'cancelled' => 'This order was cancelled and will not be delivered.',
             'returned' => 'This order was returned to our store.',
             'refunded' => 'This order was refunded.',
-            default => 'We are processing your order.',
+            default => 'We are updating your order status.',
         };
     }
 
