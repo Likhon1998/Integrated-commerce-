@@ -1,18 +1,50 @@
 {{-- Spotlight / command palette for admin header search --}}
 @php
+    $user = auth()->user();
     $quickActions = collect([
-        ['id' => 'act-dashboard', 'title' => 'Dashboard', 'subtitle' => 'Business summary', 'url' => route('dashboard'), 'icon' => 'dashboard', 'keywords' => 'home overview'],
-        auth()->user()->can('process pos sales') ? ['id' => 'act-pos', 'title' => 'Launch POS Terminal', 'subtitle' => 'Open full-size register window', 'url' => route('pos.index'), 'icon' => 'pos', 'keywords' => 'pos sell checkout register', 'target' => 'pos'] : null,
-        auth()->user()->can('manage inventory') ? ['id' => 'act-products', 'title' => 'Products', 'subtitle' => 'Inventory list', 'url' => route('products.index'), 'icon' => 'product', 'keywords' => 'inventory stock sku'] : null,
-        auth()->user()->can('manage inventory') ? ['id' => 'act-add-product', 'title' => 'Add Product', 'subtitle' => 'Create a new SKU', 'url' => route('products.create'), 'icon' => 'plus', 'keywords' => 'new create product'] : null,
-        ['id' => 'act-customers', 'title' => 'Customers', 'subtitle' => 'Customer directory', 'url' => route('customers.index'), 'icon' => 'customer', 'keywords' => 'people phone'],
-        auth()->user()->can('view sales ledger') ? ['id' => 'act-sales', 'title' => 'Sales Ledger', 'subtitle' => 'POS & online sales', 'url' => route('sales.index'), 'icon' => 'order', 'keywords' => 'orders invoices'] : null,
-        auth()->user()->can('view sales ledger') && auth()->user()->isAdminUser() ? ['id' => 'act-online', 'title' => 'Online Orders', 'subtitle' => 'Web checkout queue', 'url' => route('online-orders.index'), 'icon' => 'globe', 'keywords' => 'web pending'] : null,
+        $user->can('view dashboard') ? ['id' => 'act-dashboard', 'title' => 'Dashboard', 'subtitle' => 'Business summary', 'url' => route('dashboard'), 'icon' => 'dashboard', 'keywords' => 'home overview'] : null,
+        $user->can('process pos sales') ? ['id' => 'act-pos', 'title' => 'Launch POS Terminal', 'subtitle' => 'Open full-size register window', 'url' => route('pos.index'), 'icon' => 'pos', 'keywords' => 'pos sell checkout register', 'target' => 'pos'] : null,
+
+        // Inventory
+        $user->can('manage inventory') ? ['id' => 'act-products', 'title' => 'Products', 'subtitle' => 'Inventory list', 'url' => route('products.index'), 'icon' => 'product', 'keywords' => 'inventory stock sku'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-add-product', 'title' => 'Add Product', 'subtitle' => 'Create a new SKU', 'url' => route('products.create'), 'icon' => 'plus', 'keywords' => 'new create product'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-categories', 'title' => 'Categories', 'subtitle' => 'Product categories & icons', 'url' => route('categories.index'), 'icon' => 'category', 'keywords' => 'category icon new arrival'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-brands', 'title' => 'Brands', 'subtitle' => 'Brand directory', 'url' => route('brands.index'), 'icon' => 'brand', 'keywords' => 'brand logo'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-import', 'title' => 'Import CSV Products', 'subtitle' => 'Bulk upload catalog', 'url' => route('products.import'), 'icon' => 'plus', 'keywords' => 'csv import upload'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-barcodes', 'title' => 'Print Barcodes', 'subtitle' => 'Label printing', 'url' => route('products.barcodes'), 'icon' => 'product', 'keywords' => 'barcode label print'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-low-stock', 'title' => 'Low Stock', 'subtitle' => 'Items at reorder level', 'url' => route('reports.low_stock'), 'icon' => 'alert', 'keywords' => 'reorder alert inventory'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-suppliers', 'title' => 'Suppliers', 'subtitle' => 'Vendor directory', 'url' => route('supply.suppliers.index'), 'icon' => 'supplier', 'keywords' => 'vendor supplier'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-po', 'title' => 'Purchase Orders', 'subtitle' => 'Buy stock from suppliers', 'url' => route('supply.purchase-orders.index'), 'icon' => 'order', 'keywords' => 'purchase po supply'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-opening-stock', 'title' => 'Opening Inventory', 'subtitle' => 'Set opening stock', 'url' => route('supply.opening-inventory.index'), 'icon' => 'product', 'keywords' => 'opening stock'] : null,
+        $user->can('manage inventory') ? ['id' => 'act-adjust', 'title' => 'Stock Adjustment', 'subtitle' => 'Correct stock counts', 'url' => route('supply.adjustments.index'), 'icon' => 'alert', 'keywords' => 'adjust stock'] : null,
+
+        // Sales
+        $user->can('view sales ledger') ? ['id' => 'act-sales', 'title' => 'Sales Ledger', 'subtitle' => 'POS & online sales', 'url' => route('sales.index'), 'icon' => 'order', 'keywords' => 'orders invoices'] : null,
+        $user->can('view sales ledger') && $user->isAdminUser() ? ['id' => 'act-online', 'title' => 'Online Orders', 'subtitle' => 'Web checkout queue', 'url' => route('online-orders.index'), 'icon' => 'globe', 'keywords' => 'web pending new arrival online'] : null,
+        $user->can('view sales ledger') || $user->can('process pos sales') ? ['id' => 'act-customers', 'title' => 'Customers', 'subtitle' => 'Customer directory', 'url' => route('customers.index'), 'icon' => 'customer', 'keywords' => 'people phone'] : null,
+
+        // Sessions / finance / reports
         ['id' => 'act-sessions', 'title' => 'Cash Sessions', 'subtitle' => 'Open / close tills', 'url' => route('counters.sessions.index'), 'icon' => 'cash', 'keywords' => 'till float open close'],
-        auth()->user()->isAdminUser() ? ['id' => 'act-accounts', 'title' => 'Accounts', 'subtitle' => 'Chart, ledger, petty cash', 'url' => route('accounts.opening-balance'), 'icon' => 'accounts', 'keywords' => 'ledger bookkeeping'] : null,
-        auth()->user()->isAdminUser() ? ['id' => 'act-reports', 'title' => 'Reports', 'subtitle' => 'Sales analytics', 'url' => route('analytics.overview'), 'icon' => 'chart', 'keywords' => 'analytics report'] : null,
-        auth()->user()->can('manage inventory') ? ['id' => 'act-low-stock', 'title' => 'Low Stock', 'subtitle' => 'Items at reorder level', 'url' => route('reports.low_stock'), 'icon' => 'alert', 'keywords' => 'reorder alert inventory'] : null,
-        ['id' => 'act-store', 'title' => 'View Store', 'subtitle' => 'Open storefront', 'url' => route('home'), 'icon' => 'globe', 'keywords' => 'website shop', 'target' => '_blank'],
+        $user->isAdminUser() ? ['id' => 'act-accounts', 'title' => 'Accounts', 'subtitle' => 'Chart, ledger, petty cash', 'url' => route('accounts.opening-balance'), 'icon' => 'accounts', 'keywords' => 'ledger bookkeeping'] : null,
+        $user->isAdminUser() ? ['id' => 'act-reports', 'title' => 'Reports', 'subtitle' => 'Sales analytics', 'url' => route('analytics.overview'), 'icon' => 'chart', 'keywords' => 'analytics report'] : null,
+        $user->isAdminUser() ? ['id' => 'act-top-sellers', 'title' => 'Top Sellers', 'subtitle' => 'Staff performance', 'url' => route('reports.staff_performance'), 'icon' => 'chart', 'keywords' => 'staff performance sellers'] : null,
+
+        // CMS
+        $user->can('manage website') ? ['id' => 'act-cms-landing', 'title' => 'Landing Page', 'subtitle' => 'Store branding & features', 'url' => route('cms.landing.edit'), 'icon' => 'page', 'keywords' => 'cms website landing'] : null,
+        $user->can('manage website') ? ['id' => 'act-cms-slides', 'title' => 'Home Slides', 'subtitle' => 'Hero banners', 'url' => route('cms.slides.index'), 'icon' => 'page', 'keywords' => 'cms slides banner'] : null,
+        $user->can('manage website') ? ['id' => 'act-cms-pages', 'title' => 'CMS Pages', 'subtitle' => 'About, policies…', 'url' => route('cms.pages.index'), 'icon' => 'page', 'keywords' => 'cms pages'] : null,
+        $user->can('manage website') ? ['id' => 'act-cms-blogs', 'title' => 'Blogs', 'subtitle' => 'Blog posts', 'url' => route('cms.blogs.index'), 'icon' => 'blog', 'keywords' => 'cms blog'] : null,
+        $user->can('manage website') ? ['id' => 'act-cms-faqs', 'title' => 'FAQs', 'subtitle' => 'Help content', 'url' => route('cms.faqs.index'), 'icon' => 'page', 'keywords' => 'cms faq help'] : null,
+        $user->can('manage website') ? ['id' => 'act-cms-contact', 'title' => 'Contact Messages', 'subtitle' => 'Inbox from storefront', 'url' => route('cms.contact.index'), 'icon' => 'customer', 'keywords' => 'cms contact message'] : null,
+        $user->can('manage website') ? ['id' => 'act-cms-reviews', 'title' => 'Reviews', 'subtitle' => 'Customer reviews', 'url' => route('cms.reviews.index'), 'icon' => 'blog', 'keywords' => 'cms review'] : null,
+
+        // Access control
+        $user->can('manage roles') ? ['id' => 'act-roles', 'title' => 'Roles', 'subtitle' => 'Permissions', 'url' => route('roles.index'), 'icon' => 'staff', 'keywords' => 'role permission access'] : null,
+        $user->can('manage staff') ? ['id' => 'act-staff', 'title' => 'Staff', 'subtitle' => 'Team members', 'url' => route('staff.index'), 'icon' => 'staff', 'keywords' => 'employee user'] : null,
+        $user->can('manage counters') ? ['id' => 'act-counters', 'title' => 'Counters', 'subtitle' => 'POS counters', 'url' => route('counters.index'), 'icon' => 'cash', 'keywords' => 'counter till'] : null,
+
+        ['id' => 'act-store', 'title' => 'View Store', 'subtitle' => 'Open storefront', 'url' => route('home'), 'icon' => 'globe', 'keywords' => 'website shop new arrivals', 'target' => '_blank'],
+        ['id' => 'act-profile', 'title' => 'Profile', 'subtitle' => 'Your account settings', 'url' => route('profile.edit'), 'icon' => 'staff', 'keywords' => 'profile password'],
     ])->filter()->values();
 @endphp
 
@@ -29,7 +61,7 @@
                 @click="open()"
                 class="group relative flex w-full items-center gap-3 rounded-xl border border-slate-200/90 bg-slate-50/90 px-3.5 py-2.5 text-left shadow-sm transition hover:border-blue-300 hover:bg-white hover:shadow-md hover:shadow-blue-100/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
             <svg class="h-4 w-4 shrink-0 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <span class="flex-1 truncate text-[13px] text-slate-400 group-hover:text-slate-500">Search products, orders, customers…</span>
+            <span class="flex-1 truncate text-[13px] text-slate-400 group-hover:text-slate-500">Search products, orders, customers, categories…</span>
             <span class="hidden sm:inline-flex items-center gap-1">
                 <kbd class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 shadow-sm" x-text="modLabel"></kbd>
                 <kbd class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 shadow-sm">K</kbd>
@@ -80,7 +112,7 @@
                            @keydown.up.prevent="move(-1)"
                            @keydown.enter.prevent="go()"
                            @keydown.escape.prevent="close()"
-                           placeholder="Type to search or jump…"
+                           placeholder="Search anything you can access…"
                            class="w-full border-0 bg-transparent p-0 text-[15px] font-medium text-slate-800 placeholder:text-slate-400 focus:ring-0"
                            autocomplete="off"
                            spellcheck="false">
@@ -95,7 +127,7 @@
                     <template x-if="!loading && flatItems.length === 0">
                         <div class="px-4 py-10 text-center">
                             <p class="text-[13px] font-semibold text-slate-700" x-text="query.trim() ? 'No matches' : 'Start typing'"></p>
-                            <p class="mt-1 text-[12px] text-slate-400" x-text="query.trim() ? 'Try an invoice, product name, SKU, or phone' : 'Jump to pages or search your shop data'"></p>
+                            <p class="mt-1 text-[12px] text-slate-400" x-text="query.trim() ? 'Try a product, invoice, category, customer, or page name' : 'Jump to any page you have access to'"></p>
                         </div>
                     </template>
 
@@ -274,6 +306,12 @@ function commandPalette({ searchUrl, actions }) {
                 accounts: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
                 chart: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
                 alert: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+                category: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
+                brand: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z',
+                supplier: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+                page: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+                blog: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z',
+                staff: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
             };
             const d = paths[name] || paths.product;
             return `<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${d}"/></svg>`;

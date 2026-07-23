@@ -78,6 +78,17 @@ class User extends Authenticatable
         return $this->hasRole('Customer');
     }
 
+    /** Shop employees only — excludes website customer accounts. */
+    public function scopeStaffMembers($query)
+    {
+        return $query
+            ->where(function ($q) {
+                $q->whereNull('role')
+                    ->orWhereNotIn('role', ['customer', 'Customer']);
+            })
+            ->whereDoesntHave('roles', fn ($r) => $r->where('name', 'Customer'));
+    }
+
     public function avatarUrl(): ?string
     {
         return public_storage_url($this->avatar_path);
@@ -109,14 +120,23 @@ class User extends Authenticatable
 
     /**
      * Floor staff who sell on POS need a counter assignment.
+     * Website customers never need a counter.
      */
     public function requiresCounter(): bool
     {
+        if ($this->isStorefrontCustomer()) {
+            return false;
+        }
+
         return ! $this->isAdminUser();
     }
 
     public function canAccessPos(): bool
     {
+        if ($this->isStorefrontCustomer()) {
+            return false;
+        }
+
         if ($this->isAdminUser()) {
             return true;
         }

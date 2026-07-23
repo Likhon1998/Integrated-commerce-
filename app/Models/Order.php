@@ -123,8 +123,8 @@ class Order extends Model
     /** Cash portion that actually hit the till (split-tender aware). */
     public function cashTenderAmount(): float
     {
-        if ($this->cash_paid !== null) {
-            return max(0, (float) $this->cash_paid);
+        if ($this->hasTenderBreakdown()) {
+            return max(0, (float) ($this->cash_paid ?? 0));
         }
 
         $method = strtolower(trim((string) $this->payment_method));
@@ -135,7 +135,7 @@ class Order extends Model
         }
 
         // Legacy mixed strings without tender breakdown — do not assume all cash
-        if (str_contains($method, 'cash') && (str_contains($method, 'card') || str_contains($method, 'bkash') || str_contains($method, 'nagad') || str_contains($method, 'mobile'))) {
+        if (str_contains($method, 'cash') && (str_contains($method, 'card') || str_contains($method, 'bkash') || str_contains($method, 'nagad') || str_contains($method, 'mobile') || str_contains($method, 'bank'))) {
             return 0.0;
         }
 
@@ -144,6 +144,75 @@ class Order extends Model
         }
 
         return 0.0;
+    }
+
+    public function hasTenderBreakdown(): bool
+    {
+        return $this->cash_paid !== null || $this->card_paid !== null || $this->mobile_paid !== null;
+    }
+
+    public function cardTenderAmount(): float
+    {
+        if ($this->hasTenderBreakdown()) {
+            return max(0, (float) ($this->card_paid ?? 0));
+        }
+
+        $method = strtolower(trim((string) $this->payment_method));
+        if ($method === 'card' || $method === 'bank' || (
+            (str_contains($method, 'card') || str_contains($method, 'bank'))
+            && ! str_contains($method, '+')
+            && ! str_contains($method, 'cash')
+            && ! str_contains($method, 'bkash')
+        )) {
+            return $this->netPayable();
+        }
+
+        return 0.0;
+    }
+
+    public function mobileTenderAmount(): float
+    {
+        if ($this->hasTenderBreakdown()) {
+            return max(0, (float) ($this->mobile_paid ?? 0));
+        }
+
+        $method = strtolower(trim((string) $this->payment_method));
+        if (in_array($method, ['bkash', 'nagad', 'mobile'], true) || (
+            (str_contains($method, 'bkash') || str_contains($method, 'nagad') || str_contains($method, 'mobile'))
+            && ! str_contains($method, '+')
+            && ! str_contains($method, 'cash')
+            && ! str_contains($method, 'card')
+        )) {
+            return $this->netPayable();
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Lines for invoice/receipt: Cash, Card/Bank, bKash.
+     * Only returns methods with amount > 0.
+     *
+     * @return list<array{key: string, label: string, amount: float}>
+     */
+    public function tenderLines(): array
+    {
+        $lines = [];
+        $cash = $this->cashTenderAmount();
+        $card = $this->cardTenderAmount();
+        $mobile = $this->mobileTenderAmount();
+
+        if ($cash > 0) {
+            $lines[] = ['key' => 'cash', 'label' => 'Cash', 'amount' => round($cash, 2)];
+        }
+        if ($card > 0) {
+            $lines[] = ['key' => 'card', 'label' => 'Card / Bank', 'amount' => round($card, 2)];
+        }
+        if ($mobile > 0) {
+            $lines[] = ['key' => 'bkash', 'label' => 'bKash / Mobile', 'amount' => round($mobile, 2)];
+        }
+
+        return $lines;
     }
 
     // Link the order to the Cashier (User)

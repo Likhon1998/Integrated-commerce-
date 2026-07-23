@@ -74,7 +74,13 @@ Route::get('/contact', [WebsiteController::class, 'contact'])->name('website.con
 Route::post('/contact', [WebsiteController::class, 'submitContact'])->name('website.contact.submit');
 Route::get('/wishlist', [WebsiteController::class, 'wishlist'])->name('website.wishlist');
 
-Route::middleware(['auth', 'verified', \App\Http\Middleware\CheckIfSuspended::class, \App\Http\Middleware\EnsureStaffOpeningBalance::class])->group(function () {
+Route::middleware([
+    'auth',
+    'verified',
+    \App\Http\Middleware\EnsureNotStorefrontCustomer::class,
+    \App\Http\Middleware\CheckIfSuspended::class,
+    \App\Http\Middleware\EnsureStaffOpeningBalance::class,
+])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/refresh-session', function () {

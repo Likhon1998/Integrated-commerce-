@@ -13,7 +13,7 @@ class CustomerController extends Controller
         $user = Auth::user();
         $shopId = $user->shop_id;
 
-        $query = Customer::where('shop_id', $shopId);
+        $query = Customer::where('shop_id', $shopId)->withCount('orders');
 
         // Cashiers: only customers who purchased at their counter
         if (! $user->isAdminUser() && $user->counter_id) {
@@ -25,7 +25,10 @@ class CustomerController extends Controller
 
         $customers = $query->latest()->get();
 
-        return view('customers.index', compact('customers'));
+        $onlineCount = $customers->whereNotNull('user_id')->count();
+        $offlineCount = $customers->whereNull('user_id')->count();
+
+        return view('customers.index', compact('customers', 'onlineCount', 'offlineCount'));
     }
 
     public function create()
@@ -46,7 +49,7 @@ class CustomerController extends Controller
             'shop_id' => Auth::user()->shop_id,
             'name' => $request->name,
             'email' => $request->email,
-            'phone' => $request->phone,
+            'phone' => $request->phone ? Customer::normalizePhone($request->phone) : null,
             'address' => $request->address,
             'reward_points' => 0, // Starts at zero
         ]);
@@ -72,7 +75,13 @@ class CustomerController extends Controller
             'reward_points' => 'required|integer|min:0',
         ]);
 
-        $customer->update($request->only('name', 'email', 'phone', 'address', 'reward_points'));
+        $customer->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone ? Customer::normalizePhone($request->phone) : null,
+            'address' => $request->address,
+            'reward_points' => $request->reward_points,
+        ]);
 
         return redirect()->route('customers.index')->with('success', 'Customer updated successfully!');
     }

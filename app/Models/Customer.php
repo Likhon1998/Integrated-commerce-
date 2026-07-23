@@ -44,4 +44,33 @@ class Customer extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** Match phone allowing formatting differences (spaces, +, dashes). */
+    public function scopeWherePhone($query, ?string $phone)
+    {
+        $raw = trim((string) $phone);
+        if ($raw === '') {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $digits = preg_replace('/\D+/', '', $raw) ?: $raw;
+
+        return $query->where(function ($q) use ($raw, $digits) {
+            $q->where('phone', $raw)->orWhere('phone', $digits);
+
+            if (strlen($digits) >= 10) {
+                $tail = substr($digits, -10);
+                $q->orWhere('phone', 'like', '%'.$tail);
+            } elseif (strlen($digits) >= 9) {
+                $q->orWhere('phone', 'like', '%'.$digits);
+            }
+        });
+    }
+
+    public static function normalizePhone(?string $phone): string
+    {
+        $raw = trim((string) $phone);
+
+        return preg_replace('/\D+/', '', $raw) ?: $raw;
+    }
 }

@@ -297,6 +297,11 @@ class StorefrontAuthController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $normalizedPhone = Customer::normalizePhone($data['phone']);
+        if ($normalizedPhone === '') {
+            throw ValidationException::withMessages(['phone' => 'Enter a valid phone number.']);
+        }
+
         $existing = User::where('email', $data['email'])->first();
         if ($existing) {
             $message = $existing->isStorefrontCustomer()
@@ -306,33 +311,45 @@ class StorefrontAuthController extends Controller
             throw ValidationException::withMessages(['email' => $message]);
         }
 
-        if (Customer::where('shop_id', $shopId)->where('phone', $data['phone'])->whereNotNull('user_id')->exists()) {
+        if (Customer::where('shop_id', $shopId)->wherePhone($normalizedPhone)->whereNotNull('user_id')->exists()) {
             throw ValidationException::withMessages(['phone' => 'This phone number is already registered. Please sign in.']);
         }
 
         try {
-            $user = DB::transaction(function () use ($data, $shopId) {
+            $user = DB::transaction(function () use ($data, $shopId, $normalizedPhone) {
                 $user = User::create([
                     'name' => $data['name'],
                     'email' => $data['email'],
                     'password' => $data['password'],
                     'shop_id' => $shopId,
                     'role' => 'customer',
+                    'counter_id' => null,
                 ]);
 
                 if (\Spatie\Permission\Models\Role::where('name', 'Customer')->exists()) {
                     $user->assignRole('Customer');
                 }
 
-                Customer::updateOrCreate(
-                    ['shop_id' => $shopId, 'phone' => $data['phone']],
-                    [
+                // Link to CRM/POS customer by phone (creates or updates walk-in record).
+                $customer = Customer::where('shop_id', $shopId)->wherePhone($normalizedPhone)->first();
+                if ($customer) {
+                    $customer->update([
                         'user_id' => $user->id,
+                        'phone' => $normalizedPhone,
+                        'name' => $data['name'],
+                        'email' => $data['email'],
+                        'address' => $data['address'] ?? $customer->address,
+                    ]);
+                } else {
+                    Customer::create([
+                        'shop_id' => $shopId,
+                        'user_id' => $user->id,
+                        'phone' => $normalizedPhone,
                         'name' => $data['name'],
                         'email' => $data['email'],
                         'address' => $data['address'] ?? null,
-                    ]
-                );
+                    ]);
+                }
 
                 return $user;
             });

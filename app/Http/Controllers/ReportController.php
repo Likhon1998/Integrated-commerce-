@@ -28,61 +28,106 @@ class ReportController extends Controller
             });
     }
 
+    /**
+     * SQL expressions for Cash / Card·Bank / bKash using tender columns
+     * (with legacy payment_method fallback when breakdown is missing).
+     */
+    protected function tenderSumExpressions(string $netExpr): array
+    {
+        $hasBreakdown = '(cash_paid IS NOT NULL OR card_paid IS NOT NULL OR mobile_paid IS NOT NULL)';
+        $method = "LOWER(COALESCE(payment_method, ''))";
+
+        $cashFallback = "({$method} = 'cash'
+            OR (
+                {$method} LIKE '%cash%'
+                AND {$method} NOT LIKE '%+%'
+                AND {$method} NOT LIKE '%card%'
+                AND {$method} NOT LIKE '%bank%'
+                AND {$method} NOT LIKE '%bkash%'
+                AND {$method} NOT LIKE '%nagad%'
+                AND {$method} NOT LIKE '%mobile%'
+            ))";
+
+        $cardFallback = "({$method} IN ('card', 'bank')
+            OR (
+                ({$method} LIKE '%card%' OR {$method} LIKE '%bank%')
+                AND {$method} NOT LIKE '%+%'
+                AND {$method} NOT LIKE '%cash%'
+                AND {$method} NOT LIKE '%bkash%'
+            ))";
+
+        $bkashFallback = "({$method} IN ('bkash', 'nagad', 'mobile')
+            OR (
+                ({$method} LIKE '%bkash%' OR {$method} LIKE '%nagad%' OR {$method} LIKE '%mobile%')
+                AND {$method} NOT LIKE '%+%'
+                AND {$method} NOT LIKE '%cash%'
+                AND {$method} NOT LIKE '%card%'
+            ))";
+
+        return [
+            'cash' => "SUM(CASE WHEN {$hasBreakdown} THEN COALESCE(cash_paid, 0) WHEN {$cashFallback} THEN {$netExpr} ELSE 0 END)",
+            'card' => "SUM(CASE WHEN {$hasBreakdown} THEN COALESCE(card_paid, 0) WHEN {$cardFallback} THEN {$netExpr} ELSE 0 END)",
+            'bkash' => "SUM(CASE WHEN {$hasBreakdown} THEN COALESCE(mobile_paid, 0) WHEN {$bkashFallback} THEN {$netExpr} ELSE 0 END)",
+        ];
+    }
+
     public function dailySales(Request $request)
     {
         $this->ensureAdmin();
 
         $shopId = Auth::user()->shop_id;
-        
-        // 🚀 CHECK IF USER CLICKED "ALL TIME"
-        if ($request->has('all_time')) {
-            // Fetch the date of their very first order ever
+
+        // Quick presets
+        if ($request->boolean('today')) {
+            $startDate = Carbon::today()->startOfDay();
+            $endDate = Carbon::today()->endOfDay();
+        } elseif ($request->has('all_time')) {
             $firstOrder = Order::where('shop_id', $shopId)->min('created_at');
             $startDate = $firstOrder ? Carbon::parse($firstOrder)->startOfDay() : now()->startOfMonth();
             $endDate = now()->endOfDay();
         } else {
-            // Otherwise, use the selected dates (or default to Today)
             $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date'))->startOfDay() : Carbon::today()->startOfDay();
             $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date'))->endOfDay() : Carbon::today()->endOfDay();
         }
 
         $netExpr = 'GREATEST(total_amount - COALESCE(discount_amount, 0) - COALESCE(exchange_credit, 0), 0)';
+        $tenders = $this->tenderSumExpressions($netExpr);
 
-        // 1. PERIOD SNAPSHOT (Overview of Cash/Card/bKash for the selected date range)
+        // 1. PERIOD SNAPSHOT (Cash / Card·Bank / bKash for the selected range)
         $summary = $this->completedOrdersQuery($shopId, $startDate, $endDate)
             ->select(
                 DB::raw('COUNT(id) as total_orders'),
                 DB::raw("SUM({$netExpr}) as total_revenue"),
-                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN {$netExpr} ELSE 0 END) as cash_total"),
-                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'card' THEN {$netExpr} ELSE 0 END) as card_total"),
-                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'bkash' THEN {$netExpr} ELSE 0 END) as bkash_total")
+                DB::raw("{$tenders['cash']} as cash_total"),
+                DB::raw("{$tenders['card']} as card_total"),
+                DB::raw("{$tenders['bkash']} as bkash_total")
             )->first();
 
-        // 2. SALES BY EMPLOYEE (For the selected date range)
+        // 2. SALES BY EMPLOYEE
         $employeeSales = $this->completedOrdersQuery($shopId, $startDate, $endDate)
             ->select('user_id', DB::raw('COUNT(id) as total_orders'), DB::raw("SUM({$netExpr}) as total_revenue"))
             ->groupBy('user_id')
-            ->with('user') 
+            ->with('user')
             ->orderByDesc('total_revenue')
             ->get();
 
-        // 3. SALES BY COUNTER (For the selected date range)
+        // 3. SALES BY COUNTER
         $counterSales = $this->completedOrdersQuery($shopId, $startDate, $endDate)
             ->select('counter_id', DB::raw('COUNT(id) as total_orders'), DB::raw("SUM({$netExpr}) as total_revenue"))
             ->groupBy('counter_id')
-            ->with('counter') 
+            ->with('counter')
             ->orderByDesc('total_revenue')
             ->get();
 
-        // 4. HISTORICAL DAILY LEDGER (Filtered by the date range)
+        // 4. HISTORICAL DAILY LEDGER (per-day cash / card / bkash)
         $historicalSales = $this->completedOrdersQuery($shopId, $startDate, $endDate)
             ->select(
                 DB::raw('DATE(created_at) as date'),
                 DB::raw('COUNT(id) as total_orders'),
                 DB::raw("SUM({$netExpr}) as total_revenue"),
-                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN {$netExpr} ELSE 0 END) as cash_total"),
-                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'card' THEN {$netExpr} ELSE 0 END) as card_total"),
-                DB::raw("SUM(CASE WHEN LOWER(payment_method) = 'bkash' THEN {$netExpr} ELSE 0 END) as bkash_total")
+                DB::raw("{$tenders['cash']} as cash_total"),
+                DB::raw("{$tenders['card']} as card_total"),
+                DB::raw("{$tenders['bkash']} as bkash_total")
             )
             ->groupBy(DB::raw('DATE(created_at)'))
             ->orderBy('date', 'desc')

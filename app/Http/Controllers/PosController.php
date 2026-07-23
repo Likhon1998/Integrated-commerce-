@@ -202,20 +202,28 @@ class PosController extends Controller
 
             $changeAmount = max(0, $paidAmount - $payableAmount);
 
-            // 2. Customer Handling
+            // 2. Customer Handling (same CRM table as website shoppers — match by phone)
             $customerId = null;
             if (!empty($request->customer_phone)) {
-                $customer = Customer::where('shop_id', $shopId)->where('phone', $request->customer_phone)->first();
+                $phone = Customer::normalizePhone($request->customer_phone);
+                $customer = Customer::where('shop_id', $shopId)->wherePhone($phone)->first();
 
                 if ($customer) {
+                    $updates = [];
                     if (!empty($request->customer_name) && $customer->name !== $request->customer_name) {
-                        $customer->update(['name' => $request->customer_name]);
+                        $updates['name'] = $request->customer_name;
+                    }
+                    if ($customer->phone !== $phone) {
+                        $updates['phone'] = $phone;
+                    }
+                    if ($updates !== []) {
+                        $customer->update($updates);
                     }
                     $customerId = $customer->id;
                 } else {
                     $newCustomer = Customer::create([
                         'shop_id' => $shopId,
-                        'phone' => $request->customer_phone,
+                        'phone' => $phone,
                         'name' => $request->customer_name ?? 'Guest User',
                     ]);
                     $customerId = $newCustomer->id;
@@ -353,14 +361,19 @@ class PosController extends Controller
             return response()->json(['found' => false]);
         }
 
-        $customer = Customer::where('shop_id', $shopId)->where('phone', $phone)->first();
+        $customer = Customer::where('shop_id', $shopId)
+            ->wherePhone($phone)
+            ->first();
 
         if ($customer) {
             return response()->json([
                 'found' => true,
-                'name' => $customer->name
+                'name' => $customer->name,
+                'email' => $customer->email,
+                'phone' => $customer->phone,
             ]);
         }
+
         return response()->json(['found' => false]);
     }
 
@@ -395,20 +408,23 @@ class PosController extends Controller
             DB::beginTransaction();
 
             foreach ($orders as $offlineOrder) {
-                // 1. Customer Handling 
+                // 1. Customer Handling (shared with website shoppers)
                 $customerId = null;
                 if (!empty($offlineOrder['customer_phone'])) {
-                    $customer = Customer::where('shop_id', $shopId)->where('phone', $offlineOrder['customer_phone'])->first();
+                    $phone = Customer::normalizePhone($offlineOrder['customer_phone']);
+                    $customer = Customer::where('shop_id', $shopId)->wherePhone($phone)->first();
 
                     if ($customer) {
                         if (!empty($offlineOrder['customer_name']) && $customer->name !== $offlineOrder['customer_name']) {
-                            $customer->update(['name' => $offlineOrder['customer_name']]);
+                            $customer->update(['name' => $offlineOrder['customer_name'], 'phone' => $phone]);
+                        } elseif ($customer->phone !== $phone) {
+                            $customer->update(['phone' => $phone]);
                         }
                         $customerId = $customer->id;
                     } else {
                         $newCustomer = Customer::create([
                             'shop_id' => $shopId,
-                            'phone' => $offlineOrder['customer_phone'],
+                            'phone' => $phone,
                             'name' => $offlineOrder['customer_name'] ?? 'Guest User',
                         ]);
                         $customerId = $newCustomer->id;

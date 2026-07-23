@@ -49,6 +49,11 @@ class AuthenticatedSessionController extends Controller
 
         $user = $request->user();
 
+        // Website shoppers use the storefront account — never the staff panel.
+        if ($user->isStorefrontCustomer()) {
+            return redirect()->intended(route('website.account'));
+        }
+
         if ($user->requiresDailyOpeningBalance() && ! $user->hasTodayOpenSession()) {
             return redirect()->route('counters.sessions.open-today');
         }

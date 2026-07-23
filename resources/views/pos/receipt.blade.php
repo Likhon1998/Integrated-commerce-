@@ -403,6 +403,17 @@
                     <td class="lbl">Payment method</td>
                     <td class="text-right" style="font-weight:700">{{ $paymentLabel }}</td>
                 </tr>
+                @if(! $isVoid)
+                    @php $tenderLines = $order->tenderLines(); @endphp
+                    @if(count($tenderLines) > 0)
+                        @foreach($tenderLines as $line)
+                            <tr>
+                                <td class="lbl">{{ $line['label'] }}</td>
+                                <td class="text-right" style="font-weight:700">৳{{ number_format($line['amount'], 2) }}</td>
+                            </tr>
+                        @endforeach
+                    @endif
+                @endif
                 <tr>
                     <td class="lbl">Amount paid</td>
                     <td class="text-right" style="font-weight:700">

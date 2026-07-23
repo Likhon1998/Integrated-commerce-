@@ -14,6 +14,9 @@ class StaffController extends Controller
 {
     protected array $adminRoleNames = ['Shop Owner', 'Admin'];
 
+    /** Roles that belong to website shoppers — never assignable as staff. */
+    protected array $customerRoleNames = ['Customer', 'customer'];
+
     public function index()
     {
         $user = Auth::user();
@@ -24,7 +27,8 @@ class StaffController extends Controller
         }
 
         // Admins must never stay assigned to a till
-        User::where('shop_id', $shop->id)
+        User::staffMembers()
+            ->where('shop_id', $shop->id)
             ->where(function ($q) {
                 $q->whereIn('role', ['admin', 'Admin', 'shop_owner', 'Shop Owner', 'superadmin'])
                     ->orWhereHas('roles', fn ($r) => $r->whereIn('name', $this->adminRoleNames));
@@ -32,7 +36,11 @@ class StaffController extends Controller
             ->whereNotNull('counter_id')
             ->update(['counter_id' => null]);
 
-        $staff = User::where('shop_id', $shop->id)->with(['roles', 'counter'])->latest()->get();
+        $staff = User::staffMembers()
+            ->where('shop_id', $shop->id)
+            ->with(['roles', 'counter'])
+            ->latest()
+            ->get();
         $roles = $this->assignableRoles();
         $counters = Counter::where('shop_id', $shop->id)->where('is_active', true)->orderBy('name')->get();
 
@@ -68,6 +76,10 @@ class StaffController extends Controller
             return back()->withInput()->with('error', 'Admin / Shop Owner accounts cannot be created from Staff. They cannot be assigned to a counter.');
         }
 
+        if (in_array($data['role'], $this->customerRoleNames, true)) {
+            return back()->withInput()->with('error', 'Website customers are not staff. Create them from the storefront, not here.');
+        }
+
         $staff = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
@@ -84,9 +96,7 @@ class StaffController extends Controller
 
     public function edit(User $staff)
     {
-        if ($staff->shop_id !== Auth::user()->shop_id) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->ensureStaffMember($staff);
 
         $staff->clearCounterIfAdmin();
         $staff->refresh();
@@ -99,9 +109,7 @@ class StaffController extends Controller
 
     public function update(Request $request, User $staff)
     {
-        if ($staff->shop_id !== Auth::user()->shop_id) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->ensureStaffMember($staff);
 
         if ($staff->isAdminUser()) {
             // Admin/owner profile: role locked, always no counter
@@ -114,6 +122,10 @@ class StaffController extends Controller
 
         if (in_array($data['role'], $this->adminRoleNames, true)) {
             return back()->withInput()->with('error', 'Cannot promote staff to Admin/Shop Owner here.');
+        }
+
+        if (in_array($data['role'], $this->customerRoleNames, true)) {
+            return back()->withInput()->with('error', 'Cannot change a staff account into a website customer role.');
         }
 
         $staff->update([
@@ -129,10 +141,7 @@ class StaffController extends Controller
     public function destroy(User $staff)
     {
         $user = Auth::user();
-
-        if ($staff->shop_id !== $user->shop_id) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->ensureStaffMember($staff);
 
         if ($staff->id === $user->id) {
             return redirect()->route('staff.index')->with('error', 'You cannot delete your own account.');
@@ -150,10 +159,7 @@ class StaffController extends Controller
     public function toggleSuspend(User $staff)
     {
         $user = Auth::user();
-
-        if ($staff->shop_id !== $user->shop_id) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->ensureStaffMember($staff);
 
         if ($staff->id === $user->id) {
             return back()->with('error', 'You cannot suspend your own account!');
@@ -170,18 +176,33 @@ class StaffController extends Controller
         return back()->with('success', "Staff member {$staff->name} has been successfully {$status}.");
     }
 
+    protected function ensureStaffMember(User $staff): void
+    {
+        if ($staff->shop_id !== Auth::user()->shop_id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($staff->isStorefrontCustomer()) {
+            abort(404, 'Website customers are managed under Customers, not Staff.');
+        }
+    }
+
     protected function assignableRoles()
     {
-        return Role::whereNotIn('name', $this->adminRoleNames)->orderBy('name')->get();
+        return Role::whereNotIn('name', array_merge($this->adminRoleNames, ['Customer']))
+            ->orderBy('name')
+            ->get();
     }
 
     protected function validatedStaff(Request $request, int $shopId, bool $updating = false, ?User $staff = null): array
     {
+        $blockedRoles = array_merge($this->adminRoleNames, ['Customer']);
+
         $rules = [
             'role' => [
                 'required',
                 'string',
-                Rule::exists('roles', 'name')->where(fn ($q) => $q->whereNotIn('name', $this->adminRoleNames)),
+                Rule::exists('roles', 'name')->where(fn ($q) => $q->whereNotIn('name', $blockedRoles)),
             ],
             'counter_id' => [
                 'required',

@@ -17,9 +17,9 @@
                             </svg>
                         </div>
                         <div>
-                            <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.15em]">Sales Analytics</span>
-                            <h2 class="text-lg font-bold text-white leading-tight">Sales Summary</h2>
-                            <p class="text-xs text-slate-500">End-of-day reconciliation and historical transaction ledger.</p>
+                            <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.15em]">Payment totals</span>
+                            <h2 class="text-lg font-bold text-white leading-tight">Cash · Card/Bank · bKash</h2>
+                            <p class="text-xs text-slate-500">See how much came in by payment method — today or any date range.</p>
                         </div>
                     </div>
 
@@ -42,16 +42,17 @@
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                             </svg>
-                            Apply Filter
+                            Apply Range
                         </button>
+                        <a href="{{ route('reports.daily', ['today' => 1]) }}"
+                           class="inline-flex items-center gap-1.5 bg-emerald-500/90 hover:bg-emerald-400 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors">
+                            Today
+                        </a>
                         <a href="{{ route('reports.daily', ['all_time' => true]) }}"
                            class="inline-flex items-center gap-1.5 bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.12] text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
                             All Time
                         </a>
-                        @if(request('start_date') || request('all_time'))
+                        @if(request('start_date') || request('all_time') || request('today'))
                             <a href="{{ route('reports.daily') }}"
                                class="inline-flex items-center gap-1.5 bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-400 hover:text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors">
                                 Clear
@@ -69,6 +70,8 @@
                     <span class="text-indigo-600 font-black">
                         @if(request('all_time'))
                             All Time (Lifetime)
+                        @elseif(request('today') || ($startDate->isToday() && $endDate->isToday()))
+                            Today ({{ $startDate->format('M j, Y') }})
                         @else
                             {{ $startDate->format('M j, Y') }} — {{ $endDate->format('M j, Y') }}
                         @endif
@@ -111,10 +114,10 @@
                     <div class="mt-3 h-0.5 w-6 bg-emerald-400 rounded-full"></div>
                 </div>
 
-                {{-- Card --}}
+                {{-- Card / Bank --}}
                 <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div class="flex items-start justify-between mb-3">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Card Payments</p>
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Card / Bank</p>
                         <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
                             <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
@@ -218,7 +221,7 @@
                                 <th class="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.12em]">Orders</th>
                                 <th class="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.12em]">Total Revenue</th>
                                 <th class="px-5 py-3 text-[10px] font-black text-emerald-500 uppercase tracking-[0.12em]">Cash</th>
-                                <th class="px-5 py-3 text-[10px] font-black text-blue-500 uppercase tracking-[0.12em]">Card</th>
+                                <th class="px-5 py-3 text-[10px] font-black text-blue-500 uppercase tracking-[0.12em]">Card / Bank</th>
                                 <th class="px-5 py-3 text-[10px] font-black text-pink-500 uppercase tracking-[0.12em]">bKash</th>
                             </tr>
                         </thead>
