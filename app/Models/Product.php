@@ -73,6 +73,18 @@ class Product extends Model
         return $this->hasMany(StockMovement::class)->latest();
     }
 
+    /** Products marked as new arrivals for shop filter + homepage. */
+    public function scopeNewArrivals($query)
+    {
+        return $query->where('is_new_arrival', true);
+    }
+
+    /** Whether the storefront should show a "New" badge. */
+    public function showsAsNew(): bool
+    {
+        return (bool) $this->is_new_arrival;
+    }
+
     /** Sibling products in the same variant group (other colors / storage). */
     public function variantSiblings()
     {

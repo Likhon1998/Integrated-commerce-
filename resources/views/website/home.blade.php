@@ -146,6 +146,26 @@
 </section>
 @endif
 
+{{-- New Arrivals --}}
+@if(($newArrivals ?? collect())->isNotEmpty())
+<section class="tn-section tn-section-new">
+    <div class="tn-container">
+        <div class="tn-section-head">
+            <div class="tn-section-head-left">
+                <h2 class="tn-section-title">New Arrivals</h2>
+                <span class="tn-new-pill">Just in</span>
+            </div>
+            <a href="{{ route('website.shop', ['filter' => 'new']) }}" class="tn-section-link">View All New Arrivals &rarr;</a>
+        </div>
+        <div class="tn-flash-grid">
+            @foreach($newArrivals as $product)
+                @include('website.partials.tn-product-card', ['product' => $product])
+            @endforeach
+        </div>
+    </div>
+</section>
+@endif
+
 {{-- Trending Products --}}
 @if($trendingProducts->isNotEmpty())
 <section class="tn-section">

@@ -6,6 +6,7 @@
     $img = $ws->productImageUrl($product);
     $catLabel = $product->category?->name ?? $product->brand_name ?? 'Electronics';
     $flash = !empty($flash);
+    $isNew = $product->showsAsNew();
 
     $listItem = [
         'id' => $product->id,
@@ -25,9 +26,11 @@
     ];
 @endphp
 
-<article class="tn-product-card {{ $flash ? 'tn-product-card--flash' : '' }}">
+<article class="tn-product-card {{ $flash ? 'tn-product-card--flash' : '' }} {{ $isNew && $discount <= 0 ? 'tn-product-card--new' : '' }}">
     @if($discount > 0)
         <span class="tn-product-discount">-{{ $discount }}%</span>
+    @elseif($isNew)
+        <span class="tn-product-new">New</span>
     @endif
 
     <button type="button"

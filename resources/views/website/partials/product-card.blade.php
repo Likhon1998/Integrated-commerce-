@@ -4,8 +4,7 @@
         ? round((($product->original_price - $product->selling_price) / $product->original_price) * 100) : 0;
     $img = $ws->productImageUrl($product);
     $catLabel = $product->category?->name ?? $product->brand_name ?? 'Electronics';
-    $isNew = (bool) ($product->is_new_arrival ?? false)
-        || ($product->created_at && $product->created_at->gte(now()->subDays(30)));
+    $isNew = $product->showsAsNew();
     $listItem = [
         'id' => $product->id,
         'name' => $product->name,

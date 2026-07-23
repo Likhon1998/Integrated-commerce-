@@ -364,8 +364,8 @@
                 </label>
                 <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                     <input type="checkbox" name="is_new_arrival" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                           {{ old('is_new_arrival', $product?->is_new_arrival ?? false) ? 'checked' : '' }}>
-                    New badge
+                           {{ old('is_new_arrival', $isEdit ? ($product?->is_new_arrival ?? false) : true) ? 'checked' : '' }}>
+                    New Arrival
                 </label>
                 <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                     <input type="checkbox" name="is_featured" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"

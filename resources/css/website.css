@@ -1496,6 +1496,34 @@
     z-index: 3;
     box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
 }
+.tn-product-new {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 5px 9px;
+    border-radius: 999px;
+    z-index: 3;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.28);
+}
+.tn-section-new { padding-top: 40px; }
+.tn-new-pill {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #059669;
+    background: #d1fae5;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
 .tn-product-wish {
     position: absolute;
     top: 12px;

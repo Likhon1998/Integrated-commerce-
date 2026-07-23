@@ -66,9 +66,7 @@ class WebsiteController extends Controller
             $query->whereNotNull('original_price')
                 ->whereColumn('original_price', '>', 'selling_price');
         } elseif ($request->filter === 'new') {
-            $query->where(function ($q) {
-                $q->where('is_new_arrival', true)->orWhere('created_at', '>=', now()->subDays(30));
-            });
+            $query->newArrivals();
         }
 
         $sort = $request->query('sort', 'featured');

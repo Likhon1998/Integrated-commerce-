@@ -98,7 +98,7 @@ class ProductController extends Controller
                     'stock_quantity' => 0,
                     'alert_quantity' => $validated['alert_quantity'] ?? 5,
                     'is_published' => $request->boolean('is_published', true),
-                    'is_new_arrival' => $request->boolean('is_new_arrival'),
+                    'is_new_arrival' => $request->boolean('is_new_arrival', true),
                     'is_featured' => $request->boolean('is_featured'),
                 ];
 
@@ -409,6 +409,7 @@ class ProductController extends Controller
                         'stock_quantity' => 0,
                         'alert_quantity' => max(0, $alertQty),
                         'is_published' => true,
+                        'is_new_arrival' => true,
                     ]);
 
                     if ($openingQty > 0) {

@@ -122,6 +122,13 @@ class WebsiteService
             ->take(5)
             ->get();
 
+        $newArrivals = $this->catalogQuery($shopId)
+            ->with(['category', 'brand'])
+            ->newArrivals()
+            ->latest('id')
+            ->take(5)
+            ->get();
+
         $trendingProducts = $this->catalogQuery($shopId)
             ->with(['category', 'brand'])
             ->orderByDesc('is_best_seller')
@@ -151,6 +158,7 @@ class WebsiteService
             'promoBanners' => PromoBanner::where('shop_id', $shopId)->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get(),
             'bestSellers' => $bestSellers,
             'flashSaleProducts' => $flashSaleProducts,
+            'newArrivals' => $newArrivals,
             'trendingProducts' => $trendingProducts,
             'brands' => $brands,
             'mainNav' => NavigationLink::where('shop_id', $shopId)->where('location', 'main_nav')->where('is_active', true)->orderBy('sort_order')->get(),
@@ -173,6 +181,7 @@ class WebsiteService
             'promoBanners' => collect(),
             'bestSellers' => collect(),
             'flashSaleProducts' => collect(),
+            'newArrivals' => collect(),
             'trendingProducts' => collect(),
             'brands' => collect(),
             'mainNav' => collect(),

@@ -60,7 +60,7 @@
         {{-- Product info --}}
         <div class="lg:col-span-4">
             <div class="flex flex-wrap items-center gap-2 mb-2">
-                @if($product->is_new_arrival)
+                @if($product->showsAsNew())
                     <span class="text-[10px] font-semibold uppercase bg-emerald-500 text-white px-2 py-0.5 rounded">New</span>
                 @endif
                 @if($product->brand_name || $product->brand)

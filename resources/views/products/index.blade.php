@@ -95,6 +95,12 @@
                                                 @endif
                                                 <span class="text-slate-300">·</span>
                                                 <span class="font-mono text-[11px] text-slate-400">{{ $product->barcode }}</span>
+                                                @if($product->is_new_arrival)
+                                                    <span class="inline-flex px-1.5 py-0 text-[10px] font-bold uppercase tracking-wide rounded bg-emerald-50 text-emerald-700 border border-emerald-100">New</span>
+                                                @endif
+                                                @if($product->is_published === false)
+                                                    <span class="inline-flex px-1.5 py-0 text-[10px] font-bold uppercase tracking-wide rounded bg-slate-100 text-slate-500 border border-slate-200">Hidden</span>
+                                                @endif
                                             </div>
                                         </div>
                                     </div>
